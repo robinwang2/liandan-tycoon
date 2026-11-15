@@ -9,7 +9,7 @@ const MOODS = {
   triumph: { root: 50, scale: [0, 2, 4, 7, 9], chords: [0, 5, 7, 0], bpm: 88, density: .65, bright: 3000 },
   defeat:  { root: 45, scale: [0, 3, 5, 7, 10], chords: [0, 5, 3, 0], bpm: 48, density: .16, bright: 650 },
 };
-const NAMES = new Set('click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify error type rain_start'.split(' '));
+const NAMES = new Set('click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify lift ding error type rain_start'.split(' '));
 const clamp = (x, lo, hi, fallback) => typeof x === 'number' && Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : fallback;
 const hz = midi => 440 * 2 ** ((midi - 69) / 12);
 
@@ -125,6 +125,8 @@ export function createAudio() {
       case 'cameo': tone(0, 450, .33, .09, { end: 950 }); tone(.28, 180, .42, .12, { wave: 'triangle', end: 65 }); break;
       case 'toast': tone(0, 660, .16, .035); break;
       case 'notify': notes([784, 1175], .075, .22, .045); break;                // 顶部冒出新的行动提示：轻轻两声
+      case 'lift': dust(0, .75, .08, 520, 'lowpass'); tone(0, 150, .8, .03, { end: 260, attack: .12 }); tone(.05, 420, .55, .012, { end: 700, attack: .2 }); break;   // 电梯启动：低沉的呼呼声，往上走音调高一点
+      case 'ding': tone(0, 1318, 1.1, .075, { cutoff: 4200 }); tone(0, 2637, .55, .018, { cutoff: 5200 }); tone(.002, 1975, .8, .02, { cutoff: 4800 }); break;   // 到站：「叮」
       case 'error': [0, .11].forEach(d => tone(d, 160, .075, .09, { cutoff: 450 })); break;
       case 'type': { let delay = 0; for (let i = 0, n = 5 + Math.floor(random() * 4); i < n; i++) { tone(delay, range(430, 740), .018, .045, { wave: 'triangle', cutoff: 1500 }); delay += range(.035, .105); } break; }
       case 'rain_start': dust(0, 1.8, .065, 180, 'lowpass'); break;

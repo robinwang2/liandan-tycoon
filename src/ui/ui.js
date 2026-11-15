@@ -2,7 +2,7 @@
 import * as G from '../game/engine.js';
 import * as A from '../game/actions.js';
 import { advise, muteHint, muteMonths } from '../game/advice.js';
-import { ATTRS, REGIONS, ROUTES, TRACKS, TRAITS, TRAIT, OUTFITS, officeName, ROLES, STAFF_QUIRKS, POLICIES, PERK, FEAT, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, META_SHOP, CAT, MONTHS, MOD_NAME, KIND_NAME } from '../data/defs.js';
+import { ATTRS, REGIONS, ROUTES, TRACKS, TRAITS, TRAIT, OUTFITS, officeName, ROLES, STAFF_QUIRKS, POLICIES, PERK, FEAT, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, META_SHOP, CAT, MONTHS, MOD_NAME, KIND_NAME, floorsOf, DEPTS } from '../data/defs.js';
 import { CHAINS } from '../data/events_chains.js';
 import { LOGOS, BRAND_COLORS, logoSVG, logoDataURL } from './logos.js';
 import { artURL, ENDING_ART } from './art.js';
@@ -16,7 +16,7 @@ const nl = s => esc(s).replace(/\n/g, '<br>');
 const pct = (a, b) => (b > 0 ? Math.min(100, a / b * 100) : 0);
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 
-let S = null, meta = G.loadMeta(), office = null, ui = null, toastTimer = 0, flashTimer = 0, lastEl = null;
+let S = null, meta = G.loadMeta(), office = null, ui = null, toastTimer = 0, flashTimer = 0, scaleTimer = 0, lastEl = null;
 const V = { screen: 'title', ltab: 'rd', rtab: 'board', dlg: null, res: null, toast: null, W: null, summary: null, wait: false, hints: [], recActs: new Set(), hintSeen: {} };
 
 // 音频：WebAudio 现场合成的音效 + 环境声 + 生成式配乐（src/audio/audio.js），不依赖任何音频文件
@@ -27,7 +27,7 @@ audio.setMuted(muted);
 const sfx = (kind, o) => audio.sfx(kind, o);
 function setMuted(m) { muted = m; audio.setMuted(m); try { localStorage.setItem('ldt_mute', m ? '1' : '0'); } catch { /* 存不了就算了 */ } }
 const FX_SOUND = { money: 'coin', confetti: 'confetti', levelup: 'levelup', alarm: 'alarm', boom: 'boom', cameo: 'cameo', release: 'release' };
-const CLICK_SND = { ltab: 'tab', rtab: 'tab', dlg: 'choose', next: null };
+const CLICK_SND = { ltab: 'tab', rtab: 'tab', dlg: 'choose', next: null, floor: null };
 // 界面框架里的图标（事件、卡牌等内容里的 emoji 保留）
 const TAB_IC = { rd: 'flask', team: 'people', cap: 'coins', pr: 'megaphone', ops: 'gear' };
 const ACT_IC = { code: 'code', release: 'rocket', furnace: 'swap', selfdev: 'target', sprint: 'puzzle', paper: 'paper', headhunt: 'search_user', teambuild: 'party', pie: 'cake', office: 'building', raise: 'handshake', roadshow: 'mic', ipo: 'bell', sellcourse: 'book', subsidy: 'gift', lobby: 'capitol', hype: 'megaphone_loud', ads: 'ad', goodpr: 'heart', navy: 'ghost', fakeusers: 'mask', wash: 'washer', digdirt: 'shovel', beg: 'hand', sweep: 'broom', agi: 'sparkles' };
@@ -140,10 +140,13 @@ function candList() {
 function opsPanel() {
   let h = '';
   if (S.ownModel) {
-    const q = G.quota(S), need = G.inferNeed(S), price = G.gpuPrice(S);
-    h += `<h4 style="border:0;margin-top:0;padding-top:0">显卡<small>${G.money(S, price)}/张·月 · 配额 ${q} 张</small></h4><div class="gpu"><div class="gpubar"><i class="infer" style="width:${pct(Math.min(need, S.gpu), q)}%"></i><i class="train" style="width:${pct(Math.max(0, S.gpu - need), q)}%"></i></div>
-    <div class="gpurow"><button class="btn sm" data-a="gpu:min">0</button><button class="btn sm" data-a="gpu:-">−</button><b>${S.gpu} 张</b><button class="btn sm" data-a="gpu:+">＋</button><button class="btn sm" data-a="gpu:max">拉满</button></div>
-    <small><b style="color:var(--sky)">■</b> 推理 ${Math.min(need, S.gpu)}/${need} 张${need > S.gpu ? ' <b class="bad">不够！用户在看「服务器繁忙」</b>' : ''} · <b style="color:var(--coral)">■</b> 炼丹 ${Math.max(0, S.gpu - need)} 张<br>月租 ${G.money(S, S.gpu * price)}。推理优先，剩下的显卡才进丹炉。</small></div>`;
+    // 配额不是硬上限：超出的部分按现货价租。条子按「配额和已租数量里大的那个」画，超出时标一条配额线
+    const q = G.quota(S), need = G.inferNeed(S), price = G.gpuPrice(S), over = Math.max(0, S.gpu - q), scale = Math.max(q, S.gpu);
+    const note = over ? `<br><b class="over">超出配额 ${over} 张</b>：从黄牛和云厂商那里现租，均价是市价的 ${G.overMult(S).toFixed(1)} 倍，租得越多越贵。`
+      : S.gpu >= q ? '<br>配额用满了。再点「＋」可以按现货价多租（市价 2 倍起）；找皮衣教主、融下一轮都能涨配额。' : '';
+    h += `<h4 style="border:0;margin-top:0;padding-top:0">显卡<small>${G.money(S, price)}/张·月 · 配额 ${q} 张</small></h4><div class="gpu"><div class="gpubar"><i class="infer" style="width:${pct(Math.min(need, S.gpu), scale)}%"></i><i class="train" style="width:${pct(Math.max(0, S.gpu - need), scale)}%"></i>${over ? `<b class="qline" style="left:${pct(q, scale)}%"></b>` : ''}</div>
+    <div class="gpurow"><button class="btn sm" data-a="gpu:min">0</button><button class="btn sm" data-a="gpu:-">−</button><b>${S.gpu} 张</b><button class="btn sm" data-a="gpu:+">＋</button><button class="btn sm" data-a="gpu:max" title="按市价把配额租满">配额拉满</button></div>
+    <small><b style="color:var(--sky)">■</b> 推理 ${Math.min(need, S.gpu)}/${need} 张${need > S.gpu ? ' <b class="bad">不够！用户在看「服务器繁忙」</b>' : ''} · <b style="color:var(--coral)">■</b> 炼丹 ${Math.max(0, S.gpu - need)} 张<br>月租 ${G.money(S, G.gpuRent(S))}。推理优先，剩下的显卡才进丹炉。${note}</small></div>`;
   } else {
     h += `<p class="note">产品跑在 <b>${esc(G.rivalOf(S, S.upstream).name)}</b> 的 API 上（模型能力 ${G.upCap(S).toFixed(0)}），本月 API 账单约 ${G.money(S, G.costs(S).api)}。想摆脱上游，去「研发」里立项自研。</p>`;
   }
@@ -266,9 +269,14 @@ const fpsText = () => { const s = office?.stats; return s ? `${Math.round(s.fps)
 const perfText = () => { const s = office?.stats; return s ? `当前约 ${Math.round(s.fps)} 帧 · 显卡每帧 ${s.gpu ? s.gpu.toFixed(1) : '—'} 毫秒 · ${s.calls} 次绘制` : ''; };
 function settingsHTML() {
   const q = office?.quality?.(), vol = audio.getState().volume, p = x => Math.round((x ?? 0) * 100);
-  const gfx = q ? `<h4>画质</h4><div class="seg">${q.levels.map(l => `<button class="${q.q === l.id ? 'on' : ''}" data-a="gfx:${l.id}">${l.name}</button>`).join('')}</div>
+  // 画质：七档从「手机」到「极致」，下面写着这一档开了什么、内部按多大分辨率渲染；再往下是渲染精度和帧率上限
+  const lv = q?.levels.find(l => l.id === q.q), fpsOn = q && (q.fps == null ? 'auto' : String(q.fps));
+  const gfx = q ? `<h4>画质</h4><div class="seg tiers">${q.levels.map(l => `<button class="${q.q === l.id ? 'on' : ''}" data-a="gfx:${l.id}" title="${esc(l.desc || '')}">${l.name}</button>`).join('')}</div>
+  <p class="note tierdesc"><b>${esc(lv?.name || '')}</b>　${esc(lv?.desc || '')}${q.res ? `<br>内部渲染 ${q.res[0]}×${q.res[1]}` : ''}</p>
+  <div class="set-row scalerow"><span>渲染精度</span><input type="range" min="50" max="150" step="10" value="${Math.round((q.scale || 1) * 100)}" data-s="scale"><b>${Math.round((q.scale || 1) * 100)}%</b></div>
+  <div class="set-row fpsrow"><span>帧率上限</span><div class="seg">${[['auto', '跟随画质'], ['30', '30'], ['60', '60'], ['0', '不限']].map(([v, n]) => `<button class="${fpsOn === v ? 'on' : ''}" data-a="fpscap:${v}">${n}</button>`).join('')}</div></div>
   <label class="chk"><input type="checkbox" data-s="auto" ${q.auto ? 'checked' : ''}> 自动调整（卡顿时自动降一档）</label><p class="note" data-live="perf">${perfText()}</p>
-  <p class="note">正在用的显卡：<b>${esc(q.gpu || '未知')}</b>${q.igpu ? '（核显）' : ''}</p>${q.igpu ? `<p class="note warn">浏览器在用核显，画面会很卡。${GPU_TIP}</p>` : ''}` : '<p class="note">3D 场景没有启动，画质设置不可用。</p>';
+  <p class="note">正在用的显卡：<b>${esc(q.gpu || '未知')}</b>${q.phone ? '（手机）' : q.tablet ? '（平板）' : q.igpu ? '（核显）' : ''}</p>${q.igpu ? `<p class="note warn">浏览器在用核显，画面会很卡。${GPU_TIP}</p>` : ''}${q.phone ? '<p class="note">手机上建议用「手机」档、横屏玩；发烫的话把帧率上限设成 30。</p>' : ''}${q.q === 'max' ? '<p class="note">「极致」档要高端显卡；天色变化和城市盖好时会补拍一次街景反射，那一下可能轻微顿一顿。</p>' : ''}` : '<p class="note">3D 场景没有启动，画质设置不可用。</p>';
   const row = (k, n) => `<div class="set-row"><span>${n}</span><input type="range" min="0" max="100" value="${p(vol[k])}" data-s="vol:${k}"><b>${p(vol[k])}</b></div>`;
   return `<div class="veil"><section class="settings panel"><h2>${icon('settings', 20)} 设置</h2>${gfx}
   <h4>声音</h4>${row('master', '总音量')}${row('music', '音乐')}${row('sfx', '音效')}${row('amb', '环境声')}
@@ -279,6 +287,10 @@ function settingsHTML() {
 function setting(s, el) {
   if (s === 'auto') { const q = office?.quality?.(); if (q) office.setQuality(q.q, el.checked); }
   else if (s === 'mute') setMuted(el.checked);
+  else if (s === 'scale') {                                                   // 渲染精度：拖的时候只改数字，停手 0.3 秒再真正换分辨率
+    if (el.nextElementSibling) el.nextElementSibling.textContent = el.value + '%';
+    clearTimeout(scaleTimer); scaleTimer = setTimeout(() => { office?.setScale?.(+el.value / 100); render(); }, 300);
+  }
   else if (s === 'hints') { V.hintsOff = !el.checked; try { localStorage.setItem('ldt_hints', V.hintsOff ? '0' : '1'); } catch { /* 存不了就算了 */ } render(); }
   else if (s === 'fps') { V.fps = el.checked; try { localStorage.setItem('ldt_fps', V.fps ? '1' : '0'); } catch { /* 存不了就算了 */ } render(); }
   else if (s.startsWith('vol:')) {
@@ -373,7 +385,7 @@ function render() {
   V.recActs = new Set(V.hints.filter(h => h.act && !h.later).map(h => h.act));
   if (V.screen === 'play' && !V.dlg && !V.wait) trackHints();
   ui.innerHTML = V.screen === 'title' ? title() : V.screen === 'wizard' ? wizard() : V.screen === 'meta' ? metaScreen()
-    : V.screen === 'play' ? topbar() + leftPanel() + rightPanel() + bottom() + alertsHTML() + tutorHTML() + toastHTML() + popHTML() + modal()
+    : V.screen === 'play' ? topbar() + leftPanel() + rightPanel() + bottom() + liftHTML() + alertsHTML() + tutorHTML() + toastHTML() + popHTML() + modal()
       : topbar() + '<div class="dim"></div>' + endScreen();
   if (V.settings) ui.insertAdjacentHTML('beforeend', settingsHTML());
   if (V.fps && V.screen === 'play') ui.insertAdjacentHTML('beforeend', `<div class="fps">${fpsText()}</div>`);
@@ -398,7 +410,7 @@ function syncScene() {
       staff: S.staff.map(e => ({ id: e.uid, role: e.role, mood: G.clamp(S.morale + (parseInt(e.uid.slice(1), 10) * 7) % 21 - 10, 0, 100) })),
       racks: S.ownModel ? G.clamp(Math.ceil(Math.log2(S.gpu / 8 + 1)), 0, 12) : 0,
       furnace: S.ownModel && S.furnace?.on && free > 0 ? { heat: G.clamp(0.25 + free / Math.max(1, G.quota(S)) * 0.75, 0, 1) } : null,
-      night: String(S.policies.work) === '996', alert: !S.over && G.runway(S) < 3,
+      night: String(S.policies.work) === '996', alert: !S.over && G.runway(S) < 3, floor: floorNow(),
     });
     const L = rect('.left'), R = rect('.right'), T = rect('.top'), B = rect('.bottom');
     office.setInsets(V.screen === 'play' && L ? { left: L.right + 8, right: R ? innerWidth - R.left + 8 : 16, top: T.bottom + 8, bottom: B ? innerHeight - B.top + 8 : 16 } : { left: 0, right: 0, top: 0, bottom: 0 });
@@ -412,7 +424,60 @@ function syncScene() {
     office.setInsets({ left: box ? box.right + 8 : 0, right: 0, top: 0, bottom: 0 });
   }
 }
-const playFx = () => { if (S && office) for (const [n, d] of S.fxq.splice(0)) { office.play(n, d); if (FX_SOUND[n]) sfx(FX_SOUND[n]); } };
+// 特效：多层楼里出炉、炸炉时电梯自动去研究院；总览时彩蛋人物出场，先去老板那层
+const playFx = () => {
+  if (!S || !office) return;
+  for (const [n, d] of S.fxq.splice(0)) {
+    const p = plan(); let delay = 0;
+    if (p && V.screen === 'play') {
+      const want = n === 'release' || n === 'boom' ? floorRole(p, 'res') : n === 'cameo' && floorNow() < 0 ? bossFloor(p) : null;
+      if (want != null && want !== V.floor) { goto(want); delay = (office.lift?.().eta || 0) * 1000; }
+    }
+    office.play(n, d);
+    if (FX_SOUND[n]) { if (delay) setTimeout(() => sfx(FX_SOUND[n]), delay); else sfx(FX_SOUND[n]); }
+  }
+};
+// ───────── 多层办公楼：右侧的电梯面板 ─────────
+const plan = () => (S ? floorsOf(S.co.office) : null);
+const floorRole = (p, role) => { const i = p.findIndex(f => f.includes(role)); return i >= 0 ? i : 0; };
+const bossFloor = p => { const i = p.findIndex(f => f.includes('ceo')); return i >= 0 ? i : p.length - 1; };
+const lcdText = (f, n) => (f < 0 || f >= n ? '全' : `${f + 1}F`);
+// 现在看哪一层（-1 = 全楼）。刚搬进新楼先看全楼，之后记住上次看的
+function floorNow() {
+  if (!plan()) return 0;
+  if (V.floorLv !== S.co.office) { V.floorLv = S.co.office; V.floor = -1; }
+  return V.floor;
+}
+function liftHTML() {
+  const p = plan();
+  if (!p || V.screen !== 'play' || !office?.lift) return '';
+  const cur = floorNow(), s = office.lift(), cnt = p.map(() => 0), boss = bossFloor(p);
+  for (const e of S.staff) cnt[floorRole(p, e.role)]++;
+  const arr = s.moving ? (s.dir > 0 ? 'up' : 'dn') : '', lcd = s.moving ? Math.round(s.pos) : cur;
+  return `<div class="lift panel"><div class="lcd"><i class="arr ${arr}">${s.moving ? (s.dir > 0 ? '▲' : '▼') : '●'}</i><b data-live="lcd">${lcdText(lcd, p.length)}</b></div>
+  <button class="lb all ${cur < 0 ? 'on' : ''}" data-a="floor:all" title="看整栋楼（Home）">${icon('building', 15)}<span>全楼</span></button>
+  ${p.map((f, i) => `<button class="lb ${cur === i ? 'on' : ''}" data-a="floor:${i}" title="${f.map(d => DEPTS[d].name).join('、')}（↑↓ 换楼层）"><b>${i + 1}F</b><span>${f.map(d => DEPTS[d].short).join('·')}</span><em>${i === boss ? '👑' : ''}${cnt[i] || ''}</em></button>`).reverse().join('')}</div>`;
+}
+// 坐电梯：显示屏跟着数楼层，到站「叮」一声
+let liftRaf = 0;
+function goto(n) {
+  V.floor = n; syncScene();
+  const s = office?.lift?.();
+  if (s?.moving) { sfx('lift', { pitch: s.dir > 0 ? 2 : -3 }); liftLoop(); }
+  render();
+}
+function liftLoop() {
+  cancelAnimationFrame(liftRaf);
+  const tick = () => {
+    const s = office?.lift?.(); if (!s) return;
+    const el = ui.querySelector('.lift [data-live="lcd"]'), ar = ui.querySelector('.lift .arr');
+    if (el) el.textContent = lcdText(s.moving ? Math.round(s.pos) : s.open, s.N);
+    if (ar) { ar.className = 'arr ' + (s.moving ? (s.dir > 0 ? 'up' : 'dn') : ''); ar.textContent = s.moving ? (s.dir > 0 ? '▲' : '▼') : '●'; }
+    if (s.moving) { liftRaf = requestAnimationFrame(tick); return; }
+    sfx('ding'); ui.querySelector('.lift')?.classList.add('arrived'); setTimeout(() => ui.querySelector('.lift')?.classList.remove('arrived'), 700);
+  };
+  liftRaf = requestAnimationFrame(tick);
+}
 function toast(t) {
   if (!t || (!t.text && !(t.chips || []).length)) return;
   V.toast = t; clearTimeout(toastTimer); if (t.ok == null) sfx('toast');
@@ -446,7 +511,7 @@ function nextMonth() {
   if (!S.over) toast({ text: `${G.dateStr(S.t - 1)}结算：收入 ${G.money(S, S.last.rev)}，支出 ${G.money(S, S.last.cost)}，净 ${G.money(S, S.last.net, true)}${feat ? `\n${feat.icon} 新功能「${feat.name}」上线了，研发组空出来了。` : ''}` });
   pump();
 }
-const resetView = () => { V.summary = null; V.toast = null; V.pop = null; V.tipKey = null; V.hintSeen = {}; V.hintsReady = false; V.hintsAll = false; V.flash = null; };
+const resetView = () => { V.summary = null; V.toast = null; V.pop = null; V.tipKey = null; V.hintSeen = {}; V.floorLv = null; V.hintsReady = false; V.hintsAll = false; V.flash = null; };
 function startGame(setup) { S = G.newGame(setup, meta); V.screen = 'play'; V.ltab = 'rd'; V.rtab = 'board'; resetView(); pump(); }
 
 const CMD = {
@@ -497,6 +562,14 @@ const CMD = {
   },
   hintx(id) { const h = V.hints.find(x => x.id === id); if (!h) return; muteHint(S, h); G.saveGame(S); render(); },
   hintall() { V.hintsAll = !V.hintsAll; render(); },
+  // 楼层面板：点哪层去哪层
+  floor(x) {
+    const p = plan();
+    if (V.dlg || V.wait || !p) return;
+    const n = x === 'all' ? -1 : G.clamp(+x | 0, 0, p.length - 1);
+    if (n === V.floor && !office?.lift?.().moving) return;
+    goto(n);
+  },
   ltab(t) { V.ltab = t; render(); },
   rtab(t) { V.rtab = t; render(); },
   toast() { V.toast = null; ui.querySelector('.toast')?.remove(); },
@@ -510,6 +583,7 @@ const CMD = {
   },
   settings(a) { V.settings = a !== 'close'; render(); },
   gfx(q) { office?.setQuality?.(q, false); render(); },
+  fpscap(v) { office?.setFpsCap?.(v === 'auto' ? null : +v); render(); },
   act(id) {
     if (V.dlg || V.wait) return;
     const r = A.perform(S, id);
@@ -558,6 +632,8 @@ const CMD = {
 
 export function boot(root, scene) {
   ui = root; office = scene;
+  // 手机竖屏放不下这套界面：盖一层「请横过来」（只在竖屏窄屏时由 CSS 显示）
+  if (!document.querySelector('.rotate-hint')) document.body.insertAdjacentHTML('beforeend', '<div class="rotate-hint"><b>↻</b><span>把手机横过来玩</span><small>竖着放不下这么多信息</small></div>');
   const fit = () => { document.documentElement.style.setProperty('--z', G.clamp(Math.min(innerWidth / 1280, innerHeight / 720), 0.5, 1.3).toFixed(3)); syncScene(); };
   addEventListener('resize', fit);
   ui.addEventListener('click', e => {
@@ -581,6 +657,11 @@ export function boot(root, scene) {
     if (e.target.tagName === 'INPUT' || V.screen !== 'play') return;
     if (V.dlg) { if (V.res && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); CMD.res(); } else if (!V.res && /^[1-4]$/.test(e.key)) CMD.dlg(String(+e.key - 1)); else if (e.key === 'Escape') CMD.dlg('close'); }
     else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); CMD.next(); }
+    else if (plan() && ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home'].includes(e.key)) {     // ↑↓ 换楼层，Home 看全楼
+      e.preventDefault();
+      const p = plan(), cur = floorNow() < 0 ? p.length : V.floor, n = e.key === 'Home' ? p.length : G.clamp(cur + (e.key === 'ArrowUp' || e.key === 'PageUp' ? 1 : -1), 0, p.length);
+      if (n !== cur) goto(n >= p.length ? -1 : n);
+    }
   });
   // 声音要等玩家第一次点击或按键才能开（浏览器的规定）
   const unlock = () => audio.unlock();

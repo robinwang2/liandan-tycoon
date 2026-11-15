@@ -1,6 +1,6 @@
 // CEO 行动：每个行动花行动点（和钱），要么直接生效，要么弹出子选项。
 import * as G from './engine.js';
-import { DATA_SOURCES, FEATURES, FEAT, OFFICES, officeName, STAGES, INVESTORS, ROLES, DIRT, AGI_CAP } from '../data/defs.js';
+import { DATA_SOURCES, FEATURES, FEAT, OFFICES, MAX_OFFICE, officeName, floorsOf, STAGES, INVESTORS, ROLES, DIRT, AGI_CAP } from '../data/defs.js';
 
 const { rnd, rf, pick, money, fmtUsers, mod, power, unit, applyFx, addDirt, news, optCheck, clamp, pCheck, rollCheck } = G;
 const pct = (S, attr, dc) => Math.round(pCheck(S, attr, dc) * 100);
@@ -199,10 +199,18 @@ export const ACTIONS = [
     run: S => { const ok = rollCheck(S, 'cha', 14); applyFx(S, { morale: ok ? 16 : -6 }); return { ok, text: ok ? '你讲了使命、愿景和财富自由。散会时有人眼里有光，有人打开计算器算期权。' : '饼画得太大，把大家噎着了。会后茶水间的共识是：「先把上个月的报销批了。」' }; },
   },
   {
-    id: 'office', tab: 'team', name: '升级办公室', icon: '🏢', ap: 1, cost: S => (S.co.office < 5 ? OFFICES[S.co.office + 1].up * mod(S, 'rentMult') : 0),
-    desc: S => (S.co.office < 5 ? `搬进「${officeName(S, S.co.office + 1)}」：能坐 ${OFFICES[S.co.office + 1].cap} 人，月租 ${money(S, OFFICES[S.co.office + 1].rent * mod(S, 'rentMult'))}` : '已经是总部大楼了'),
-    block: S => (S.co.office >= 5 ? '已经到顶了' : null),
-    run: S => { S.co.office++; applyFx(S, { morale: 8, rep: 3, hype: 3 }); S.fxq.push(['levelup']); news(S, `🏢 ${S.co.name} 搬进了${officeName(S)}。`); return `搬家那天，大家抱着显示器走进了${officeName(S)}。行政第一件事，是把公司 logo 贴满了每一面墙。`; },
+    id: 'office', tab: 'team', name: '升级办公室', icon: '🏢', ap: 1, cost: S => (S.co.office < MAX_OFFICE ? OFFICES[S.co.office + 1].up * mod(S, 'rentMult') : 0),
+    desc: S => {
+      if (S.co.office >= MAX_OFFICE) return '已经是总部大楼了';
+      const nx = S.co.office + 1, fl = floorsOf(nx);
+      return `搬进「${officeName(S, nx)}」${fl ? `（${fl.length} 层，${nx === MAX_OFFICE ? '一层一个部门' : '部门分楼层'}）` : ''}：能坐 ${OFFICES[nx].cap} 人，月租 ${money(S, OFFICES[nx].rent * mod(S, 'rentMult'))}`;
+    },
+    block: S => (S.co.office >= MAX_OFFICE ? '已经到顶了' : null),
+    run: S => {
+      S.co.office++; applyFx(S, { morale: 8, rep: 3, hype: 3 }); S.fxq.push(['levelup']); news(S, `🏢 ${S.co.name} 搬进了${officeName(S)}。`);
+      const fl = floorsOf(S.co.office);
+      return fl ? `搬家那天，电梯从早到晚没停过。${S.co.office === MAX_OFFICE ? '每个部门终于有了自己的楼层，' : '各部门按楼层分好了地盘，'}行政第一件事，是在每层电梯口都贴上公司 logo。` : `搬家那天，大家抱着显示器走进了${officeName(S)}。行政第一件事，是把公司 logo 贴满了每一面墙。`;
+    },
   },
   // ── 资本 ──
   {
@@ -283,7 +291,7 @@ export function fire(S, uid) {
   if (!e) return null;
   return G.measure(S, () => { S.cash -= 2 * e.salary * mod(S, 'salaryMult'); G.removeStaff(S, uid); applyFx(S, { morale: e.skill >= 7 ? -8 : -4 }); return { text: `${e.name} 「毕业」了，N+1 已付。` }; });
 }
-export function setGpu(S, n) { S.gpu = clamp(Math.round(n), 0, G.quota(S)); }
+export function setGpu(S, n) { S.gpu = Math.max(0, Math.round(n) || 0); }          // 没有硬上限：超出配额的按现货价租（见 G.gpuRent）
 export function setPolicy(S, k, v) {
   if (String(S.policies[k]) === String(v)) return;
   S.policies[k] = v;

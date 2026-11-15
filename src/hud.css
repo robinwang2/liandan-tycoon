@@ -201,6 +201,9 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
 #ui .bar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--highlight)); }
 #ui .gpubar .infer { background: linear-gradient(90deg, color-mix(in srgb, var(--info) 60%, var(--base)), var(--info)); }
 #ui .gpubar .train { background: var(--gold-fill); }
+#ui .gpubar { position: relative; }
+#ui .gpubar .qline { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ink-1); box-shadow: 0 0 0 1px var(--shade); }   /* 配额线：右边是按现货价租的 */
+#ui .gpu small .over { color: var(--bad); }
 #ui .gpurow { gap: 6px; }
 #ui .gpurow b { color: var(--gold); font-size: 14px; }
 #ui .seg { border: 1px solid var(--line-bright); border-radius: 8px; background: var(--recess); }
@@ -570,3 +573,42 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
 #ui .tab .tdot { position: absolute; top: 6px; right: calc(50% - 17px); width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold-glow); }
 #ui .w.ready { border-color: var(--gold-line); cursor: pointer; }
 #ui .w.ready small:first-of-type { color: var(--gold); }
+
+/* 多层办公楼：右侧的电梯面板。顶上是楼层显示屏（琥珀色数码字 + 上下箭头），下面是楼层按钮，当前楼层金色 */
+#ui .lift { position: absolute; right: 346px; top: 50%; translate: 0 -50%; z-index: 3; width: 150px; padding: 8px; display: flex; flex-direction: column; gap: 4px; background: var(--glass); border-radius: 12px; }
+#ui:not(:has(.right)) .lift { right: 12px; }
+#ui .lift .lcd { display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; margin-bottom: 4px; border-radius: 8px; background: #07090d; border: 1px solid var(--line); box-shadow: inset 0 2px 8px rgba(0, 0, 0, .6); }
+#ui .lift .lcd b { min-width: 54px; text-align: center; font: 700 24px/1 Consolas, "SFMono-Regular", ui-monospace, monospace; letter-spacing: 1px; color: #ffb547; text-shadow: 0 0 8px rgba(255, 170, 60, .6); }
+#ui .lift .arr { width: 14px; text-align: center; font-style: normal; font-size: 12px; color: #4a4f58; }
+#ui .lift .arr.up, #ui .lift .arr.dn { color: #ffb547; text-shadow: 0 0 6px rgba(255, 170, 60, .7); }
+#ui .lift .lb { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 4px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 8px; background: var(--recess); color: var(--ink-2); font: 500 11px/1.25 var(--font); text-align: left; cursor: pointer; }
+#ui .lift .lb b { color: var(--ink-1); font-size: 12px; font-weight: 700; }
+#ui .lift .lb span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ui .lift .lb em { font-style: normal; font-size: 10.5px; color: var(--ink-2); }
+#ui .lift .lb:hover { background: var(--surface); color: var(--ink-1); }
+#ui .lift .lb.on { background: var(--gold-wash); border-color: var(--gold-line); color: var(--gold); }
+#ui .lift .lb.on b, #ui .lift .lb.on em { color: var(--gold); }
+#ui .lift .lb.all { grid-template-columns: 18px 1fr; margin-bottom: 4px; }
+#ui .lift .lb.all .ic { color: var(--gold); }
+#ui .lift.arrived .lb.on { box-shadow: 0 0 0 1px var(--gold), 0 0 14px var(--gold-glow); }
+
+/* 画质设置：七档一排、这一档的说明、渲染精度、帧率上限 */
+#ui .settings .seg.tiers button { padding: 7px 2px; font-size: 12px; }
+#ui .settings .tierdesc { margin: -4px 0 6px; line-height: 1.65; }
+#ui .settings .tierdesc b { color: var(--gold); }
+#ui .set-row.scalerow { grid-template-columns: 64px minmax(0, 1fr) 40px; }
+#ui .set-row.fpsrow { grid-template-columns: 64px minmax(0, 1fr); }
+#ui .set-row.fpsrow .seg { margin: 0; }
+#ui .set-row.fpsrow .seg button { padding: 6px 2px; font-size: 11.5px; }
+
+/* 手机竖屏：请横过来 */
+.rotate-hint { display: none; }
+@media (orientation: portrait) and (max-width: 760px) {
+  .rotate-hint { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; background: #0c0f16; color: #f2c46d; font: 600 18px/1.4 "PingFang SC", "Microsoft YaHei", sans-serif; text-align: center; }
+  .rotate-hint b { font-size: 64px; line-height: 1; }
+  .rotate-hint small { color: #aeb6c2; font-size: 13px; font-weight: 400; }
+}
+@media (orientation: portrait) and (max-width: 760px) and (prefers-reduced-motion: no-preference) {
+  .rotate-hint b { animation: rot-hint 1.8s ease-in-out infinite; }
+  @keyframes rot-hint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
+}

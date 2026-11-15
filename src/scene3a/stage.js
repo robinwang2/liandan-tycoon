@@ -15,14 +15,20 @@ const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
 export const FX = 1;                                                           // 特效图层：精灵、光晕、粒子放这层，不参与环境光遮蔽
 export const FARL = 2;                                                         // 远景图层：远处的楼、山、海，不进遮蔽和景深的深度图（省一遍绘制）
 
-// 画质档位：dpr 像素比上限 | msaa 抗锯齿采样 | shadow 阴影贴图 | ao 环境光遮蔽采样 | dof 景深步长（越小越细）| city 城市细节
+// 画质档位，从手机到顶配：
+//   px 内部渲染像素上限 | dpr 像素比上限 | msaa 抗锯齿采样 | shadow 阴影贴图（0 = 不要）| soft 阴影边缘的软度
+//   ao 环境光遮蔽采样 | aoRes 遮蔽分辨率 | dof 景深步长（越小越细）| bloom 泛光 | post false = 不走后期，直接出画面
+//   city 城市细节（0 只留近处 / 1 标准 / 2 多一圈街区、更多车和人）| refl 城市实时反射 | aniso 贴图各向异性 | fps 默认帧率上限
 export const QUALITY = {
-  min: { name: '极简', dpr: 1, px: 0.55e6, msaa: 0, shadow: 0, ao: 0, aoRes: 0.5, dof: 0, bloom: 0.6 },
-  low: { name: '流畅', dpr: 1, px: 1.0e6, msaa: 0, shadow: 2048, ao: 0, aoRes: 0.5, dof: 0, bloom: 0.8 },
-  med: { name: '均衡', dpr: 1, px: 1.5e6, msaa: 2, shadow: 2048, ao: 8, aoRes: 0.5, dof: 7, bloom: 1 },
-  high: { name: '高', dpr: 1.5, px: 2.1e6, msaa: 2, shadow: 4096, ao: 12, aoRes: 0.5, dof: 5, bloom: 1 },
-  ultra: { name: '电影', dpr: 2, px: 4.0e6, msaa: 4, shadow: 4096, ao: 16, aoRes: 1, dof: 2.6, bloom: 1 },
+  mobile: { name: '手机', dpr: 1, px: 0.33e6, msaa: 0, shadow: 0, ao: 0, aoRes: 0.5, dof: 0, bloom: 0, post: false, city: 0, aniso: 2, fps: 30, desc: '直接出画面，不开阴影和后期，城市只留近处，锁 30 帧。手机和很老的电脑用' },
+  min: { name: '极简', dpr: 1, px: 0.55e6, msaa: 0, shadow: 0, ao: 0, aoRes: 0.5, dof: 0, bloom: 0.6, city: 1, aniso: 4, desc: '没有阴影和遮蔽，保留泛光和调色' },
+  low: { name: '流畅', dpr: 1, px: 1.0e6, msaa: 0, shadow: 2048, ao: 0, aoRes: 0.5, dof: 0, bloom: 0.8, city: 1, aniso: 4, desc: '有阴影，不开遮蔽和景深。核显用这档' },
+  med: { name: '均衡', dpr: 1, px: 1.5e6, msaa: 2, shadow: 2048, ao: 8, aoRes: 0.5, dof: 7, bloom: 1, city: 1, aniso: 4, desc: '阴影、遮蔽、景深都开，分辨率中等' },
+  high: { name: '高', dpr: 1.5, px: 2.1e6, msaa: 2, shadow: 4096, ao: 12, aoRes: 0.5, dof: 5, bloom: 1, city: 1, aniso: 8, desc: '独显的默认档' },
+  ultra: { name: '电影', dpr: 2, px: 4.0e6, msaa: 4, shadow: 4096, ao: 16, aoRes: 1, dof: 2.6, bloom: 1, city: 1, aniso: 8, desc: '接近 2K 原生分辨率，满分辨率遮蔽，细景深' },
+  max: { name: '极致', dpr: 2, px: 8.3e6, msaa: 4, shadow: 8192, soft: 2.4, ao: 24, aoRes: 1, dof: 1.8, bloom: 1.1, city: 2, refl: true, aniso: 16, desc: '原生 4K、8K 软阴影、城市实时反射（玻璃幕墙照得出街景）、更大的城市。要高端显卡' },
 };
+export const Q_ORDER = ['max', 'ultra', 'high', 'med', 'low', 'min', 'mobile'];          // 自动调整往下降的顺序
 
 const QUAD_VS = /* glsl */`varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
@@ -90,7 +96,9 @@ void main() {
   col = mix(col, cc, c * 0.9);
   col = mix(col, uHor * 0.85, smoothstep(0.0, -0.3, d.y));                                             // 地平线以下：一片雾色
   gl_FragColor = vec4(col, 1.0);
-}`;
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;                                                                                                     // 最后两行只在「手机」档（不走后期、直接出画面）时生效
 
 // 天色关键帧：[太阳高度角(度), 天顶, 地平线, 日光颜色, 日光强度, 环境光强度, 曝光]
 const SKYKEYS = [
@@ -114,23 +122,28 @@ export function createStage(container) {
   cam.layers.enableAll();
   const st = {
     w: 1, h: 1, pr: 1, t: 0, q: 'high', qAuto: true, mode: 'title', frame: { W: 16, D: 11.5, H: 3.6 }, insets: { left: 0, right: 0, top: 0, bottom: 0 },
-    az: Math.PI / 4, azUser: 0, zoom: 1, el: 0.6, fov: 22, upp: 0, snap: true, shake: 0, alert: 0, alertT: 0,
+    az: Math.PI / 4, azUser: 0, zoom: 1, el: 0.6, fov: 22, upp: 0, snap: true, shake: 0, alert: 0, alertT: 0, lift: 0,
     tod: 10, todFrom: 10, todTo: 10, lapse: 0, lapseDur: 0, weather: 'clear', wx: [0.3, 0, 0, 1], dist: 200,
+    scale: 1, fpsCap: null,                                                    // 玩家自己调的：渲染精度倍数、帧率上限（null = 跟着画质档）
   };
   const GPU = (() => {
     const g = renderer.getContext(), ext = g.getExtension('WEBGL_debug_renderer_info'), raw = String((ext && g.getParameter(ext.UNMASKED_RENDERER_WEBGL)) || g.getParameter(g.RENDERER) || '');
     const soft = /SwiftShader|llvmpipe|Microsoft Basic|software/i.test(raw);
     const name = soft ? '软件渲染（没用上显卡）' : raw.replace(/^ANGLE \([^,]*,\s*/, '').replace(/^ANGLE Metal Renderer:\s*/i, '').replace(/\s*\(0x[0-9a-f]+\)/i, '').replace(/\s+(Direct3D|OpenGL|Vulkan|Metal).*$/i, '').replace(/,.*$/, '').trim() || raw || '未知显卡';
-    const igpu = soft || (/Intel|Radeon\(TM\)|Radeon Graphics|Radeon Vega|Vega \d|UHD|Iris|Mali|Adreno|PowerVR/i.test(raw) && !/RTX|GTX|Quadro|Radeon RX|Radeon Pro|Arc\(TM\) [AB]\d|Arc [AB]\d/i.test(raw));
-    return { name, raw, igpu, soft };
+    // 手机、平板：看 UA、触屏和屏幕尺寸（iPad 会冒充 Mac，靠触点数认出来）
+    const ua = navigator.userAgent || '', touch = (navigator.maxTouchPoints || 0) > 1, short = Math.min(screen.width || 9999, screen.height || 9999);
+    const phone = (/Android|iPhone|iPod|Mobile|HarmonyOS/i.test(ua) || touch) && short < 560;
+    const tablet = !phone && (/iPad|Tablet|Android/i.test(ua) || (touch && /Macintosh/.test(ua)));
+    const igpu = !phone && !tablet && (soft || (/Intel|Radeon\(TM\)|Radeon Graphics|Radeon Vega|Vega \d|UHD|Iris|Mali|Adreno|PowerVR/i.test(raw) && !/RTX|GTX|Quadro|Radeon RX|Radeon Pro|Arc\(TM\) [AB]\d|Arc [AB]\d/i.test(raw)));
+    return { name, raw, igpu, soft, phone, tablet };
   })();
   let saved = false;
-  try { const s = JSON.parse(localStorage.getItem('ldt_gfx_v2') || 'null'); if (s && QUALITY[s.q] && s.gpu === GPU.name) { st.q = s.q; st.qAuto = !!s.auto; saved = true; } } catch { /* 读不到就用默认档 */ }
-  if (!saved && GPU.igpu) st.q = GPU.soft ? 'min' : 'low';
+  try { const s = JSON.parse(localStorage.getItem('ldt_gfx_v2') || 'null'); if (s && QUALITY[s.q] && s.gpu === GPU.name) { st.q = s.q; st.qAuto = !!s.auto; st.scale = clamp(+s.scale || 1, 0.5, 1.5); st.fpsCap = s.fps ?? null; saved = true; } } catch { /* 读不到就用默认档 */ }
+  if (!saved) st.q = GPU.phone || GPU.soft ? 'mobile' : GPU.tablet ? 'min' : GPU.igpu ? 'low' : 'high';
 
   // ── 天空、日月、环境光 ──
   const U = { uSun: { value: new THREE.Vector3(0, 1, 0) }, uMoon: { value: new THREE.Vector3(-0.4, 0.75, -0.5).normalize() }, uZen: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uSunCol: { value: new THREE.Color() }, uNight: { value: 0 }, uCloud: { value: 0.3 }, uTime: { value: 0 } };
-  const skyMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false, fog: false, toneMapped: false });
+  const skyMat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: SKY_VS, fragmentShader: SKY_FS, side: THREE.BackSide, depthWrite: false, fog: false });
   const dome = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 24), skyMat); dome.scale.setScalar(1800); dome.frustumCulled = false; dome.renderOrder = -10; scene.add(dome);
   const pm = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(); envScene.add(new THREE.Mesh(dome.geometry, skyMat));
   let envRT = null, envTod = -99, envWx = '', envAt = -9;
@@ -167,22 +180,46 @@ export function createStage(container) {
     renderer.toneMappingExposure = lerp(A[6], B[6], u);
     scene.fog.color.copy(cB).lerp(cA, 0.25);
     for (const m of nightMats) m[0].emissiveIntensity = lerp(m[1], m[2], n);
-    // 环境反射贴图：天色变了才重烤，翻月快进时每隔几帧烤一次
-    if (force || ((Math.abs(st.tod - envTod) > (st.lapse > 0 ? 0.5 : 0.12) || st.weather !== envWx) && st.t - envAt > 0.12)) {
-      const rt = pm.fromScene(envScene, 0, 0.1, 10); scene.environment = rt.texture; envRT?.dispose(); envRT = rt; envTod = st.tod; envWx = st.weather; envAt = st.t;
+    // 环境反射贴图：天色变了才重烤，翻月快进时每隔几帧烤一次（手机档烤得更省）。极致档烤完天空再补一张带城市的
+    const lite = QUALITY[st.q].post === false;
+    if (force || ((Math.abs(st.tod - envTod) > (st.lapse > 0 ? (lite ? 1.5 : 0.5) : (lite ? 0.4 : 0.12)) || st.weather !== envWx) && st.t - envAt > (lite ? 0.5 : 0.12))) {
+      const rt = pm.fromScene(envScene, 0, 0.1, 10); scene.environment = rt.texture; envRT?.dispose(); envRT = rt; envTod = st.tod; envWx = st.weather; envAt = st.t; reflDirty = true;
     }
   }
+  // ── 城市实时反射（极致档）：在办公室上空放一台六面相机拍一圈街景，做成环境贴图，玻璃幕墙和亮面地板就照得出城市 ──
+  let cubeRT = null, cubeCam = null, reflDirty = true, reflAt = -99;
+  function bakeReflections() {
+    if (!cubeRT) {
+      cubeRT = new THREE.WebGLCubeRenderTarget(512, { type: THREE.HalfFloatType }); cubeCam = new THREE.CubeCamera(1, 1600, cubeRT);
+      for (const c of cubeCam.children) { c.layers.set(0); c.layers.enable(FARL); }          // 精灵和粒子不拍
+    }
+    cubeCam.position.set(0, st.probeY || 26, 0); dome.position.copy(cubeCam.position);          // 放在办公楼顶上方，别拍到楼里面
+    const au = renderer.shadowMap.autoUpdate, tm = renderer.toneMapping; renderer.shadowMap.autoUpdate = false; renderer.toneMapping = THREE.NoToneMapping;
+    cubeCam.update(renderer, scene);
+    renderer.shadowMap.autoUpdate = au; renderer.toneMapping = tm; dome.position.copy(cam.position);
+    const rt = pm.fromCubemap(cubeRT.texture); scene.environment = rt.texture; envRT?.dispose(); envRT = rt; reflDirty = false; reflAt = st.t;
+  }
+  function dropReflections() { cubeRT?.dispose(); cubeRT = null; cubeCam = null; }
 
   // ── 后期管线 ──
   let composer = null, gtao = null, bloom = null, dof = null, grade = null;
   const fnPass = fn => { const p = new Pass(); p.needsSwap = false; p.render = fn; return p; };
   const rawPass = (fs, uniforms) => new ShaderPass(new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null }, ...uniforms }, vertexShader: QUAD_VS, fragmentShader: fs, depthTest: false, depthWrite: false }));
+  const qSubs = [];                                                             // 换档时要跟着变的（城市细节、贴图各向异性……）
   function buildPipeline() {
     const Q = QUALITY[st.q];
-    composer?.dispose(); gtao?.dispose?.(); bloom?.dispose?.();
-    st.pr = Math.max(0.5, Math.min(globalThis.devicePixelRatio || 1, Q.dpr, Math.sqrt(Q.px / (st.w * st.h))));
+    composer?.dispose(); gtao?.dispose?.(); bloom?.dispose?.(); composer = gtao = bloom = dof = grade = null;
+    st.pr = Math.max(0.35, Math.min(globalThis.devicePixelRatio || 1, Q.dpr, Math.sqrt(Q.px * st.scale / (st.w * st.h))));
     renderer.setPixelRatio(st.pr); renderer.setSize(st.w, st.h, false);
     const W = Math.max(2, Math.round(st.w * st.pr)), H = Math.max(2, Math.round(st.h * st.pr));
+    st.res = [W, H];
+    sun.castShadow = Q.shadow > 0; if (Q.shadow) sun.shadow.mapSize.set(Q.shadow, Q.shadow); sun.shadow.radius = Q.soft || 1; sun.shadow.map?.dispose(); sun.shadow.map = null;
+    if (!Q.refl) dropReflections(); reflDirty = true;
+    for (const f of qSubs) f(Q);
+    st.snap = true;
+    // 手机档：不建后期管线，渲染器自己做色调映射，直接画到屏幕上（省掉好几张全屏缓冲和十几遍全屏绘制）
+    renderer.toneMapping = Q.post === false ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping;
+    if (Q.post === false) return;
     composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(W, H, { type: THREE.HalfFloatType, samples: Q.msaa }));
     composer.addPass(new RenderPass(scene, cam));
     gtao = null; dof = null;
@@ -198,10 +235,9 @@ export function createStage(container) {
     bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.4, 0.7, 1.0); composer.addPass(bloom);
     grade = rawPass(GRADE_FS, { uExposure: { value: 1 }, uGrade: { value: new THREE.Vector4(1.1, 1.06, 0.34, 0.035) }, uShadow: { value: new THREE.Vector3(-0.012, 0.0, 0.02) }, uHigh: { value: new THREE.Vector3(0.02, 0.008, -0.02) }, uTime: { value: 0 }, uCA: { value: 0.012 }, uAlert: { value: 0 } });
     composer.addPass(grade);
-    sun.castShadow = Q.shadow > 0; if (Q.shadow) sun.shadow.mapSize.set(Q.shadow, Q.shadow); sun.shadow.map?.dispose(); sun.shadow.map = null;
-    st.snap = true;
   }
-  function setQuality(q, auto = false) { if (!QUALITY[q]) return; st.q = q; st.qAuto = auto; warm = 0; slow = 0; try { localStorage.setItem('ldt_gfx_v2', JSON.stringify({ q, auto, gpu: GPU.name })); } catch { /* 存不了就算了 */ } buildPipeline(); }
+  const saveGfx = () => { try { localStorage.setItem('ldt_gfx_v2', JSON.stringify({ q: st.q, auto: st.qAuto, gpu: GPU.name, scale: st.scale, fps: st.fpsCap })); } catch { /* 存不了就算了 */ } };
+  function setQuality(q, auto = false) { if (!QUALITY[q]) return; st.q = q; st.qAuto = auto; warm = 0; slow = 0; saveGfx(); buildPipeline(); }
 
   // ── 镜头：长焦俯拍。play 是经营视角，title 压低机位露出天际线，wizard 介于两者之间 ──
   const MODES = { play: { el: 0.6, fov: 22, zoom: 1, orbit: 0.012 }, title: { el: 0.34, fov: 28, zoom: 0.76, orbit: 0.4 }, wizard: { el: 0.5, fov: 24, zoom: 0.92, orbit: 0.3 }, end: { el: 0.45, fov: 24, zoom: 0.8, orbit: 0.35 } };
@@ -216,18 +252,28 @@ export function createStage(container) {
     const az = st.az + st.azUser + Math.sin(st.t * (M.orbit > 0.1 ? 0.07 : 0.25)) * M.orbit;
     st.azNow = az; st.dist = st.upp * st.h / (2 * Math.tan(st.fov * Math.PI / 360));
     const sh = st.shake > 0 ? st.shake * 0.5 : 0; st.shake = Math.max(0, st.shake - dt * 1.6);
-    tgt.set(0, L.H * 0.3 + (st.mode === 'title' ? 5 : 0), 0);
+    tgt.set(0, L.H * 0.3 + (st.mode === 'title' ? 5 : 0) + st.lift, 0);              // lift：多层楼里镜头跟着电梯上下
     cam.position.set(tgt.x + Math.sin(az) * Math.cos(st.el) * st.dist + (Math.random() - 0.5) * sh, tgt.y + Math.sin(st.el) * st.dist + (Math.random() - 0.5) * sh, tgt.z + Math.cos(az) * Math.cos(st.el) * st.dist);
     cam.lookAt(tgt); cam.fov = st.fov; cam.aspect = st.w / st.h; cam.near = Math.max(8, st.dist * 0.2); cam.far = 2400;
     cam.setViewOffset(st.w, st.h, -(i.left - i.right) / 2, -(i.top - i.bottom) / 2, st.w, st.h); cam.updateProjectionMatrix();
     dome.position.copy(cam.position);
     scene.fog.near = st.dist + lerp(60, 10, st.wx[2] > 0.2 && st.weather === 'fog' ? 1 : 0); scene.fog.far = st.dist + lerp(620, 230, clamp(st.wx[0] - 0.5, 0, 0.5) * 2);
   }
+  // 拖动转镜头；手机上两根手指捏合缩放
   let drag = null;
-  const el = renderer.domElement;
-  const onDown = e => { drag = { x: e.clientX, az: st.azUser }; el.setPointerCapture?.(e.pointerId); };
-  const onMove = e => { if (drag) st.azUser = clamp(drag.az - (e.clientX - drag.x) * 0.005, -1.25, 1.25); };
-  const onUp = () => { drag = null; };
+  const el = renderer.domElement, touches = new Map();
+  const pinch = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  const onDown = e => {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); el.setPointerCapture?.(e.pointerId);
+    drag = touches.size === 2 ? { pinch: pinch(), zoom: st.zoom } : { x: e.clientX, az: st.azUser };
+  };
+  const onMove = e => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!drag) return;
+    if (drag.pinch && touches.size >= 2) st.zoom = clamp(drag.zoom * pinch() / Math.max(1, drag.pinch), 0.5, 2.2);
+    else if (!drag.pinch) st.azUser = clamp(drag.az - (e.clientX - drag.x) * 0.005, -1.25, 1.25);
+  };
+  const onUp = e => { touches.delete(e.pointerId); drag = touches.size === 1 ? (() => { const [p] = touches.values(); return { x: p.x, az: st.azUser }; })() : null; };
   const onWheel = e => { e.preventDefault(); st.zoom = clamp(st.zoom * (e.deltaY > 0 ? 0.92 : 1.08), 0.5, 2.2); };
   el.addEventListener('pointerdown', onDown); el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', onUp); el.addEventListener('pointercancel', onUp); el.addEventListener('wheel', onWheel, { passive: false });
   function resize() { st.w = Math.max(1, container.clientWidth); st.h = Math.max(1, container.clientHeight); buildPipeline(); }
@@ -237,9 +283,11 @@ export function createStage(container) {
   const subs = []; let raf = 0, last = performance.now(), dead = false, ms = 16, slow = 0, frames = 0, query = null, fast = 16, warm = 0;
   const stats = { fps: 60, ms: 16, cpu: 0, gpu: 0, calls: 0, tris: 0 };
   const gl = renderer.getContext(), tq = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const fpsCap = () => st.fpsCap ?? QUALITY[st.q].fps ?? 0;                    // 0 = 不限
   function frame(now) {
     if (dead) return; raf = requestAnimationFrame(frame);
     if (document.hidden) { last = now; return; }
+    const cap = fpsCap(); if (cap && now - last < 1000 / cap - 2) return;     // 锁帧：省电、手机不烫
     tick(now);
   }
   function tick(now) {
@@ -253,11 +301,15 @@ export function createStage(container) {
     for (const f of subs) f(dt, st.t, env);
     st.alert = damp(st.alert, st.alertT, 2, dt);
     const n = env.night, Q = QUALITY[st.q];
-    bloom.strength = lerp(0.32, 0.6, n) * Q.bloom; bloom.threshold = lerp(1.0, 0.92, n); bloom.radius = 0.72;
-    if (dof) { const r = Math.hypot(st.frame.W, st.frame.D) * 0.5 + 5, px = st.h * st.pr / 1080; dof.uniforms.uDof.value.set(st.dist, r, (st.mode === 'title' ? 34 : 62) * px, (st.mode === 'title' ? 9 : 13) * px); dof.uniforms.uNF.value.set(cam.near, cam.far); }
-    const g = grade.uniforms; g.uExposure.value = renderer.toneMappingExposure; g.uTime.value = st.t; g.uAlert.value = st.alert * 0.4;
-    g.uGrade.value.set(lerp(1.1, 1.16, n), lerp(1.06, 1.1, n), lerp(0.34, 0.46, n), 0.035);
-    renderer.info.reset(); composer.render(dt);
+    if (Q.refl && reflDirty && st.lapse <= 0 && st.t - reflAt > 1.2) bakeReflections();      // 极致档：天色或城市变了，补拍一圈街景反射
+    if (bloom) { bloom.strength = lerp(0.32, 0.6, n) * Q.bloom; bloom.threshold = lerp(1.0, 0.92, n); bloom.radius = 0.72; }
+    if (dof) { const r = Math.hypot(st.frame.W, st.frame.D) * 0.5 + 5 + st.frame.H * 0.2, px = st.h * st.pr / 1080; dof.uniforms.uDof.value.set(st.dist, r, (st.mode === 'title' ? 34 : 62) * px, (st.mode === 'title' ? 9 : 13) * px); dof.uniforms.uNF.value.set(cam.near, cam.far); }
+    if (grade) {
+      const g = grade.uniforms; g.uExposure.value = renderer.toneMappingExposure; g.uTime.value = st.t; g.uAlert.value = st.alert * 0.4;
+      g.uGrade.value.set(lerp(1.1, 1.16, n), lerp(1.06, 1.1, n), lerp(0.34, 0.46, n), 0.035);
+    }
+    renderer.info.reset();
+    if (composer) composer.render(dt); else renderer.render(scene, cam);
     if (timing) { gl.endQuery(tq.TIME_ELAPSED_EXT); query = timing; }
     stats.calls = renderer.info.render.calls; stats.tris = renderer.info.render.triangles;
     ms = lerp(ms, raw * 1000, 0.05); stats.ms = ms; stats.fps = 1000 / ms; stats.cpu = lerp(stats.cpu, performance.now() - c0, 0.1);
@@ -266,7 +318,7 @@ export function createStage(container) {
     if (st.qAuto && warm > 3) {
       const lag = tq && stats.gpu > 0 ? stats.gpu > 18 || stats.cpu > 24 : fast > 45;
       slow = lag ? slow + real : Math.max(0, slow - real);
-      if (slow > 1.2) { const order = ['ultra', 'high', 'med', 'low', 'min'], j = order.indexOf(st.q); if (j >= 0 && j < order.length - 1) setQuality(order[j + 1], true); slow = 0; warm = 0; }
+      if (slow > 1.2) { const j = Q_ORDER.indexOf(st.q); if (j >= 0 && j < Q_ORDER.length - 1) setQuality(Q_ORDER[j + 1], true); slow = 0; warm = 0; }
     }
   }
   raf = requestAnimationFrame(frame);
@@ -278,6 +330,7 @@ export function createStage(container) {
     fx(o) { o.traverse(x => x.layers.set(FX)); return o; },
     setFrame(L) { if (L.W !== st.frame.W || L.D !== st.frame.D || L.H !== st.frame.H) { st.frame = { W: L.W, D: L.D, H: L.H }; } },
     setMode(m) { if (MODES[m] && m !== st.mode) { st.mode = m; } },
+    setLift(y) { st.lift = y || 0; },
     snap() { st.snap = true; },
     setInsets(i) { const n = { left: i.left || 0, right: i.right || 0, top: i.top || 0, bottom: i.bottom || 0 }, o = st.insets; if (n.left !== o.left || n.right !== o.right || n.top !== o.top || n.bottom !== o.bottom) st.insets = n; },
     // 设定时间（小时）。lapse 给秒数就播一段延时摄影：从现在快进一整天再停到目标时间
@@ -285,14 +338,19 @@ export function createStage(container) {
     setWeather(w) { if (WEATHER[w]) st.weather = w; },
     setAlert(on) { st.alertT = on ? 1 : 0; },
     shake(a) { st.shake = Math.max(st.shake, a); },
-    setQuality, quality: () => ({ q: st.q, auto: st.qAuto, gpu: GPU.name, igpu: GPU.igpu }),
+    setQuality, quality: () => ({ q: st.q, auto: st.qAuto, gpu: GPU.name, igpu: GPU.igpu, phone: GPU.phone, tablet: GPU.tablet, scale: st.scale, fps: st.fpsCap, fpsNow: fpsCap(), res: st.res }),
+    setScale(s) { st.scale = clamp(+s || 1, 0.5, 1.5); saveGfx(); buildPipeline(); },        // 渲染精度：在画质档的分辨率上限上再乘一个系数
+    setFpsCap(c) { st.fpsCap = c == null ? null : +c; saveGfx(); },                         // null = 跟着画质档（手机档 30），0 = 不限
+    onQuality(f) { qSubs.push(f); f(QUALITY[st.q]); return () => { const i = qSubs.indexOf(f); if (i >= 0) qSubs.splice(i, 1); }; },
+    refreshReflections() { reflDirty = true; },
+    setProbe(y) { if (Math.abs((st.probeY || 0) - y) > 0.5) { st.probeY = y; reflDirty = true; } },     // 反射相机的高度：办公楼顶再往上一点
     refreshSky() { skyUpdate(0, true); },
     // 调试用：页面在后台时 requestAnimationFrame 不跑，可以手动推一帧
     debug: { get composer() { return composer; }, get gtao() { return gtao; }, get dof() { return dof; }, get bloom() { return bloom; }, sun, step(dt = 1 / 60) { tick(last + dt * 1000); } },
     dispose() {
       dead = true; cancelAnimationFrame(raf); ro.disconnect();
       el.removeEventListener('pointerdown', onDown); el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', onUp); el.removeEventListener('pointercancel', onUp); el.removeEventListener('wheel', onWheel);
-      composer?.dispose(); gtao?.dispose?.(); bloom?.dispose?.(); envRT?.dispose(); pm.dispose(); dome.geometry.dispose(); skyMat.dispose(); sun.shadow.map?.dispose(); renderer.dispose(); el.remove();
+      composer?.dispose(); gtao?.dispose?.(); bloom?.dispose?.(); envRT?.dispose(); dropReflections(); pm.dispose(); dome.geometry.dispose(); skyMat.dispose(); sun.shadow.map?.dispose(); renderer.dispose(); el.remove();
     },
   };
 }

@@ -121,7 +121,7 @@ export function createCity(stage, k, PROPS, artMat) {
     ];
   }
   function build(o) {
-    const key = `${o.region}|${o.level}|${o.L.W}`;
+    const key = `${o.region}|${o.level}|${o.L.W}|${o.detail ?? 1}`;
     if (key === (job ? job.key : live?.key)) return;
     if (job) abort();
     root = new THREE.Group(); owned = []; bakes = []; blds = []; cars = []; peds = null; night = []; wetMats = []; ticks = []; frameInfo = null;
@@ -140,7 +140,9 @@ export function createCity(stage, k, PROPS, artMat) {
     s.root.clear();
   }
   function* gen(o) {
-    const bay = o.region === 'bay', L = o.L, lv = clamp(o.level | 0, 1, 5), hx = L.W / 2 + 3.4, hz = L.D / 2 + 3.4, EX = Math.max(hx, hz) + RW + 3 * BL + 2 * ST + 30;
+    // 多层楼那几档（5 档以上）沿用最繁华的街区
+    const bay = o.region === 'bay', L = o.L, lv = [1, 1, 2, 3, 4, 4, 5, 5, 5][clamp(o.level | 0, 1, 8)], hx = L.W / 2 + 3.4, hz = L.D / 2 + 3.4;
+    const det = o.detail ?? 1, RINGS = det >= 2 ? 4 : 3, EX = Math.max(hx, hz) + RW + RINGS * BL + (RINGS - 1) * ST + 30;     // det：画质档给的城市细节
     const atlas = makeAtlas(), signTex = makeSigns(bay);
     const glass = {
       mirror: own(new THREE.MeshStandardMaterial({ map: atlas.A, emissiveMap: atlas.B, emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.07, metalness: 0.92, envMapIntensity: 1.25 })),
@@ -219,16 +221,17 @@ export function createCity(stage, k, PROPS, artMat) {
     // ── 地面与路网 ──
     const ground = k.group();
     k.box(EX * 2 + 500, 0.4, EX * 2 + 500, asphalt, ground, 0, -0.2, 0, { cast: false });
-    const bands = h => { const out = [[-h, h, 0]]; let e = h + RW; for (let m = 1; m <= 3; m++) { out.push([e, e + BL, m]); out.unshift([-(e + BL), -e, -m]); e += BL + ST; } return out; };
+    const bands = h => { const out = [[-h, h, 0]]; let e = h + RW; for (let m = 1; m <= RINGS; m++) { out.push([e, e + BL, m]); out.unshift([-(e + BL), -e, -m]); e += BL + ST; } return out; };
     const X = bands(hx), Z = bands(hz), street = k.group(), far = k.group(), heroes = [], trees = [];
     const safeDir = (x, z) => (x * 0.7071 + z * 0.7071) / (Math.hypot(x, z) || 1) < -0.3;      // 镜头永远转不到的那一侧：高楼只放这边
     for (const [x0, x1, ci] of X) for (const [z0, z1, cj] of Z) {
       const ring = Math.max(Math.abs(ci), Math.abs(cj)); if (!ring) continue;
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, bw = x1 - x0, bd = z1 - z0, seed = ((ci + 5) * 131 + (cj + 5) * 17 + lv * 977 + (bay ? 7 : 0)) | 0, r0 = hsh(seed, 0, 1);
       k.box(bw, 0.18, bd, walk, ground, cx, 0.09, cz, { r: 0.06 });
+      if (det === 0 && ring >= 3) { yield; continue; }                                    // 手机档：最外圈只铺地，不盖楼
       const lod = ring === 1 ? 2 : ring === 2 ? 1 : 0, safe = safeDir(cx, cz);
       // 行道树、路灯
-      if (ring < 3) for (let s = 0; s < 4; s++) {
+      if (ring < 3 && (det > 0 || ring === 1)) for (let s = 0; s < 4; s++) {
         const len = s % 2 ? bd : bw, n = Math.max(1, Math.round(len / 8));
         for (let i = 0; i < n; i++) {
           const t = (i + 0.5) / n * len - len / 2, px = s === 0 ? cx + t : s === 2 ? cx + t : s === 1 ? x1 - 1.0 : x0 + 1.0, pz = s === 1 ? cz + t : s === 3 ? cz + t : s === 0 ? z1 - 1.0 : z0 + 1.0;
@@ -245,16 +248,16 @@ export function createCity(stage, k, PROPS, artMat) {
         if (ring === 1) place(street, 'billboard', cx, 0.24, cz, Math.atan2(-cx, -cz), { art: artMat?.(seed), seed });
         yield; continue;
       }
-      const mix = ring === 3 || (ring === 2 && safe) ? FAR[bay ? 'bay' : 'sz'] : MIX[bay ? 'bay' : 'sz'][clamp(lv + (ring === 2 ? 1 : 0), 1, 5)];
+      const mix = ring >= 3 || (ring === 2 && safe) ? FAR[bay ? 'bay' : 'sz'] : MIX[bay ? 'bay' : 'sz'][clamp(lv + (ring === 2 ? 1 : 0), 1, 5)];
       const sty = pick(mix, hsh(seed, 0, 13)), S = STY[sty], iw = bw - 2 * SW, id = bd - 2 * SW;
       const nx = Math.max(1, Math.round(iw / S.lot)), nz = Math.max(1, Math.round(id / S.lot)), lw = (iw - (nx - 1) * S.gap) / nx, ld = (id - (nz - 1) * S.gap) / nz;
       if (S.yard) k.box(iw, 0.1, id, lawn, ground, cx, 0.2, cz, { r: 0.04 });
       const units = new Map();
       for (let a = 0; a < nx; a++) for (let b = 0; b < nz; b++) {
         const s2 = seed * 31 + a * 7 + b, bx = cx - iw / 2 + lw / 2 + a * (lw + S.gap), bz = cz - id / 2 + ld / 2 + b * (ld + S.gap), inset = S.yard ? 1.6 + hsh(s2, 1, 15) * 1.2 : 0;
-        let fl = Math.round(lerp(S.fl[0], S.fl[1], hsh(s2, 2, 17)) * (ring === 3 ? 1.15 : 1));
-        if (!safe) fl = Math.min(fl, ring === 3 ? 9 : ring === 2 ? 16 : 99);
-        if (ring === 3) { makeBuilding(sty, bx, bz, lw - inset * 2, ld - inset * 2, fl, s2, lod, far, far); continue; }
+        let fl = Math.round(lerp(S.fl[0], S.fl[1], hsh(s2, 2, 17)) * (ring === 3 ? 1.15 : ring > 3 ? 1.3 : 1));
+        if (!safe) fl = Math.min(fl, ring >= 3 ? 9 : ring === 2 ? 16 : 99);
+        if (ring >= 3) { makeBuilding(sty, bx, bz, lw - inset * 2, ld - inset * 2, fl, s2, lod, far, far); continue; }
         const uk = ring === 1 ? ((a * 2 / nx) | 0) + ',' + ((b * 2 / nz) | 0) : '0';
         let U = units.get(uk); if (!U) units.set(uk, (U = { base: k.group(), upper: k.group(), pts: [], h: 0 }));
         const B = makeBuilding(sty, bx, bz, lw - inset * 2, ld - inset * 2, fl, s2, lod, U.base, U.upper);
@@ -287,7 +290,7 @@ export function createCity(stage, k, PROPS, artMat) {
     place(street, 'kiosk', -(hx + RW + 1.4), 0.18, hz * 0.5, Math.PI / 2, { seed: lv });
     const carNames = (bay ? ['car_sedan', 'car_suv', 'car_pickup', 'robotaxi', 'car_hatch'] : ['car_sedan', 'car_suv', 'car_taxi', 'car_hatch', 'van_delivery']).filter(n => PROPS[n]), carCol = ['#e5484d', '#f4f4f2', '#2b2f38', '#3f7fd6', '#c9ced6', '#f2c14e', '#2f8f6b', '#8a8f98'];
     if (!carNames.length) carNames.push('car');
-    for (let i = 0; i < 6; i++) {                                                           // 路边停车
+    for (let i = 0; i < (det === 0 ? 3 : 6); i++) {                                       // 路边停车
       const s = i % 4, t = (hsh(i, lv, 21) - 0.5) * 2 * (s % 2 ? hz : hx) * 0.8, off = RW - 0.85;
       place(street, carNames[i % carNames.length], s === 0 ? t : s === 2 ? t : s === 1 ? hx + off : -(hx + off), 0, s === 1 ? t : s === 3 ? t : s === 0 ? hz + off : -(hz + off), s % 2 ? (s === 1 ? Math.PI : 0) : (s === 0 ? Math.PI / 2 : -Math.PI / 2), { brand: carCol[(i * 3) % 8], seed: i }, true);
     }
@@ -327,13 +330,15 @@ export function createCity(stage, k, PROPS, artMat) {
     // ── 车流：绕着办公室的环路 + 外面的直街 ──
     const mkCar = (name, color, seed) => { const g = P(name, { brand: color, seed }); if (!g) return null; const wheels = g.userData.wheels || [], b = k.bake(g); bakes.push(b); root.add(b); return { o: b, wheels }; };
     const moving = bay ? ['car_sedan', 'robotaxi', 'car_suv', 'car_hatch', 'bus_city', 'car_pickup', 'robotaxi', 'van_delivery'] : ['car_taxi', 'scooter_delivery', 'car_sedan', 'scooter_delivery', 'bus_city', 'car_suv', 'van_delivery', 'car_taxi'];
+    if (det === 0) moving.length = 4;                                                       // 手机档：只留环路上的四辆车
+    if (det >= 2) moving.push(...moving.slice(0, 6));                                     // 极致档：车多一些
     moving.forEach((n, i) => {
       const c = mkCar(PROPS[n] ? n : 'car', carCol[(i * 5 + 1) % 8], i); if (!c) return;
       if (i < 4) { const dir = i % 2 ? 1 : -1, off = dir > 0 ? -1.5 : 1.3; cars.push({ ...c, loop: true, a: ax + off, b: az + off, p: i * 37, v: dir * (5.2 + (i % 3) * 0.6) }); }
       else { const m = 1 + (i % 2), alongX = i % 4 < 2, sg = i % 3 ? 1 : -1, base = (alongX ? hz : hx) + RW + m * BL + (m - 1) * ST + ST / 2; cars.push({ ...c, alongX, sg, lane: (i % 2 ? 1 : -1) * base + (alongX ? sg : -sg) * 2.0, E: EX - 14, p: -EX + i * 53 % (2 * EX), v: 7 + (i % 3) * 1.4 }); }
     });
     // 行人：沿着环路外侧的人行道溜达
-    const N = 22, body = new THREE.InstancedMesh(k.geo('pedB', () => new THREE.CapsuleGeometry(0.17, 0.52, 4, 10)), k.mat('#ffffff', { rough: 0.8 }), N), head = new THREE.InstancedMesh(k.geo('pedH', () => new THREE.SphereGeometry(0.19, 12, 9)), k.mat('#ffffff', { rough: 0.6 }), N);
+    const N = det === 0 ? 10 : det >= 2 ? 40 : 22, body = new THREE.InstancedMesh(k.geo('pedB', () => new THREE.CapsuleGeometry(0.17, 0.52, 4, 10)), k.mat('#ffffff', { rough: 0.8 }), N), head = new THREE.InstancedMesh(k.geo('pedH', () => new THREE.SphereGeometry(0.19, 12, 9)), k.mat('#ffffff', { rough: 0.6 }), N);
     const shirts = ['#e5484d', '#3f7fd6', '#f2c14e', '#2f8f6b', '#f4f4f2', '#2b2f38', '#8b5cf6', '#ff8a4c'], skins = ['#f3c9a3', '#e0ac7e', '#c68a5e', '#8d5a3c', '#f6d7b8'], col = new THREE.Color();
     for (let i = 0; i < N; i++) { body.setColorAt(i, col.set(shirts[i % 8])); head.setColorAt(i, col.set(skins[i % 5])); }
     body.castShadow = head.castShadow = true; root.add(body, head);

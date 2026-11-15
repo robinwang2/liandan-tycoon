@@ -34,7 +34,7 @@ const RULES = [
     if (raise) tips.push(pf >= 0.9 ? `业绩系数 ${pf.toFixed(2)}，现在融资能拿到三份报价。` : pf >= 0.75 ? `业绩系数 ${pf.toFixed(2)}，不到 0.9，融资只有一份「趁火打劫」的报价。` : `业绩系数才 ${pf.toFixed(2)}，不到 0.75，现在去融资只会听到「保持联系」。`);
     if (S.policies.price === 'free') tips.push('定价还是「免费冲量」，订阅收入只有三成。');
     const free = S.ownModel ? Math.max(0, S.gpu - G.inferNeed(S)) : 0;
-    if (free >= 4) tips.push(`丹炉占着 ${free} 张卡（每月约 ${G.money(S, free * G.gpuPrice(S))}），少租几张能多撑一阵。`);
+    if (free >= 4) tips.push(`丹炉占着 ${free} 张卡（每月约 ${G.money(S, G.gpuRent(S) - G.gpuRent(S, S.gpu - free))}），少租几张能多撑一阵。`);
     const quick = ['sellcourse', 'subsidy'].filter(id => avail(S, id));
     if ((!raise || pf < 0.9) && quick.length) tips.push(`${quick.map(id => `「${ACT[id].name}」`).join('、')}能先回点血。`);
     const h = { id: 'cash', lv: 'bad', icon: 'cash', title: rw < 1 ? '下个月发不出工资' : `钱只够撑 ${Math.floor(rw)} 个月`, text: `每月净流出 ${G.money(S, -net)}。${tips.join('')}`, go: { ltab: 'cap' } };
@@ -44,8 +44,7 @@ const RULES = [
     const need = G.inferNeed(S);
     if (!need || S.gpu >= need) return null;
     const q = G.quota(S), gap = num((1 - S.gpu / need) * 100);
-    if (q >= need) return { id: 'outage', lv: 'bad', icon: 'gpu', title: '显卡不够推理', text: `用户要 ${need} 张卡做推理，你只租了 ${S.gpu} 张，${gap}% 的请求在报「服务器繁忙」，口碑和用户都在流失。去「经营」把显卡加上。`, go: { ltab: 'ops' }, hl: 'gpu:+' };
-    return withAct({ id: 'outage', lv: 'bad', icon: 'gpu', title: '显卡配额不够', text: `推理要 ${need} 张卡，配额只有 ${q} 张，${gap}% 的请求在报「服务器繁忙」。${S.gpu < q ? '先把配额租满，再' : ''}找皮衣教主要配额，或者高价扫货。`, go: { ltab: 'ops' }, hl: S.gpu < q ? 'gpu:max' : null }, S, 'beg', 'sweep');
+    return { id: 'outage', lv: 'bad', icon: 'gpu', title: '显卡不够推理', text: `用户要 ${need} 张卡做推理，你只租了 ${S.gpu} 张，${gap}% 的请求在报「服务器繁忙」，口碑和用户都在流失。${need <= q ? '去「经营」把显卡加上。' : `配额只有 ${q} 张，超出的部分得按现货价租（市价 2 倍起），找皮衣教主要点配额能便宜不少。`}`, go: { ltab: 'ops' }, hl: 'gpu:+' };
   },
   function crime(S) {
     const d = S.exposedCrime >= 25 && worstCrime(S);
@@ -143,6 +142,12 @@ const RULES = [
     return { id: 'selfdev', lv: 'gold', icon: 'target', title: '可以自研模型了', text: `已经融到 ${STAGES[S.stage].name}，可以组建炼丹团队，摆脱上游 ${G.rivalOf(S, S.upstream)?.name || ''}。之后要自己租显卡、招研究员，每月成本会涨一截，但产品的天花板不再受制于人。`, act: 'selfdev', later: r.later };
   },
   // ── 留意 ──
+  function premium(S) {                                                         // 超出配额的卡在按现货价烧钱：提醒去要配额
+    const over = S.gpu - G.quota(S);
+    if (over <= 0) return null;
+    const extra = G.gpuRent(S) - S.gpu * G.gpuPrice(S);
+    return onlyIfAct(withAct({ id: 'premium', lv: 'warn', icon: 'gpu', title: '显卡在吃溢价', text: `有 ${over} 张卡超出配额、按现货价在租，每月比按市价多花 ${G.money(S, extra)}。找皮衣教主要点配额，这笔钱就能省下来。`, go: { ltab: 'ops' } }, S, 'beg'));
+  },
   function reg(S) {
     if (S.reg < 70) return null;
     return withAct({ id: 'reg', lv: S.reg >= 88 ? 'bad' : 'warn', icon: 'bank', title: S.reg >= 88 ? '监管要动手了' : '监管压力大', text: `监管压力 ${num(S.reg)}：增长受限、合规成本上升，到 100 会吃一记重锤。${S.policies.safety === 'loose' ? '安全审核还是「放飞自我」，压力每月都在猛涨。' : ''}`, go: { ltab: 'cap' } }, S, 'lobby', 'goodpr');

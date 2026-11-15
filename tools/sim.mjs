@@ -85,6 +85,14 @@ function playMonth(S, style) {
 }
 
 function smoke() {
+  // 显卡没有硬上限：配额以外也能租，但超出的部分越多越贵
+  {
+    const S = G.newGame(mkSetup(setups[0]), {}); S.stage = 3;
+    const q = G.quota(S), p = G.gpuPrice(S);
+    A.setGpu(S, q * 2);
+    const ok = S.gpu === q * 2 && Math.abs(G.gpuRent(S, q) - q * p) < 1e-6 && G.gpuRent(S) > 3 * q * p && G.gpuRent(S, q * 3) - G.gpuRent(S) > G.gpuRent(S) - G.gpuRent(S, q);
+    if (!ok) { console.log(`  ✗ 显卡配额：想租 ${q * 2} 张，实际 ${S.gpu} 张，月租 ${G.gpuRent(S).toFixed(1)}`); process.exitCode = 1; }
+  }
   // 每个事件的每个选项都执行一遍，抓运行时错误
   let n = 0;
   for (const id of Object.keys(G.EV)) {
@@ -112,14 +120,14 @@ function run() {
   const stat = {}, byStyle = {};
   for (const style of ['clean', 'shady', 'advice']) {
     for (const s of setups) {
-      const key = `${s.region}/${s.route}`, row = (stat[key] ??= { n: 0, ends: {}, t: 0, stage: 0, val: [], users: [], ev: 0, perks: 0 });
+      const key = `${s.region}/${s.route}`, row = (stat[key] ??= { n: 0, ends: {}, t: 0, stage: 0, val: [], users: [], ev: 0, perks: 0, office: [] });
       const sr = (byStyle[style] ??= { n: 0, ends: {}, val: [] });
       for (let i = 0; i < Math.ceil(N / setups.length / 2); i++) {
         const S = G.newGame(mkSetup(s, style), {});
         try { drain(S, null, style === 'shady'); let g = 0; while (!S.over && g++ < 80) playMonth(S, style); }
         catch (e) { console.log(`✗ ${key}/${s.track} t=${S.t}: ${e.stack.split('\n').slice(0, 3).join(' | ')}`); process.exitCode = 1; continue; }
         if (!S.over) { console.log('✗ 没有结局', key, S.t); continue; }
-        row.n++; row.ends[S.over.id] = (row.ends[S.over.id] || 0) + 1; row.t += S.over.t; row.stage += S.stage; row.val.push(S.over.val); row.users.push(S.stats.maxUsers); row.ev += S.stats.events; row.perks += S.perks.length; (S.stats.rounds || []).forEach((t, i) => { (row.rt ??= [])[i] = (row.rt[i] || 0) + t; (row.rn ??= [])[i] = (row.rn[i] || 0) + 1; });
+        row.office.push(S.co.office); row.n++; row.ends[S.over.id] = (row.ends[S.over.id] || 0) + 1; row.t += S.over.t; row.stage += S.stage; row.val.push(S.over.val); row.users.push(S.stats.maxUsers); row.ev += S.stats.events; row.perks += S.perks.length; (S.stats.rounds || []).forEach((t, i) => { (row.rt ??= [])[i] = (row.rt[i] || 0) + t; (row.rn ??= [])[i] = (row.rn[i] || 0) + 1; });
         sr.n++; sr.ends[S.over.id] = (sr.ends[S.over.id] || 0) + 1; sr.val.push(S.over.val);
       }
     }
@@ -127,7 +135,7 @@ function run() {
   const med = a => a.sort((x, y) => x - y)[Math.floor(a.length / 2)] || 0;
   for (const [k, r] of Object.entries(stat)) {
     const ends = Object.entries(r.ends).sort((a, b) => b[1] - a[1]).map(([id, c]) => `${ENDINGS[id].name}${Math.round(c / r.n * 100)}%`).join(' ');
-    console.log(`${k.padEnd(10)} n=${r.n} 平均存活${(r.t / r.n).toFixed(0)}月 平均轮次${(r.stage / r.n).toFixed(1)} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 用户峰值中位${med(r.users).toFixed(0)}万 事件${(r.ev / r.n).toFixed(0)} 卡${(r.perks / r.n).toFixed(1)} 各轮月份[${(r.rt || []).map((t, i) => (t / r.rn[i]).toFixed(0) + '(' + Math.round(r.rn[i] / r.n * 100) + '%)').join(' ')}] | ${ends}`);
+    console.log(`${k.padEnd(10)} n=${r.n} 平均存活${(r.t / r.n).toFixed(0)}月 平均轮次${(r.stage / r.n).toFixed(1)} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 用户峰值中位${med(r.users).toFixed(0)}万 事件${(r.ev / r.n).toFixed(0)} 卡${(r.perks / r.n).toFixed(1)} 办公室[${[1,2,3,4,5,6,7,8].map(l => Math.round(r.office.filter(x => x >= l).length / r.n * 100)).slice(3).join("/")}%≥4..8档] 各轮月份[${(r.rt || []).map((t, i) => (t / r.rn[i]).toFixed(0) + '(' + Math.round(r.rn[i] / r.n * 100) + '%)').join(' ')}] | ${ends}`);
   }
   for (const [st, r] of Object.entries(byStyle)) console.log(`${('[' + st + ']').padEnd(10)} n=${r.n} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 | ${Object.entries(r.ends).sort((a, b) => b[1] - a[1]).map(([id, c]) => `${ENDINGS[id].name}${Math.round(c / r.n * 100)}%`).join(' ')}`);
   console.log('提示出现频率（占所有月份）：' + Object.entries(HINT_N).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${Math.round(c / HINT_M * 100)}%`).join(' · '));

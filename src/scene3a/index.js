@@ -58,7 +58,10 @@ function makeRain(stage) {
       void main() { vec3 p = position; float y = mod(p.y - uTime * 24.0, 44.0); p.y = y - aEnd * 0.85; p.x += aEnd * 0.1;
         vA = (1.0 - aEnd * 0.8) * uAmt * smoothstep(44.0, 38.0, y) * step(fract(position.x * 7.31 + position.z * 3.17), uAmt * 1.2);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
-    fragmentShader: `uniform vec3 uCol; varying float vA; void main() { gl_FragColor = vec4(uCol, vA * 0.42); }`,
+    fragmentShader: `uniform vec3 uCol; varying float vA; void main() { gl_FragColor = vec4(uCol, vA * 0.42);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
     transparent: true, depthWrite: false, fog: false,
   });
   const lines = new THREE.LineSegments(g, mat); lines.frustumCulled = false; lines.layers.set(FX); lines.renderOrder = 5; stage.scene.add(lines);
@@ -71,13 +74,22 @@ export function createOffice(container) {
   const art = makeArt(k);
   stage.onFrame((dt, t, env) => { for (const m of k.nightMats) m[0].emissiveIntensity = m[1] + (m[2] - m[1]) * env.night; });   // 天黑以后：灯、屏幕、招牌、车灯亮起来
   const city = createCity(stage, k, PROPS, art.wide), room = createRoom(stage, k, PROPS, art), rain = makeRain(stage);
-  let v = { mode: '' }, lastT = null, lastNight = null, titleDrift = false;
+  let v = { mode: '' }, lastT = null, lastNight = null, titleDrift = false, cityOpts = null, detail = 1, wasBusy = false;
+  // 换画质档：城市细节跟着变（手机档只留近处，极致档多一圈街区），贴图各向异性也跟着调
+  const maxAniso = stage.renderer.capabilities.getMaxAnisotropy();
+  stage.onQuality(Q => {
+    for (const t of Object.values(k.grains)) { const a = Math.min(Q.aniso || 4, maxAniso); if (t.anisotropy !== a) { t.anisotropy = a; t.needsUpdate = true; } }
+    room.setLite(Q.post === false);
+    const d = Q.city ?? 1; if (d === detail) return; detail = d;
+    if (cityOpts) city.build({ ...cityOpts, detail });
+  });
+  stage.onFrame(() => { const b = city.busy; if (wasBusy && !b) stage.refreshReflections(); wasBusy = b; });   // 城市盖好了，极致档补拍一次街景反射
   stage.onFrame((dt, t, env) => { if (titleDrift && !env.lapse) stage.setTime(env.tod + dt * 0.11); });   // 标题页：时间缓缓流动，看一轮日落和夜景
 
   function sync(view) {
     const prev = v; v = { ...prev, ...view };
     const r = room.sync(view);
-    if (r.rebuilt) { stage.setFrame(r.L); city.build({ region: v.region, level: v.level, L: r.L, brand: v.brand }); if (!r.up) stage.snap(); }
+    if (r.rebuilt) { stage.setFrame(r.frame || r.L); stage.setLift(r.lift || 0); stage.setProbe(Math.max(26, (r.top || 0) + 10)); cityOpts = { region: v.region, level: v.level, L: r.L, brand: v.brand }; city.build({ ...cityOpts, detail }); stage.refreshReflections(); if (!r.up) stage.snap(); }
     const mode = v.mode === 'title' ? (v.wizard ? 'wizard' : 'title') : v.mode === 'end' ? 'end' : 'play';
     if (mode !== prev.camMode) { stage.setMode(mode); v.camMode = mode; }
     // 时间和天气
@@ -99,10 +111,13 @@ export function createOffice(container) {
   return {
     sync,
     play(name, data) { room.play(name, data); },
+    lift: () => room.lift(),
     setInsets(i) { stage.setInsets(i); },
     // 画质：low / med / high / ultra；auto = 卡顿时自动降档
     setQuality(q, auto) { stage.setQuality(q, auto); },
-    quality() { return { ...stage.quality(), levels: Object.entries(QUALITY).map(([id, q]) => ({ id, name: q.name })) }; },
+    setScale(s) { stage.setScale(s); },
+    setFpsCap(c) { stage.setFpsCap(c); },
+    quality() { return { ...stage.quality(), levels: Object.entries(QUALITY).map(([id, q]) => ({ id, name: q.name, desc: q.desc })) }; },
     stats: stage.stats,
     env: stage.env,
     get busy() { return city.busy; },

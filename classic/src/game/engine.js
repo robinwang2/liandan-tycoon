@@ -632,7 +632,7 @@ const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } 
 export const loadMeta = () => ({ points: 0, own: {}, ach: {}, ends: {}, runs: 0, best: 0, ...(store.get(META_KEY) || {}) });
 export const saveMeta = m => store.set(META_KEY, m);
 export const saveGame = S => store.set(SAVE_KEY, S);
-export const loadGame = () => { const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null; S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; return S; };   // 兼容旧存档
+export const loadGame = () => { const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null; S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; S.co.office = clamp(S.co.office | 0, 1, OFFICES.length - 1); return S; };   // 兼容旧存档（3A 版的办公室多几档，拿过来按总部算）
 export const clearSave = () => store.del(SAVE_KEY);
 export const traitLocked = (meta, t) => !!t.cost && !meta.own['t_' + t.id];
 export function buyMeta(meta, id) {

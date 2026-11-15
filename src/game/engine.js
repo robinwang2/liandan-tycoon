@@ -72,6 +72,13 @@ export function board(S) {
 export const rank = S => { const i = board(S).findIndex(r => r.me); return i < 0 ? 99 : i + 1; };
 export const quota = S => Math.round(S.quotaBase * STAGES[S.stage].quota * (1 + S.quotaAdd) * mod(S, 'quotaMult'));
 export const gpuPrice = S => S.gpuBase * mod(S, 'gpuPriceMult');
+// 显卡月租。配额只是「按市价拿货」的份额，不是硬上限：超出配额的去黄牛和云厂商那里现租，
+// 第 k 张超额卡的单价约为 市价 × (2 + k / 配额)，租得越多越贵
+export function gpuRent(S, n = S.gpu) {
+  const q = Math.max(1, quota(S)), p = gpuPrice(S), x = Math.max(0, n - q);
+  return (n - x) * p + x * p * (2 + x / (2 * q));
+}
+export const overMult = S => { const q = Math.max(1, quota(S)), x = Math.max(0, S.gpu - q); return x ? 2 + x / (2 * q) : 1; };   // 超额部分的平均溢价倍数
 export const inferNeed = S => (usesOwn(S) ? Math.ceil(S.users * TRACKS[S.co.track].infer * mod(S, 'inferMult')) : 0);
 export const teamCap = S => OFFICES[S.co.office].cap + Math.max(0, S.founder.attrs.mgmt - 5) + mod(S, 'teamCapAdd');
 export const apMax = S => 3 + (S.founder.attrs.mgmt >= 9 ? 1 : 0) + mod(S, 'apAdd');
@@ -89,7 +96,7 @@ export const shareCap = S => 0.04 + 0.22 * S.quality / 100 + 0.14 * clamp((usedC
 export function costs(S) {
   const salary = S.staff.reduce((a, e) => a + e.salary, 0) * mod(S, 'salaryMult');
   const rent = OFFICES[S.co.office].rent * mod(S, 'rentMult');
-  let gpu = S.gpu * gpuPrice(S);
+  let gpu = gpuRent(S);
   if (S.furnace?.on && S.furnace.data === 'buy') gpu *= 1.3;
   const api = usesOwn(S) ? 0 : S.users * TRACKS[S.co.track].infer * 2.5 * S.apiIdx * mod(S, 'apiCostMult');
   const misc = 1 + S.staff.length * 0.25 + S.users * 0.08;
@@ -172,7 +179,7 @@ const FX = {
   tech: (S, v) => { if (S.ownModel) { S.E = Math.max(0, EofCap(myCap(S) + v) - baseE(S.t)); if (S.model) { S.model.cap += v; S.model.bench += v; } } else S.quality = clamp(S.quality + v * 1.5, 0, 100); },
   bench: (S, v) => { if (S.model) { S.model.bench += v; S.model.infl += v; } },
   quality: gauge('quality'),
-  quota: (S, v) => { S.quotaAdd = clamp(S.quotaAdd + v / 100, -0.6, 2); S.gpu = Math.min(S.gpu, quota(S)); },   // 加法叠加，最多 +200%
+  quota: (S, v) => { S.quotaAdd = Math.max(-0.6, S.quotaAdd + v / 100); },   // 加法叠加，不封顶；配额变少时已经租的卡照留，只是超出的部分按现货价算
   equity: (S, v) => { S.equity = clamp(S.equity + v, 0, 100); },
   ap: (S, v) => { S.apNext += v; },
   attr: (S, v) => { for (const k in v) S.founder.attrs[k] = clamp(S.founder.attrs[k] + v[k], 1, 15); },
@@ -635,7 +642,7 @@ const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } 
 export const loadMeta = () => ({ points: 0, own: {}, ach: {}, ends: {}, runs: 0, best: 0, ...(store.get(META_KEY) || {}) });
 export const saveMeta = m => store.set(META_KEY, m);
 export const saveGame = S => store.set(SAVE_KEY, S);
-export const loadGame = () => { const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null; S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; return S; };   // 兼容旧存档
+export const loadGame = () => { const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null; S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; S.co.office = clamp(S.co.office | 0, 1, OFFICES.length - 1); return S; };   // 兼容旧存档
 export const clearSave = () => store.del(SAVE_KEY);
 export const traitLocked = (meta, t) => !!t.cost && !meta.own['t_' + t.id];
 export function buyMeta(meta, id) {

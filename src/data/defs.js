@@ -126,9 +126,39 @@ export const OFFICES = [
   { name: '共享办公', cap: 8, rent: 3, up: 25 },
   { name: '写字楼', cap: 14, rent: 12, up: 150 },
   { name: '整层办公区', cap: 22, rent: 40, up: 900 },
-  { name: '总部大楼', cap: 34, rent: 130, up: 6000 },
+  { name: '两层小楼', cap: 27, rent: 58, up: 1500 },
+  { name: '三层独栋', cap: 32, rent: 80, up: 2400 },
+  { name: { bay: '科技园四层楼', sz: '产业园四层楼' }, cap: 38, rent: 105, up: 3600 },
+  { name: '总部大楼', cap: 46, rent: 150, up: 6000 },
 ];
+export const MAX_OFFICE = OFFICES.length - 1;
 export const officeName = (S, lv = S.co.office) => { const n = OFFICES[lv].name; return typeof n === 'string' ? n : n[S.co.region]; };
+
+// 多层办公楼：每层住哪些部门（从 1 楼往上）。低档位两个小部门合用一层，总部一层一个部门。
+// lobby = 大堂前台，ceo = 总裁办（创始人在这儿），res 研究院那层还放着丹炉和机房
+export const DEPTS = {
+  lobby: { name: '大堂', short: '大堂', icon: '🛎️', color: '#c9a86a' },
+  ceo: { name: '总裁办', short: '总裁办', icon: '👑', color: '#f2c94c' },
+  res: { name: '研究院', short: '研究', icon: '🔬', color: '#8e6bff' },
+  eng: { name: '工程部', short: '工程', icon: '🛠️', color: '#3d8bff' },
+  ops: { name: '运营部', short: '运营', icon: '📣', color: '#ff9736' },
+  biz: { name: '商务部', short: '商务', icon: '💼', color: '#5c7a99' },
+  legal: { name: '法务公关部', short: '法务', icon: '⚖️', color: '#8a93a6' },
+};
+export const FLOOR_PLANS = {
+  5: [['ops', 'biz', 'legal'], ['eng', 'res']],
+  6: [['lobby', 'ops'], ['biz', 'legal'], ['eng', 'res']],
+  7: [['lobby', 'ops'], ['biz', 'legal'], ['eng'], ['res']],
+  8: [['lobby'], ['ops'], ['biz'], ['legal'], ['eng'], ['res'], ['ceo']],
+};
+export const floorsOf = lv => FLOOR_PLANS[lv] || null;
+// 某个角色（或 'ceo' 创始人）在第几层（0 = 1 楼）。总部以外，创始人待在顶楼
+export function floorOf(lv, who) {
+  const plan = FLOOR_PLANS[lv];
+  if (!plan) return 0;
+  const i = plan.findIndex(f => f.includes(who));
+  return i >= 0 ? i : who === 'ceo' ? plan.length - 1 : 0;
+}
 
 export const ROLES = {
   res: { name: '研究员', icon: '🔬', pay: 1.25, color: '#8e6bff' },
