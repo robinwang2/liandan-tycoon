@@ -1,0 +1,11 @@
+# 依赖和构建产物（npm install / npm run build 会重新生成）
+node_modules/
+dist/
+classic/dist/
+.vite/
+
+# 本机杂项
+*.log
+.DS_Store
+Thumbs.db
+.claude/settings.local.json

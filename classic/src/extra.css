@@ -1,0 +1,26 @@
+/* 员工头像与产出气泡、新手教学卡片 */
+.ava { display: block; flex-shrink: 0; border-radius: 26%; border: 2px solid var(--ink); background: #fff; }
+.cand[data-a] { cursor: pointer; border-radius: 10px; padding: 5px 4px; transition: background .1s; }
+.cand[data-a]:hover { background: #fff6d6; }
+.cand.on { background: #ffe9a8; }
+.pop { position: absolute; width: 292px; padding: 12px 14px 10px; z-index: 8; animation: popin .16s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes popin { from { transform: scale(.9); opacity: 0; } }
+.poph { display: flex; gap: 12px; align-items: center; }
+.poph .ava { border-width: 2.5px; box-shadow: 3px 3px 0 var(--ink); }
+.poph b { font-size: 17px; display: block; } .poph small { display: block; margin: 1px 0 4px; }
+.pop h5 { margin: 12px 0 4px; font-size: 12px; color: var(--muted); letter-spacing: 1px; }
+.pop ul { margin: 0; padding: 0; list-style: none; }
+.pop li { background: #e9f8ef; border: 1.5px solid var(--ink); border-radius: 9px; padding: 3px 9px; margin-bottom: 5px; font-weight: 700; font-size: 12.5px; }
+.pop li::before { content: '▲ '; color: var(--good); }
+.pop .pq { margin: 8px 0 0; background: #fff1c9; border: 1.5px dashed var(--ink); border-radius: 9px; padding: 3px 9px; font-size: 12px; }
+.pop .ps { margin: 8px 0 0; font-size: 11.5px; color: var(--muted); }
+
+.tutor { position: absolute; left: 50%; top: 92px; transform: translateX(-50%); width: 500px; max-width: 46%; display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; z-index: 6; background: #fffbe6; animation: popin .22s cubic-bezier(.2, 1.4, .4, 1); }
+.tutor .tface { font-size: 34px; line-height: 1; }
+.tutor b { font-size: 14px; } .tutor p { margin: 3px 0 0; font-size: 13px; line-height: 1.6; }
+.tutor .btn { align-self: flex-end; white-space: nowrap; background: var(--sun); }
+.hl { animation: hl 1s infinite; position: relative; z-index: 2; }
+@keyframes hl { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 107, 74, .9), 3px 3px 0 var(--ink); } 50% { box-shadow: 0 0 0 9px rgba(255, 107, 74, 0), 3px 3px 0 var(--ink); } }
+.tab.hl { background: #ffd9cf; }
+.chkline { display: block; margin-top: 14px; padding: 9px 12px; background: var(--soft); border: 2px dashed var(--ink); border-radius: 12px; font-size: 12.5px; cursor: pointer; }
+.chkline input { width: 16px; height: 16px; vertical-align: -3px; accent-color: var(--coral); }

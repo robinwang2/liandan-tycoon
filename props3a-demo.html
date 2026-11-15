@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Liandan — Miniature prop atelier</title>
+  <style>
+    :root{font-family:Inter,"Segoe UI",sans-serif;color:#243c38;background:#d7dfd7;color-scheme:light}*{box-sizing:border-box}body{margin:0;overflow:hidden}canvas{display:block;width:100vw;height:100vh;outline:none}.masthead{position:fixed;top:28px;left:30px;z-index:3;pointer-events:none}.eyebrow{font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.65}.masthead h1{font-weight:500;font-size:26px;margin:8px 0}.masthead p{font-size:12px;margin:0;opacity:.7}.controls{position:fixed;top:24px;right:26px;z-index:5;display:flex;gap:6px;flex-wrap:wrap;max-width:520px;justify-content:flex-end}button,select{font:12px inherit;color:inherit;background:#f8f8eeec;border:1px solid #b6c3b8;border-radius:6px;min-height:36px;padding:8px 12px;cursor:pointer;backdrop-filter:blur(12px)}button:hover,select:hover{background:#fff}button:focus-visible,select:focus-visible{outline:2px solid #248e80;outline-offset:3px}select{min-width:200px}.inspector{position:fixed;left:30px;bottom:26px;width:360px;padding:20px 22px;border-radius:10px;border:1px solid #a9bbb777;background:#f8f8e9df;backdrop-filter:blur(20px);z-index:5;box-shadow:0 6px 30px #26463c12}.inspector h2{font-size:19px;font-weight:500;margin:6px 0 8px}.inspector p{font-size:12px;line-height:1.6;margin:0;opacity:.8}.inspector nav{display:flex;gap:6px;margin-top:14px}.inspector nav button{flex:1;background:transparent}.bottom{position:fixed;bottom:30px;right:28px;text-align:right;font-size:11px;line-height:1.8;opacity:.7;pointer-events:none;z-index:4}.label{color:#364e45;font:10px ui-monospace,monospace;letter-spacing:.03em;padding:3px 7px;border:1px solid #9aafa05e;border-radius:3px;background:#f5f6e5d9;white-space:nowrap;pointer-events:none}.category{font:500 16px "Segoe UI",sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#456456;background:transparent;border:0}.night{color:#d3e4df;background:#172e3a}.night button,.night select{background:#1c343ddd;border-color:#45616a}.night .inspector{background:#1a303cdd;border-color:#49616c}.night .label{background:#213b45dd;border-color:#526869;color:#e0e9d8}.night .category{background:transparent;color:#a3beb2}.hidden{display:none!important}@media(max-width:760px){.masthead{top:15px;left:16px}.masthead h1{font-size:20px}.masthead p{display:none}.controls{top:88px;right:14px;left:14px;justify-content:flex-start}.inspector{left:14px;bottom:14px;width:calc(100% - 28px);padding:14px 16px}.bottom{display:none}}
+  </style>
+</head>
+<body>
+  <canvas id="scene" aria-label="Interactive 3D prop gallery"></canvas>
+  <header class="masthead"><div class="eyebrow">Liandan Tycoon · 3A collection</div><h1>The miniature atelier</h1><p>Wood, glass, brushed steel. A city in the details.</p></header>
+  <div class="controls" aria-label="Gallery controls">
+    <select id="prop" aria-label="Inspect a prop"><option value="">Entire collection</option></select>
+    <button id="day-night" aria-pressed="false">Night</button>
+    <button id="brand">Brand · jade</button>
+    <button id="seed">Seed · 0</button>
+  </div>
+  <section class="inspector" aria-live="polite"><div class="eyebrow" id="category">Collection</div><h2 id="title">Loading the collection…</h2><p id="detail"></p><nav><button id="previous" aria-label="Previous prop">← Previous</button><button id="overview">All props</button><button id="next" aria-label="Next prop">Next →</button></nav></section>
+  <div class="bottom">Drag to orbit · scroll to inspect · right-drag to pan<br>← / → browse · Esc collection · N day/night<br><span id="status"></span></div>
+  <script type="module" src="/src/scene3a/props-demo.js"></script>
+</body>
+</html>
