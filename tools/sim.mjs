@@ -75,7 +75,7 @@ function playMonth(S, style) {
     if (act(S, 'ipo', shady)) continue;
     if (!S.sprint && act(S, 'sprint', shady)) continue;
     if (!S.ownModel && S.stage >= 3 && rand() < 0.3 && act(S, 'selfdev', shady)) continue;
-    const opts = ['hype', 'ads', 'code', 'teambuild', 'roadshow', 'goodpr', 'lobby', 'pie', 'sellcourse', 'subsidy', 'beg', 'paper'].concat(shady ? ['navy', 'fakeusers', 'digdirt', 'furnace'] : ['wash']);
+    const opts = ['hype', 'ads', 'code', 'teambuild', 'roadshow', 'goodpr', 'lobby', 'pie', 'sellcourse', 'subsidy', 'beg', 'paper'].concat(shady ? ['navy', 'fakeusers', 'digdirt', 'furnace'] : ['wash'], ['mobilize', 'utopia', 'selfcrit', 'subbotnik', 'plan', 'yank', 'bci', 'buyback', 'costcut', 'spinoff']);
     if (!act(S, opts[Math.floor(rand() * opts.length)], shady)) { if (guard > 8) break; }
   }
   if (S.over) return;
@@ -117,7 +117,7 @@ function smoke() {
 }
 
 function run() {
-  const stat = {}, byStyle = {};
+  const stat = {}, byStyle = {}, ideo = { sz: 0, n: 0, red: 0, cap: 0, fail: 0, on: 0, road: 0, val: { red: [], cap: [], none: [] }, unlocked: {} };
   for (const style of ['clean', 'shady', 'advice']) {
     for (const s of setups) {
       const key = `${s.region}/${s.route}`, row = (stat[key] ??= { n: 0, ends: {}, t: 0, stage: 0, val: [], users: [], ev: 0, perks: 0, office: [] });
@@ -129,6 +129,13 @@ function run() {
         if (!S.over) { console.log('✗ 没有结局', key, S.t); continue; }
         row.office.push(S.co.office); row.n++; row.ends[S.over.id] = (row.ends[S.over.id] || 0) + 1; row.t += S.over.t; row.stage += S.stage; row.val.push(S.over.val); row.users.push(S.stats.maxUsers); row.ev += S.stats.events; row.perks += S.perks.length; (S.stats.rounds || []).forEach((t, i) => { (row.rt ??= [])[i] = (row.rt[i] || 0) + t; (row.rn ??= [])[i] = (row.rn[i] || 0) + 1; });
         sr.n++; sr.ends[S.over.id] = (sr.ends[S.over.id] || 0) + 1; sr.val.push(S.over.val);
+        if (s.region === 'sz') {                                              // 路线之争：开了几局、各走到哪个结局
+          ideo.sz++;
+          if (S.ideo) { ideo.n++; ideo[S.ideo.result || 'on']++; }
+          if (S.ach.includes('road')) ideo.road++;
+          ideo.val[S.ideo?.result === 'red' ? 'red' : S.ideo?.result === 'cap' ? 'cap' : 'none'].push(S.over.val);
+          for (const f of ['utopia_ok', 'utopia_fail', 'bci_ok', 'bci_shut', 'yank', 'spinoff', 'red_cell']) if (S.flags[f]) ideo.unlocked[f] = (ideo.unlocked[f] || 0) + 1;
+        }
       }
     }
   }
@@ -138,6 +145,7 @@ function run() {
     console.log(`${k.padEnd(10)} n=${r.n} 平均存活${(r.t / r.n).toFixed(0)}月 平均轮次${(r.stage / r.n).toFixed(1)} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 用户峰值中位${med(r.users).toFixed(0)}万 事件${(r.ev / r.n).toFixed(0)} 卡${(r.perks / r.n).toFixed(1)} 办公室[${[1,2,3,4,5,6,7,8].map(l => Math.round(r.office.filter(x => x >= l).length / r.n * 100)).slice(3).join("/")}%≥4..8档] 各轮月份[${(r.rt || []).map((t, i) => (t / r.rn[i]).toFixed(0) + '(' + Math.round(r.rn[i] / r.n * 100) + '%)').join(' ')}] | ${ends}`);
   }
   for (const [st, r] of Object.entries(byStyle)) console.log(`${('[' + st + ']').padEnd(10)} n=${r.n} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 | ${Object.entries(r.ends).sort((a, b) => b[1] - a[1]).map(([id, c]) => `${ENDINGS[id].name}${Math.round(c / r.n * 100)}%`).join(' ')}`);
+  console.log(`路线之争：深圳 ${ideo.sz} 局里 ${ideo.n} 局开了链 → 红色 ${ideo.red} · 警惕乌托邦 ${ideo.cap} · 股权不够 ${ideo.fail} · 没走完 ${ideo.on}；成就 ${ideo.road} 局；估值中位 红${(med(ideo.val.red) / 1e4).toFixed(0)}亿 资${(med(ideo.val.cap) / 1e4).toFixed(0)}亿 无${(med(ideo.val.none) / 1e4).toFixed(0)}亿；${Object.entries(ideo.unlocked).map(([k, v]) => k + ' ' + v).join(' · ')}`);
   console.log('提示出现频率（占所有月份）：' + Object.entries(HINT_N).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${Math.round(c / HINT_M * 100)}%`).join(' · '));
 }
 

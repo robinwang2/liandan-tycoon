@@ -650,6 +650,8 @@ export function createRoom(stage, k, PROPS, art) {
       if (lk.glasses) { for (const sx of [-1, 1]) k.torus(0.07, kind === 'cameo' ? 0.02 : 0.012, '#22252d', g, sx * 0.105, 0.02, 0.285, { cast: false, rough: 0.3 }); k.box(0.08, 0.018, 0.015, '#22252d', g, 0, 0.03, 0.292, { cast: false }); }
       if (lk.headphones) { k.torus(0.315, 0.028, '#22252d', g, 0, 0.05, 0, { arc: Math.PI, cast: false, rough: 0.4 }); for (const sx of [-1, 1]) k.cyl(0.08, 0.08, 0.065, '#e5484d', g, sx * 0.31, 0, 0, { rz: Math.PI / 2, rough: 0.4 }); }
     });
+    // 脑机实验成功以后：员工都戴着脑机头盔（银色头箍 + 小圆顶 + 发蓝光的天线）
+    if (kind === 'staff' && st.view.bci) part(head, 0, 0.16, 0, g => { k.torus(0.305, 0.03, '#c9d2dc', g, 0, -0.02, 0, { rx: Math.PI / 2, metal: 0.8, rough: 0.3 }); k.ball(0.2, '#e4eaf1', g, 0, 0.1, -0.02, { sy: 0.55, metal: 0.6, rough: 0.25 }); k.cyl(0.012, 0.012, 0.16, '#8a93a6', g, 0.1, 0.22, -0.02, { metal: 0.8, rough: 0.3 }); k.ball(0.035, '#39c6ff', g, 0.1, 0.31, -0.02, { glow: '#39c6ff', glowK: 1.4, night: 2.6, cast: false }); });
     let crown = null;
     if (kind === 'founder') { crown = part(head, 0, 0.5, 0, g => { k.cyl(0.15, 0.15, 0.07, '#f2c94c', g, 0, 0, 0, { metal: 1, rough: 0.25 }); for (let i = 0; i < 5; i++) k.cone(0.045, 0.12, '#f2c94c', g, Math.sin(i * 1.257) * 0.128, 0.08, Math.cos(i * 1.257) * 0.128, { seg: 4, metal: 1, rough: 0.25 }); }); }
     if (kind === 'cameo') root.scale.setScalar(1.18);
@@ -838,7 +840,9 @@ export function createRoom(stage, k, PROPS, art) {
       if ((v.founder?.outfit || '') !== (p.founder?.outfit || '')) buildFounder();
       drawSign();
     }
-    syncStaff(v.staff, rebuilt || p.mode !== v.mode);
+    const bciFlip = !!v.bci !== !!p.bci;                                        // 戴上 / 摘下脑机头盔：小人整批重做
+    if (bciFlip) { for (const a of actors.values()) { actorsG.remove(a.root); freeActor(a); } actors.clear(); }
+    syncStaff(v.staff, rebuilt || bciFlip || p.mode !== v.mode);
     // 多层楼：外面传进来要看哪一层（-1 = 全楼），变了就坐电梯过去
     if (tw.on) { const want = v.floor ?? -1; if (rebuilt) goFloor(want, true); else if (want !== tw.target) goFloor(want); updateLabels(); }
     else stage.setLift?.(0);

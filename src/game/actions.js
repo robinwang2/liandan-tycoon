@@ -1,13 +1,14 @@
 // CEO 行动：每个行动花行动点（和钱），要么直接生效，要么弹出子选项。
 import * as G from './engine.js';
-import { DATA_SOURCES, FEATURES, FEAT, OFFICES, MAX_OFFICE, officeName, floorsOf, STAGES, INVESTORS, ROLES, DIRT, AGI_CAP } from '../data/defs.js';
+import { DATA_SOURCES, FEATURES, FEAT, OFFICES, MAX_OFFICE, officeName, floorsOf, STAGES, INVESTORS, INVESTORS_EAST, EAST_RIVALS, ROLES, DIRT, AGI_CAP } from '../data/defs.js';
+import * as IDEO from './ideology.js';
 
 const { rnd, rf, pick, money, fmtUsers, mod, power, unit, applyFx, addDirt, news, optCheck, clamp, pCheck, rollCheck } = G;
 const pct = (S, attr, dc) => Math.round(pCheck(S, attr, dc) * 100);
 
 export const TABS = [
   { id: 'rd', name: '研发', icon: '⚗️' }, { id: 'team', name: '团队', icon: '👥' }, { id: 'cap', name: '资本', icon: '💰' },
-  { id: 'pr', name: '公关', icon: '📣' }, { id: 'ops', name: '经营', icon: '🧭' },
+  { id: 'pr', name: '公关', icon: '📣' }, { id: 'ops', name: '经营', icon: '🧭' }, { id: 'ideo', name: '意识形态', icon: '☭' },
 ];
 
 const FURNACE_TEXT = {
@@ -73,25 +74,27 @@ function closeRound(S, val, p, who) {
   return `${STAGES[S.stage].name}到账 ${money(S, cash)}。你发了一条朋友圈：「感谢信任，继续赶路。」配图是凌晨四点的办公室。`;
 }
 function raiseDialog(S) {
-  const k = S.stage + 1, val0 = G.valuation(S), pf = G.perf(S), winter = S.burstT && S.t - S.burstT < 14;
+  const k = S.stage + 1, val0 = G.valuation(S), pf = G.perf(S), winter = S.burstT && S.t - S.burstT < 14, red = !!S.flags.red;
   if (pf < 0.75 || (winter && rnd(S) < 0.45)) {
     S.lastRaiseT = S.t - 3;
     return { ok: false, text: winter ? '你见了二十家机构。每一家都说「我们长期看好 AI」，然后没有一家回消息。寒冬里没人掏钱。' : '你见了二十家机构，收获了二十句「数据再跑一跑，我们保持联系」。指标还撑不起这一轮。' };
   }
-  const now = S.users + S.fake, target = Math.max(now * 2.5, STAGES[Math.min(6, k + 1)].users * 0.35), rv = pick(S, S.rivals.slice(0, 3));
-  const mk = (name, vk, p, note, extra) => ({ label: name, hint: `估值 ${money(S, val0 * vk)} · 出让 ${Math.round(p * 100)}% · 到账 ${money(S, val0 * vk * p)}${note ? ' · ' + note : ''}`, go: () => { extra?.(); return { text: closeRound(S, val0 * vk, p, name.split('：')[0]) }; } });
+  const vcs = red ? INVESTORS_EAST : INVESTORS;                         // 红色公司：美元基金不再和你谈，只剩人民币基金和国家队
+  const now = S.users + S.fake, target = Math.max(now * 2.5, STAGES[Math.min(6, k + 1)].users * 0.35), rv = pick(S, red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.rivals.slice(0, 3));
+  const mk = (name, vk, p, note, extra, after) => ({ label: name, hint: `估值 ${money(S, val0 * vk)} · 出让 ${Math.round(p * 100)}% · 到账 ${money(S, val0 * vk * p)}${note ? ' · ' + note : ''}`, go: () => { extra?.(); const text = closeRound(S, val0 * vk, p, name.split('：')[0]); after?.(); return { text }; } });
+  // 深圳的国资：选了它就开启「路线之争」事件链（还没开过的话，每轮正经融资它都会在桌上）
+  const state = () => mk('深创头：国资入股', 0.95, 0.14, `监管压力 -15，两年内收入 +10%${S.ideo ? '' : '；国资会派驻一名董事'}`, () => applyFx(S, { reg: -15, temp: { key: 'revMult', mult: 1.1, months: 24 } }), () => IDEO.startIdeo(S, G));
   const pool = [
-    () => mk(`${pick(S, INVESTORS)}：高估值 + 对赌`, 1.3, 0.15, `一年内用户须达 ${fmtUsers(target)}，否则赔股权`, () => { S.vam = { due: S.t + 12, target }; }),
-    () => mk('英伟大战投：以卡换股', 1.0, 0.12, '显卡配额 +40%', () => applyFx(S, { quota: 40 })),
+    () => mk(`${pick(S, vcs)}：高估值 + 对赌`, 1.3, 0.15, `一年内用户须达 ${fmtUsers(target)}，否则赔股权`, () => { S.vam = { due: S.t + 12, target }; }),
+    () => (red ? mk('昇天算力：以卡换股', 1.0, 0.12, '显卡配额 +40%（国产卡）', () => applyFx(S, { quota: 40 })) : mk('英伟大战投：以卡换股', 1.0, 0.12, '显卡配额 +40%', () => applyFx(S, { quota: 40 }))),
     () => mk('土豪主权基金：大钱大稀释', 1.15, 0.22, '钱多事少'),
-    () => (S.co.region === 'sz'
-      ? mk('深创头：国资入股', 0.95, 0.14, '监管压力 -15，两年内收入 +10%', () => applyFx(S, { reg: -15, temp: { key: 'revMult', mult: 1.1, months: 24 } }))
-      : mk('硬银：孙正意的直觉', 1.5, 0.25, '「想得再疯狂一点」热度 +10', () => applyFx(S, { hype: 10, bubble: 2 }))),
+    ...(S.co.region === 'sz' ? (S.ideo ? [state] : []) : [() => mk('硬银：孙正意的直觉', 1.5, 0.25, '「想得再疯狂一点」热度 +10', () => applyFx(S, { hype: 10, bubble: 2 }))]),
     () => mk(`${rv.name}：战略投资`, 1.05, 0.14, '三年内上游与推理成本 -30%', () => { applyFx(S, { temp: [{ key: 'apiCostMult', mult: 0.7, months: 36 }], rival: { rel: 30 } }, { rival: rv.id }); }),
   ];
-  if (pf < 0.9) return { dialog: { kind: 'event', cat: 'money', icon: '🩸', art: 'pitch', title: `${STAGES[k].name} · 只有一份 Term Sheet`, text: `业绩离这一轮的达标线还差一截（业绩系数 ${pf.toFixed(2)}，1.0 为达标）。聊了一圈，只有一家愿意给钱，条件很不客气。要么签，要么回去把数据做上来再说。`, options: [mk(`${pick(S, INVESTORS)}：流血融资`, 0.55, 0.25, '趁你病，要你命')] } };
-  const offers = [mk(`${pick(S, INVESTORS)}：干净的钱`, 0.85, 0.15, '没有附加条款')];
-  while (offers.length < 3) offers.push(pool.splice(Math.floor(rnd(S) * pool.length), 1)[0]());
+  if (pf < 0.9) return { dialog: { kind: 'event', cat: 'money', icon: '🩸', art: 'pitch', title: `${STAGES[k].name} · 只有一份 Term Sheet`, text: `业绩离这一轮的达标线还差一截（业绩系数 ${pf.toFixed(2)}，1.0 为达标）。聊了一圈，只有一家愿意给钱，条件很不客气。要么签，要么回去把数据做上来再说。`, options: [mk(`${pick(S, vcs)}：流血融资`, 0.55, 0.25, '趁你病，要你命')] } };
+  const offers = [mk(`${pick(S, vcs)}：干净的钱`, 0.85, 0.15, '没有附加条款')];
+  if (S.co.region === 'sz' && !S.ideo) offers.push(state());
+  while (offers.length < 3 && pool.length) offers.push(pool.splice(Math.floor(rnd(S) * pool.length), 1)[0]());
   return { dialog: { kind: 'event', cat: 'money', icon: '💰', art: 'pitch', title: `${STAGES[k].name} · 三份 Term Sheet`, text: `路演了一圈，三份投资意向书摆在桌上。当前估值基准 ${money(S, val0)}（业绩系数 ${pf.toFixed(2)}，1.0 为达标）。签哪一份？`, options: offers } };
 }
 
@@ -250,7 +253,56 @@ export const ACTIONS = [
     run: S => { const ok = rollCheck(S, 'net', 15); if (ok) applyFx(S, { quota: 30 }); return { ok, text: ok ? '你在一场行业晚宴上堵到了皮衣教主。他看了看你的名片，又看了看你的眼神，说：「给他批。」' : '教主的助理礼貌地告诉你，你的订单已经排上了——在 2031 年第三季度。' }; },
   },
   { id: 'sweep', tab: 'ops', name: '高价扫货', icon: '📦', ap: 1, show: S => S.ownModel, cost: S => G.quota(S) * G.gpuPrice(S) * 3, desc: () => '从黄牛手里收现货：显卡配额 +25%', run: S => { applyFx(S, { quota: 25 }); return '黄牛开着一辆面包车来了，后备箱里全是显卡，还送了你两箱矿泉水。'; } },
+  // ── 意识形态：开局什么都没有；国资入股后走完「路线之争」才会解锁 ──
+  // 红色路线
+  {
+    id: 'mobilize', tab: 'ideo', name: '公开动员', icon: '📢', ap: 1, cd: 3, show: IDEO.isRed, desc: () => '热度 +8，泡沫 +3，士气 +10',
+    run: S => { S.hype = clamp(S.hype + 8, 0, 100); S.bubble = clamp(S.bubble + 3, 0, 100); S.morale = clamp(S.morale + 10, 0, 100); return IDEO.actText(S, 'mobilize', G); },
+  },
+  {
+    id: 'utopia', tab: 'ideo', name: '乌托邦社区实验', icon: '🌾', ap: 1, cost: () => 20000, show: S => IDEO.isRed(S) && !S.flags.utopia_on,
+    desc: () => '花 2 亿在城郊建一座让 AI 做计划的公社。一次性事件链，成了有长期加成',
+    run: S => { S.flags.utopia_on = 1; G.queueEvent(S, 'utopia_1'); news(S, `🌾 ${S.co.name} 在城郊买下一片地，「乌托邦社区实验」破土动工。`); return IDEO.actText(S, 'utopia', G); },
+  },
+  {
+    id: 'selfcrit', tab: 'ideo', name: '自我批评会', icon: '🪞', ap: 1, cd: 6, show: IDEO.isRed, block: S => (S.dirt.length ? null : '保险柜是空的，没什么可检讨的'),
+    desc: S => { const d = worstDirt(S); return d ? `当众检讨「${d.name}」，这张黑料就此翻篇；士气 -${Math.round(4 + d.sev / 3)}，口碑 +2，监管压力 -3` : '当众检讨一张黑料，让它就此翻篇'; },
+    run: S => { const d = worstDirt(S); G.removeDirt(S, d.uid); applyFx(S, { morale: -(4 + d.sev / 3), rep: 2, reg: -3 }); return `「${d.name}」翻篇了。${IDEO.actText(S, 'selfcrit', G)}`; },
+  },
+  {
+    id: 'subbotnik', tab: 'ideo', name: '星期六义务劳动', icon: '🧹', ap: 1, cd: 4, show: IDEO.isRed,
+    desc: S => (S.sprint ? `「${FEAT[S.sprint.id].name}」开发进度 +35%（不发加班费）；士气 -4` : '产品体验 +5（不发加班费）；士气 -4'),
+    run: S => { if (S.sprint) S.sprint.done = Math.min(S.sprint.need, S.sprint.done + S.sprint.need * 0.35); else S.quality = clamp(S.quality + 5, 0, 100); applyFx(S, { morale: -4 }); return IDEO.actText(S, 'subbotnik', G); },
+  },
+  {
+    id: 'plan', tab: 'ideo', name: '五年计划', icon: '📜', ap: 2, show: IDEO.isRed, block: S => (S.ideo?.plan ? `上一个计划${G.dateStr(S.ideo.plan.due)}才到期` : null),
+    desc: () => '定一个 12 个月的目标，相关产出 +12~20%；到期没完成，要么认账，要么改报表', run: S => IDEO.planDialog(S, G),
+  },
+  // 资本路线
+  {
+    id: 'yank', tab: 'ideo', name: '末位淘汰', icon: '📉', ap: 1, show: S => IDEO.isCap(S) && !S.flags.yank,
+    desc: () => '一次性决定：从这个月起，每个部门（2 人以上）每月淘汰能力最低的一人，HR 自动补一个新人。不影响士气', run: S => IDEO.yankDialog(S, G),
+  },
+  {
+    id: 'bci', tab: 'ideo', name: '脑机实验', icon: '🧠', ap: 1, cost: S => Math.max(40, 2 * unit(S)), show: S => IDEO.isCap(S) && !S.flags.bci_on,
+    desc: S => `在地下二层成立「秘密实验部」，留下一张黑料；事件链走完，员工睡觉时也能给${S.ownModel ? '丹炉提供算力' : '产品跑推理（API 成本 -35%）'}`,
+    run: S => { S.flags.bci_on = 1; addDirt(S, 'bci_lab'); G.queueEvent(S, 'bci_1'); news(S, '🧠 平面图上没有的地下二层，亮起了灯。'); return IDEO.actText(S, 'bci', G); },
+  },
+  {
+    id: 'buyback', tab: 'ideo', name: '股票回购', icon: '🔁', ap: 1, cd: 6, show: IDEO.isCap, cost: S => G.valuation(S) * 0.03, block: S => (S.equity >= 90 ? '股权已经够多了' : null),
+    desc: () => '按估值买回 3% 股权，董事会里你的票更稳', run: S => { applyFx(S, { equity: 3 }); return IDEO.actText(S, 'buyback', G); },
+  },
+  {
+    id: 'costcut', tab: 'ideo', name: '降本增效', icon: '✂️', ap: 1, cd: 8, show: IDEO.isCap, desc: () => '半年内总成本 -12%；士气 -6',
+    run: S => { applyFx(S, { temp: { key: 'costMult', mult: 0.88, months: 6 }, morale: -6 }); return IDEO.actText(S, 'costcut', G); },
+  },
+  {
+    id: 'spinoff', tab: 'ideo', name: '分拆上市', icon: '🪓', ap: 2, show: S => IDEO.isCap(S) && !S.flags.spinoff, block: S => (S.stage < 3 ? '至少融到 B 轮再说' : null),
+    desc: S => `把一块业务拆出去单独上市（一次性）：到账约 ${money(S, G.valuation(S) * 0.06)}，热度 +6、泡沫 +4、监管压力 +4`,
+    run: S => { S.flags.spinoff = 1; S.cash += G.valuation(S) * 0.06; applyFx(S, { hype: 6, bubble: 4, reg: 4 }); S.fxq.push(['money']); return IDEO.actText(S, 'spinoff', G); },
+  },
 ];
+const worstDirt = S => S.dirt.slice().sort((a, b) => b.sev - a.sev)[0];
 export const ACT = Object.fromEntries(ACTIONS.map(a => [a.id, a]));
 
 // 某个行动现在能不能点、要花多少钱
@@ -269,7 +321,7 @@ export function perform(S, id) {
     const r = a.run(S);
     if (r?.dialog) {
       r.dialog.closable = true;
-      r.dialog.options = r.dialog.options.map(o => ({ ...o, go: () => { commit(); return o.go(); } }));
+      r.dialog.options = r.dialog.options.map(o => ({ ...o, go: () => { if (!o.free) commit(); return o.go(); } }));   // free：「算了」这类选项不扣行动点
       return r;
     }
     commit();
@@ -289,6 +341,7 @@ export function hire(S, uid) {
 export function fire(S, uid) {
   const e = S.staff.find(x => x.uid === uid);
   if (!e) return null;
+  IDEO.noteFire(S);
   return G.measure(S, () => { S.cash -= 2 * e.salary * mod(S, 'salaryMult'); G.removeStaff(S, uid); applyFx(S, { morale: e.skill >= 7 ? -8 : -4 }); return { text: `${e.name} 「毕业」了，N+1 已付。` }; });
 }
 export function setGpu(S, n) { S.gpu = Math.max(0, Math.round(n) || 0); }          // 没有硬上限：超出配额的按现货价租（见 G.gpuRent）

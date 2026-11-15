@@ -22,7 +22,7 @@ const STEP = Object.fromEntries(STEPS.map(s => [s.key, s]));
 
 // 每个行动、页签、仪表属于哪一步
 const ACT_KEY = { code: 'start', sprint: 'product', release: 'model', furnace: 'model', paper: 'model', beg: 'model', sweep: 'model', headhunt: 'team', teambuild: 'team', pie: 'team', office: 'team', raise: 'cap', roadshow: 'cap', ipo: 'cap', selfdev: 'cap', subsidy: 'cap', lobby: 'policy', hype: 'pr', ads: 'pr', goodpr: 'pr', sellcourse: 'pr', navy: 'dirt', fakeusers: 'dirt', wash: 'dirt', digdirt: 'dirt' };
-const LTAB_KEY = { rd: 'start', team: 'team', cap: 'cap', pr: 'pr', ops: 'model' };
+const LTAB_KEY = { rd: 'start', team: 'team', cap: 'cap', pr: 'pr', ops: 'model', ideo: 'cap' };
 const RTAB_KEY = { board: 'model', chain: 'chain', team: 'team', safe: 'dirt', perks: 'perks', fin: 'product', log: 'team' };
 const GAUGE_KEY = { hype: 'pr', rep: 'pr', morale: 'team', reg: 'policy', bubble: 'cap', dirt: 'dirt' };
 const CHIP_KEY = { cash: 'start', val: 'cap', users: 'product', rank: 'model', equity: 'cap' };

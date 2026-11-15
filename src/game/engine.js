@@ -2,14 +2,18 @@
 import {
   MONTHS, START_YEAR, AGI_CAP, REGIONS, TRACKS, TRAIT, OFFICES, officeName, ROLES, STAFF_QUIRKS, POLICIES,
   PERKS, PERK, FEAT, RIVALS, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, NAMES, ATTR_NAME, META_SHOP, MOD_NAME,
+  GOALS, IDEO_FLAG_MODS, OLD_QUOTA_MULT, EAST_RIVALS,
 } from '../data/defs.js';
 import { EVENTS_CHAINS } from '../data/events_chains.js';
 import { EVENT_ART, CAT_ART } from '../data/event_art.js';
 import { EVENTS_CORE } from '../data/events_core.js';
 import { EVENTS_PACK } from '../data/events_pack.js';
 import { NEWS } from '../data/news.js';
+import { IDEO_EVENTS, UTOPIA_EVENTS, BCI_EVENTS } from '../data/ideology.js';
+import { IDEO_DYN, ideoMonth } from './ideology.js';
 
-const ALL = [...EVENTS_CORE, ...EVENTS_CHAINS, ...EVENTS_PACK];
+// 路线之争：结局后的随机事件进随机池（靠 flag 限定）；链事件和动态事件 weight 0，只能被排进来
+const ALL = [...EVENTS_CORE, ...EVENTS_CHAINS, ...EVENTS_PACK, ...IDEO_EVENTS, ...UTOPIA_EVENTS, ...BCI_EVENTS, ...IDEO_DYN];
 export const EV = Object.fromEntries(ALL.map(e => [e.id, e]));
 
 // ───────── 工具 ─────────
@@ -39,6 +43,8 @@ export function mod(S, key) {
   for (const id of S.perks) add(PERK[id]?.mods);
   for (const id of S.feats) add(FEAT[id]?.mods);
   for (const k in S.policies) add(POLICIES[k].opts[S.policies[k]]?.mods);
+  if (S.ideo?.goal) add(GOALS[S.ideo.goal]?.mods);                     // 公司目标（路线之争之后）
+  for (const f in IDEO_FLAG_MODS) if (S.flags[f]) add(IDEO_FLAG_MODS[f]);
   for (const tm of S.temp) if (tm.key === key) v = mult ? v * (tm.mult ?? 1) : v + (tm.add ?? 0);
   if (key === 'devMult' && S.co.route === 'app') v *= 1.15;
   return v;
@@ -70,7 +76,12 @@ export function board(S) {
   return rows.sort((a, b) => b.bench - a.bench);
 }
 export const rank = S => { const i = board(S).findIndex(r => r.me); return i < 0 ? 99 : i + 1; };
-export const quota = S => Math.round(S.quotaBase * STAGES[S.stage].quota * (1 + S.quotaAdd) * mod(S, 'quotaMult'));
+// 显卡配额：供应商愿意按市价卖给你的量。不跟融资轮次绑定，看两样东西：
+// ① 行业产能：基础配额每月涨 4.5%（一年约 ×1.7）；② 采购记录：租满配额的老客户每月多给一点，超租的部分有三成半会转成长约（见 endMonth）
+export const quotaFloor = S => S.quotaBase * 1.045 ** (Math.max(1, S.t) - 1);
+export const quota = S => Math.round((quotaFloor(S) + (S.quotaEarn || 0)) * (1 + S.quotaAdd) * mod(S, 'quotaMult'));
+// 脑机实验成功以后：员工睡觉时也在帮丹炉算梯度，每人折合几张卡（固件年年升级，越来越多）
+export const brainGpu = S => (S.flags?.bci_ok && S.ownModel ? Math.round(S.staff.reduce((a, e) => a + 2 + e.skill, 0) * (1 + S.t / 36)) : 0);
 export const gpuPrice = S => S.gpuBase * mod(S, 'gpuPriceMult');
 // 显卡月租。配额只是「按市价拿货」的份额，不是硬上限：超出配额的去黄牛和云厂商那里现租，
 // 第 k 张超额卡的单价约为 市价 × (2 + k / 配额)，租得越多越贵
@@ -98,7 +109,7 @@ export function costs(S) {
   const rent = OFFICES[S.co.office].rent * mod(S, 'rentMult');
   let gpu = gpuRent(S);
   if (S.furnace?.on && S.furnace.data === 'buy') gpu *= 1.3;
-  const api = usesOwn(S) ? 0 : S.users * TRACKS[S.co.track].infer * 2.5 * S.apiIdx * mod(S, 'apiCostMult');
+  const api = usesOwn(S) ? 0 : S.users * TRACKS[S.co.track].infer * 2.5 * S.apiIdx * mod(S, 'apiCostMult') * (S.flags.bci_ok ? 0.65 : 1);   // 脑机实验：员工大脑帮着跑推理
   const misc = 1 + S.staff.length * 0.25 + S.users * 0.08;
   const k = mod(S, 'costMult') * (S.reg >= 70 ? 1.06 : 1);          // 监管压力过高：合规成本上升
   return { salary: salary * k, rent: rent * k, gpu: gpu * k, api: api * k, misc: misc * k, total: (salary + rent + gpu + api + misc) * k };
@@ -219,6 +230,8 @@ const FX = {
     if (v.done) c.done = true;
   },
   end: (S, v) => { endGame(S, v); },
+  // 路线之争的两条进度条；记下哪条先满（两条都满时看谁先到）
+  ideo: (S, v) => { const I = S.ideo; if (!I) return; for (const k of ['red', 'cap']) if (v[k]) { I[k] = clamp(I[k] + v[k], 0, 100); if (I[k] >= 100 && !I.full) I.full = k; } },
 };
 export const FX_KEYS = Object.keys(FX);
 export function applyFx(S, fx, ctx = {}) { if (fx) for (const k in fx) FX[k]?.(S, fx[k], ctx); }
@@ -227,6 +240,7 @@ export function applyFx(S, fx, ctx = {}) { if (fx) for (const k in fx) FX[k]?.(S
 const READ = {
   t: S => S.t, stage: S => S.stage, users: S => S.users + S.fake, hype: S => S.hype, rep: S => S.rep, morale: S => S.morale, reg: S => S.reg, bubble: S => S.bubble,
   dirt: S => dirtTotal(S), staff: S => S.staff.length, rank: S => rank(S), runway: S => runway(S), office: S => S.co.office, equity: S => S.equity, gpu: S => S.gpu,
+  red: S => S.ideo?.red ?? 0, cap: S => S.ideo?.cap ?? 0,
 };
 export function cond(S, w) {
   if (!w) return true;
@@ -248,6 +262,7 @@ export function cond(S, w) {
   return true;
 }
 function whyNot(S, req) {
+  if (req.notFlag && [].concat(req.notFlag).includes('red') && S.flags.red) return '西方资本已经不和你谈了';
   if (req.cash != null && S.cash < req.cash * unit(S)) return `需要现金 ${money(S, req.cash * unit(S))}`;
   if (req.attr) for (const a in req.attr) if (S.founder.attrs[a] < req.attr[a]) return `需要${ATTR_NAME[a]} ≥ ${req.attr[a]}`;
   return '条件不满足';
@@ -279,7 +294,7 @@ function instEvent(S, ev, ctx) {
       const go = o.go;
       return { ...o, label: fmt(S, o.label, ctx), hint: fmt(S, o.hint, ctx), go: () => { const r = go() || {}; if (r.text) r.text = fmt(S, r.text, ctx); return r; } };
     }
-    const out = { label: fmt(S, o.label, ctx), hint: fmt(S, o.hint, ctx) };
+    const out = { label: fmt(S, o.label, ctx), hint: fmt(S, o.hint, ctx), side: o.side };
     if (o.req && !cond(S, o.req)) { out.disabled = true; out.why = whyNot(S, o.req); }
     if (o.check) out.chk = `${ATTR_NAME[o.check.attr]}检定 ${Math.round(pCheck(S, o.check.attr, o.check.dc) * 100)}%`;
     else if (o.odds != null) out.chk = `看运气 ${Math.round(pOdds(S, o.odds) * 100)}%`;
@@ -296,7 +311,8 @@ function instEvent(S, ev, ctx) {
     return out;
   });
   if (ev.scene) S.fxq.push(ev.scene);
-  return { kind: 'event', id: ev.id, cat: ev.cat, icon: ev.icon, title: fmt(S, ev.title, ctx), text: fmt(S, text, ctx), options, art: ev.art || EVENT_ART[ev.id] || CAT_ART[ev.cat] || 'boardroom', chain: ev.chain, portrait: ev.portrait, delay: ev.delay };
+  const val = k => (typeof ev[k] === 'function' ? ev[k](S, ctx, API) : ev[k]);          // 标题、图标、插画也可以按局势变
+  return { kind: 'event', id: ev.id, cat: ev.cat, icon: val('icon'), title: fmt(S, val('title'), ctx), text: fmt(S, text, ctx), options, art: val('art') || EVENT_ART[ev.id] || CAT_ART[ev.cat] || 'boardroom', chain: ev.chain, portrait: ev.portrait, delay: ev.delay };
 }
 
 function scandalDialog(S, d) {
@@ -360,6 +376,7 @@ const SNAP = [
   ['reg', '监管压力', S => S.reg, -1], ['bubble', '泡沫', S => S.bubble, 0], ['users', '用户', S => S.users + S.fake, 1, 'users'], ['quality', '产品体验', S => S.quality, 1],
   ['equity', '股权', S => S.equity, 1, 'pct'], ['quota', '显卡配额', S => quota(S), 1], ['tech', '模型能力', S => (S.ownModel ? myCap(S) : 0), 1, 'f1'], ['bench', '跑分', S => S.model?.bench ?? 0, 1, 'f1'],
   ['dirt', '黑料', S => S.dirt.length, -1], ['proj', '特殊项目', S => S.projects.length, 0], ['staff', '员工', S => S.staff.length, 1], ['ap', '下月行动点', S => S.apNext, 1], ['perks', '董事会卡', S => S.perks.length, 1],
+  ['red', '共产', S => S.ideo?.red ?? 0, 0], ['capb', '资本', S => S.ideo?.cap ?? 0, 0],
 ];
 const snap = S => SNAP.map(r => r[2](S));
 function diff(S, a, b) {
@@ -396,7 +413,7 @@ export function newGame(setup, meta) {
     hype: 8, rep: 50, morale: 65, reg: 10, bubble: 35, burstT: 0, outage: 0,
     users: setup.route === 'app' ? 2 : 0.3, fake: 0, quality: setup.route === 'app' ? 40 : 28,
     ownModel: setup.route === 'model', model: null, E: 0, furnace: null, lastReleaseT: -9, upstream: null, apiIdx: 1,
-    gpu: 0, gpuBase: 1.5, quotaBase: R.quota, quotaAdd: 0,
+    gpu: 0, gpuBase: 1.5, quotaBase: R.quota, quotaAdd: 0, quotaEarn: 0,
     staff: [], cands: [], uid: 1, policies: { work: '965', price: 'std', safety: 'std' },
     dirt: [], exposed: 0, exposedCrime: 0, hadDirt: false,
     perks: [], feats: [], sprint: null, projects: [], chains: {}, flags: {}, temp: [], rivals: [], sched: [], seen: {}, q: [], fxq: [], log: [], cd: {},
@@ -518,6 +535,7 @@ export function fxLines(S, fx) {
     else if (k === 'perk') out.push(['获得一张董事会卡', true]);
     else if (k === 'project') out.push([`开启特殊项目「${v.name}」`, null]);
     else if (k === 'end') out.push(['本局结束', null]);
+    else if (k === 'ideo') { if (v.red) out.push([`共产 ${sg(v.red)}`, null]); if (v.cap) out.push([`资本 ${sg(v.cap)}`, null]); }
   }
   return out;
 }
@@ -525,8 +543,8 @@ export function fxLines(S, fx) {
 export function endMonth(S) {
   if (S.over) return;
   // 1. 算力：推理优先，剩下的进丹炉
-  const need = inferNeed(S), free = Math.max(0, S.gpu - need);
-  S.outage = need > S.gpu ? 1 - S.gpu / need : 0;
+  const need = inferNeed(S), have = S.gpu + brainGpu(S), free = Math.max(0, have - need);
+  S.outage = need > have ? 1 - have / need : 0;
   if (S.outage > 0.05) news(S, `🔥 显卡不够用，用户看到的是「服务器繁忙，请稍后再试」（缺口 ${Math.round(S.outage * 100)}%）。`);
   if (S.ownModel && S.furnace?.on) {
     let gain = free * researchEff(S) * DATA_SOURCES[S.furnace.data].mult;
@@ -562,6 +580,12 @@ export function endMonth(S) {
   S.streak.x996 = String(S.policies.work) === '996' ? S.streak.x996 + 1 : 0;
   if (S.streak.x996 && S.streak.x996 % 8 === 0) addDirt(S, 'overwork');
   S.stats.maxUsers = Math.max(S.stats.maxUsers, S.users);
+  // 显卡配额跟着采购走：租满配额的老客户，供应商每月多给 7%；超租的部分有三成半转成长约；闲置过半就慢慢收回
+  {
+    const q = Math.max(1, quota(S)), k = Math.max(0.05, (1 + S.quotaAdd) * mod(S, 'quotaMult'));
+    if (S.gpu >= 0.85 * q) S.quotaEarn = (S.quotaEarn || 0) + (0.07 * q + 0.35 * Math.max(0, S.gpu - q)) / k;
+    else if (S.gpu < 0.5 * q) S.quotaEarn = (S.quotaEarn || 0) * 0.97;
+  }
   // 4. 仪表
   const rw = runway(S);
   S.hype = clamp(S.hype * (1 - (0.11 + Math.max(0, S.hype - 60) * 0.002) * mod(S, 'hypeDecayMult')), 0, 100);
@@ -581,6 +605,7 @@ export function endMonth(S) {
   }
   // 6. 团队
   if (S.morale < 25 && S.staff.length && rnd(S) < 0.3) { const e = pick(S, S.staff.filter(x => x.quirk !== 'loyal').length ? S.staff.filter(x => x.quirk !== 'loyal') : S.staff); removeStaff(S, e.uid); news(S, `👋 士气太低，${e.name}（${ROLES[e.role].name}）提了离职。`); }
+  ideoMonth(S, API);                                                  // 路线之争：读书会招新、末位淘汰
   // 7. 时间推进
   S.t++;
   S.temp = S.temp.filter(tm => tm.until > S.t);
@@ -619,7 +644,7 @@ export function endMonth(S) {
   if (S.reg >= 100 && !S.cd.crack) { S.cd.crack = S.t + 10; queueEvent(S, 'crackdown'); }
   if (!S.burstT && S.t > 24 && ((S.bubble >= 78 && rnd(S) < 0.14) || (S.t >= 56 && rnd(S) < 0.12))) queueEvent(S, 'bubble_burst');
   if (S.stage >= 2 && !S.cd.coup && ((S.equity < 45 && (S.rep < 30 || S.morale < 28 || S.exposed >= 35) && rnd(S) < 0.35) || (S.equity < 25 && rnd(S) < 0.04))) { S.cd.coup = S.t + 18; queueEvent(S, 'coup'); }
-  if (S.stage >= 2 && !S.cd.acq && rnd(S) < 0.04 + (S.hype > 60 ? 0.03 : 0)) { S.cd.acq = S.t + 14; queueEvent(S, 'acq_offer', { rival: pick(S, S.rivals.slice(0, 4)).id }); }
+  if (S.stage >= 2 && !S.cd.acq && rnd(S) < 0.04 + (S.hype > 60 ? 0.03 : 0)) { S.cd.acq = S.t + 14; queueEvent(S, 'acq_offer', { rival: pick(S, S.flags.red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.rivals.slice(0, 4)).id }); }   // 红色公司：西方巨头不再来收购
   for (const [id, ctx] of projEvents) queueEvent(S, id, ctx);
   // 随机事件
   const n = S.tut?.on && S.t <= 2 ? 0 : (rnd(S) < 0.82 ? 1 : 0) + (S.t > 10 && rnd(S) < 0.18 ? 1 : 0);
@@ -642,7 +667,12 @@ const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } 
 export const loadMeta = () => ({ points: 0, own: {}, ach: {}, ends: {}, runs: 0, best: 0, ...(store.get(META_KEY) || {}) });
 export const saveMeta = m => store.set(META_KEY, m);
 export const saveGame = S => store.set(SAVE_KEY, S);
-export const loadGame = () => { const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null; S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; S.co.office = clamp(S.co.office | 0, 1, OFFICES.length - 1); return S; };   // 兼容旧存档
+export const loadGame = () => {                                      // 兼容旧存档
+  const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null;
+  S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; S.co.office = clamp(S.co.office | 0, 1, OFFICES.length - 1);
+  if (S.quotaEarn == null) S.quotaEarn = Math.max(0, S.quotaBase * (OLD_QUOTA_MULT[S.stage] ?? 1) - quotaFloor(S));   // 老存档的配额按轮次算：差额记成「长约」，别让玩家一读档就被现货价坑
+  return S;
+};
 export const clearSave = () => store.del(SAVE_KEY);
 export const traitLocked = (meta, t) => !!t.cost && !meta.own['t_' + t.id];
 export function buyMeta(meta, id) {
@@ -665,4 +695,4 @@ export function finalize(S, meta) {
 }
 
 // 给核心事件里的函数用的工具箱
-export const API = { clamp, rnd, rf, ri, pick, money, fmtUsers, mod, power, unit, runway, valuation, perf, rank, board, quota, costs, revenue, applyFx, addDirt, removeDirt, addStaff, genStaff, removeStaff, optCheck, optOdds, pCheck, endGame, award, news, queueEvent, gainPerk, capOf, EofCap, frontier, myCap, baseE, rivalOf, usesOwn, teamCap, STAGES, AGI_CAP, market, measure, projectRate };
+export const API = { dateStr, refreshCands, cond, fmt, clamp, rnd, rf, ri, pick, money, fmtUsers, mod, power, unit, runway, valuation, perf, rank, board, quota, costs, revenue, applyFx, addDirt, removeDirt, addStaff, genStaff, removeStaff, optCheck, optOdds, pCheck, endGame, award, news, queueEvent, gainPerk, capOf, EofCap, frontier, myCap, baseE, rivalOf, usesOwn, teamCap, STAGES, AGI_CAP, market, measure, projectRate };

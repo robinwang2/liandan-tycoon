@@ -71,7 +71,7 @@ export const EVENTS_PACK = [
     ],
   },
   {
-    id: 'circular_funding', title: '左脚踩右脚', icon: '♻️', cat: 'money', when: { stageMin: 1 },
+    id: 'circular_funding', title: '左脚踩右脚', icon: '♻️', cat: 'money', when: { stageMin: 1, notFlag: 'red' },
     text: '皮衣教主愿意投资 {co}，唯一条件是钱必须全部用来买英伟大 Envidia 的卡。董事会称之为生态协同，财务称之为钱来公司参观了一圈。',
     options: [
       F('接受生态投资', '融资新闻让估值和卡价一起上涨，钱在账户停留四小时就回了皮衣口袋，你得到一屋暖气。', { cash: 5, equity: -4, quota: 30, bubble: 7, flag: 'circular_money' }),
@@ -835,7 +835,7 @@ export const EVENTS_PACK = [
     ],
   },
   {
-    id: 'fifteen_minutes', title: '十五分钟疯狂', icon: '⏱️', cat: 'money', when: { stageMin: 2, hypeMin: 50 },
+    id: 'fifteen_minutes', title: '十五分钟疯狂', icon: '⏱️', cat: 'money', when: { stageMin: 2, hypeMin: 50, notFlag: 'red' },
     text: '硬银孙正意见你十五分钟，开场就让你「想得再疯狂一百倍」。你准备的财务模型还没打开，他已在餐巾纸上画出全球智能帝国，含月球分部。',
     options: [
       C('比他更疯狂', 'cha', 18, '你把愿景放大到月球和百年，他沉默十秒后拍桌投资。理性离场，巨款和董事会卡一起进场。', { cash: 8, equity: -7, hype: 15, bubble: 10, perk: 'draft' }, '你说要服务全人类，他问为什么不是全银河。十五分钟结束，你因想象力不够失去一笔想象中的钱。', { hype: -8, morale: -4 }),

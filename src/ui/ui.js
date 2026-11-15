@@ -4,6 +4,8 @@ import * as A from '../game/actions.js';
 import { advise, muteHint, muteMonths } from '../game/advice.js';
 import { ATTRS, REGIONS, ROUTES, TRACKS, TRAITS, TRAIT, OUTFITS, officeName, ROLES, STAFF_QUIRKS, POLICIES, PERK, FEAT, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, META_SHOP, CAT, MONTHS, MOD_NAME, KIND_NAME, floorsOf, DEPTS } from '../data/defs.js';
 import { CHAINS } from '../data/events_chains.js';
+import { IDEO_CHAINS } from '../data/ideology.js';
+import * as IDEO from '../game/ideology.js';
 import { LOGOS, BRAND_COLORS, logoSVG, logoDataURL } from './logos.js';
 import { artURL, ENDING_ART } from './art.js';
 import { avatarSVG } from './avatar.js';
@@ -29,8 +31,10 @@ function setMuted(m) { muted = m; audio.setMuted(m); try { localStorage.setItem(
 const FX_SOUND = { money: 'coin', confetti: 'confetti', levelup: 'levelup', alarm: 'alarm', boom: 'boom', cameo: 'cameo', release: 'release' };
 const CLICK_SND = { ltab: 'tab', rtab: 'tab', dlg: 'choose', next: null, floor: null };
 // 界面框架里的图标（事件、卡牌等内容里的 emoji 保留）
-const TAB_IC = { rd: 'flask', team: 'people', cap: 'coins', pr: 'megaphone', ops: 'gear' };
-const ACT_IC = { code: 'code', release: 'rocket', furnace: 'swap', selfdev: 'target', sprint: 'puzzle', paper: 'paper', headhunt: 'search_user', teambuild: 'party', pie: 'cake', office: 'building', raise: 'handshake', roadshow: 'mic', ipo: 'bell', sellcourse: 'book', subsidy: 'gift', lobby: 'capitol', hype: 'megaphone_loud', ads: 'ad', goodpr: 'heart', navy: 'ghost', fakeusers: 'mask', wash: 'washer', digdirt: 'shovel', beg: 'hand', sweep: 'broom', agi: 'sparkles' };
+const TAB_IC = { rd: 'flask', team: 'people', cap: 'coins', pr: 'megaphone', ops: 'gear', ideo: 'flag' };
+// 事件链登记表：普通链 + 路线之争和它解锁的两条链
+const CHAIN_INFO = { ...CHAINS, ...IDEO_CHAINS, ideo: { title: '路线之争', icon: '☭' } };
+const ACT_IC = { code: 'code', release: 'rocket', furnace: 'swap', selfdev: 'target', sprint: 'puzzle', paper: 'paper', headhunt: 'search_user', teambuild: 'party', pie: 'cake', office: 'building', raise: 'handshake', roadshow: 'mic', ipo: 'bell', sellcourse: 'book', subsidy: 'gift', lobby: 'capitol', hype: 'megaphone_loud', ads: 'ad', goodpr: 'heart', navy: 'ghost', fakeusers: 'mask', wash: 'washer', digdirt: 'shovel', beg: 'hand', sweep: 'broom', agi: 'sparkles', mobilize: 'megaphone_loud', utopia: 'sun', selfcrit: 'eye', subbotnik: 'broom', plan: 'calendar', yank: 'target', bci: 'bolt', buyback: 'swap', costcut: 'minus', spinoff: 'rocket' };
 
 const RAND = {
   bay: { name: ['Kevin Wang', 'Alice Chen', 'Jason Lin', 'Mia Zhou', 'Leo Xu', 'Grace Liu'], co: ['Chaos Labs', '无限进步', 'Gradient', '奇点临近', 'Hallucinate', '第一性原理'] },
@@ -128,7 +132,7 @@ function actCard(a) {
   return `<button class="act ${st.why ? 'off' : ''} ${a.shady ? 'shady' : ''} ${rec ? 'rec' : ''}" data-a="act:${a.id}" ${st.why ? 'disabled' : ''}><span class="ic">${ACT_IC[a.id] ? icon(ACT_IC[a.id], 22) : a.icon}</span><span class="bd"><b>${a.shady ? '☠ ' : ''}${a.name}${rec ? '<i class="rtag">建议</i>' : ''}</b><small>${esc(a.desc(S))}</small>${st.why ? `<em>${esc(st.why)}</em>` : ''}</span><span class="cost"><i>${'●'.repeat(a.ap)}</i>${st.cost > 0 ? `<u>${G.money(S, st.cost)}</u>` : ''}</span></button>`;
 }
 function person(e, btn) {
-  return `<div class="cand ${V.pop?.uid === e.uid ? 'on' : ''}" data-a="who:${e.uid}" title="点一下，看看这个人能带来什么">${avatarSVG(e.uid, e.role, 36)}<span class="bd"><b>${esc(e.name)}</b> <small>${ROLES[e.role].name}${e.quirk ? ` · <i class="q">${STAFF_QUIRKS[e.quirk].name}</i>` : ''}</small><br>${skillDots(e.skill)} <small>月薪 ${G.money(S, e.salary * G.mod(S, 'salaryMult'))}</small></span>${btn}</div>`;
+  return `<div class="cand ${V.pop?.uid === e.uid ? 'on' : ''}" data-a="who:${e.uid}" title="点一下，看看这个人能带来什么">${avatarSVG(e.uid, e.role, 36)}<span class="bd"><b>${esc(e.name)}</b> <small>${ROLES[e.role].name}${e.quirk ? ` · <i class="q">${STAFF_QUIRKS[e.quirk].name}</i>` : ''}${e.red && S?.ideo ? ' · <i class="q red" title="共产倾向：读书会成员">☭ 读书会</i>' : ''}</small><br>${skillDots(e.skill)} <small>月薪 ${G.money(S, e.salary * G.mod(S, 'salaryMult'))}</small></span>${btn}</div>`;
 }
 function candList() {
   const cap = G.teamCap(S);
@@ -143,10 +147,11 @@ function opsPanel() {
     // 配额不是硬上限：超出的部分按现货价租。条子按「配额和已租数量里大的那个」画，超出时标一条配额线
     const q = G.quota(S), need = G.inferNeed(S), price = G.gpuPrice(S), over = Math.max(0, S.gpu - q), scale = Math.max(q, S.gpu);
     const note = over ? `<br><b class="over">超出配额 ${over} 张</b>：从黄牛和云厂商那里现租，均价是市价的 ${G.overMult(S).toFixed(1)} 倍，租得越多越贵。`
-      : S.gpu >= q ? '<br>配额用满了。再点「＋」可以按现货价多租（市价 2 倍起）；找皮衣教主、融下一轮都能涨配额。' : '';
+      : S.gpu >= q ? '<br>配额用满了。再点「＋」可以按现货价多租（市价 2 倍起）。配额会跟着采购慢慢涨：一直租满，供应商每月多给一点，超租的部分有三成多会转成长约；找皮衣教主能立刻涨一截。' : '';
+    const brain = G.brainGpu(S);
     h += `<h4 style="border:0;margin-top:0;padding-top:0">显卡<small>${G.money(S, price)}/张·月 · 配额 ${q} 张</small></h4><div class="gpu"><div class="gpubar"><i class="infer" style="width:${pct(Math.min(need, S.gpu), scale)}%"></i><i class="train" style="width:${pct(Math.max(0, S.gpu - need), scale)}%"></i>${over ? `<b class="qline" style="left:${pct(q, scale)}%"></b>` : ''}</div>
     <div class="gpurow"><button class="btn sm" data-a="gpu:min">0</button><button class="btn sm" data-a="gpu:-">−</button><b>${S.gpu} 张</b><button class="btn sm" data-a="gpu:+">＋</button><button class="btn sm" data-a="gpu:max" title="按市价把配额租满">配额拉满</button></div>
-    <small><b style="color:var(--sky)">■</b> 推理 ${Math.min(need, S.gpu)}/${need} 张${need > S.gpu ? ' <b class="bad">不够！用户在看「服务器繁忙」</b>' : ''} · <b style="color:var(--coral)">■</b> 炼丹 ${Math.max(0, S.gpu - need)} 张<br>月租 ${G.money(S, G.gpuRent(S))}。推理优先，剩下的显卡才进丹炉。${note}</small></div>`;
+    <small><b style="color:var(--sky)">■</b> 推理 ${Math.min(need, S.gpu)}/${need} 张${need > S.gpu ? ' <b class="bad">不够！用户在看「服务器繁忙」</b>' : ''} · <b style="color:var(--coral)">■</b> 炼丹 ${Math.max(0, S.gpu - need)} 张<br>月租 ${G.money(S, G.gpuRent(S))}。推理优先，剩下的显卡才进丹炉。${note}${brain ? `<br>🧠 员工脑力另外折合 <b>${brain} 张卡</b>：不花钱，先供推理、再进丹炉。` : ''}</small></div>`;
   } else {
     h += `<p class="note">产品跑在 <b>${esc(G.rivalOf(S, S.upstream).name)}</b> 的 API 上（模型能力 ${G.upCap(S).toFixed(0)}），本月 API 账单约 ${G.money(S, G.costs(S).api)}。想摆脱上游，去「研发」里立项自研。</p>`;
   }
@@ -155,21 +160,66 @@ function opsPanel() {
 }
 function leftPanel() {
   if (!ltabOpen(S, V.ltab)) V.ltab = 'rd';                                  // 教学期间：没开放的页签不显示
-  const acts = A.ACTIONS.filter(a => a.tab === V.ltab && (!a.show || a.show(S)) && actOpen(S, a.id)).map(actCard).join('') || '<p class="empty">这里暂时没有可做的事。</p>';
+  const acts = A.ACTIONS.filter(a => a.tab === V.ltab && (!a.show || a.show(S)) && actOpen(S, a.id)).map(actCard).join('') || (V.ltab === 'ideo' ? '' : '<p class="empty">这里暂时没有可做的事。</p>');
   const recTabs = new Set([...V.recActs].map(id => A.ACT[id].tab));                          // 别的页签里有建议做的事：标个小金点
   return `<aside class="left panel"><nav class="tabs">${A.TABS.filter(t => ltabOpen(S, t.id)).map(t => `<button class="tab ${V.ltab === t.id ? 'on' : ''}" data-a="ltab:${t.id}">${TAB_IC[t.id] ? icon(TAB_IC[t.id], 18) : t.icon}<span>${t.name}</span>${recTabs.has(t.id) && V.ltab !== t.id ? '<i class="tdot"></i>' : ''}</button>`).join('')}</nav>
-  <div class="scroll" data-sc="l-${V.ltab}">${V.ltab === 'ops' ? opsPanel() + acts : acts + (V.ltab === 'team' ? candList() : '')}</div></aside>`;
+  <div class="scroll" data-sc="l-${V.ltab}">${V.ltab === 'ops' ? opsPanel() + acts : V.ltab === 'ideo' ? ideoPanel() + (acts ? '<h4>行动</h4>' + acts : '') : acts + (V.ltab === 'team' ? candList() : '')}</div></aside>`;
+}
+// ───────── 意识形态页 ─────────
+const SIDE_TAG = { red: '☭ 共产', cap: '$ 资本', mid: '⚖ 务实' };
+const ibars = I => `<div class="ibars"><div class="ib red"><span>☭ 共产</span><div class="bar"><i style="width:${Math.round(I.red)}%"></i></div><b>${Math.round(I.red)}</b></div><div class="ib cap"><span>$ 资本</span><div class="bar"><i style="width:${Math.round(I.cap)}%"></i></div><b>${Math.round(I.cap)}</b></div></div>`;
+const leanShort = () => { const { v } = IDEO.ideoLean(S); return v > 0.18 ? '参谋看你偏「共产」' : v < -0.18 ? '参谋看你偏「资本」' : '参谋看你在摇摆'; };
+const RESULT_TXT = { red: ['☭', '红色路线', '再也拿不到西方融资；招牌换成了红色。'], cap: ['🧯', '警惕不现实的乌托邦主义', '公司目标转向稳健经营。'], fail: ['🗳️', '你说了不算', '终局时股权不到四成，方向由董事会代为决定。'] };
+// 开局这里没有任何按钮：只有公司目标。国资入股后是路线之争的进度；走完以后是结局和解锁的行动
+function ideoPanel() {
+  const I = S.ideo, g = IDEO.goalOf(S), C = IDEO.cast, reds = S.staff.filter(e => e.red).length;
+  let h = `<div class="goal ${I?.result || ''}"><small>公司目标</small><b>${esc(g.name)}</b>${g.desc ? `<small>${esc(g.desc)}</small>` : ''}</div>`;
+  if (!I) return h + `<p class="empty">${S.co.region === 'sz' ? '公司还没有自己的「主义」。听说深创头的国资基金一直在看 AI 公司——也许哪一轮融资会改变这一切。' : '这家公司只信仰一样东西：下一轮融资。'}</p>`;
+  if (I.on) {
+    h += `<h4>路线之争<small>第 ${Math.min(IDEO.IDEO_LEN, I.n + 1)}/${IDEO.IDEO_LEN} 级 · 每月一级</small></h4>${ibars(I)}
+    <p class="note">${esc(IDEO.leanText(S))}</p>
+    <p class="note">终局：共产条满或比资本条多 → 红色路线；资本条满或更多 → 警惕不现实的乌托邦主义。<br>你的股权 <b class="${S.equity < 40 ? 'bad' : S.equity < 45 ? 'warn' : 'good'}">${S.equity.toFixed(0)}%</b>，终局时须 ≥ ${IDEO.IDEO_EQUITY}%，否则你说了不算。${reds ? `<br>读书会成员 ${reds} 人（团队页里标着 ☭）。` : ''}</p>
+    <h4>人物</h4><div class="cast">${['rep', 'red', 'cap'].map(k => `<div class="${k}"><b>${esc(C[k].name)}</b><small>${esc(C[k].role)}</small><p>${esc(C[k].desc)}</p></div>`).join('')}</div>`;
+    if (I.picks.length) h += `<h4>你的表态</h4><ul class="ipicks">${I.picks.slice(-6).reverse().map(p => `<li class="${p.side}"><small>第 ${p.n} 级</small>${esc(p.label)}</li>`).join('')}</ul>`;
+    return h;
+  }
+  const R = RESULT_TXT[I.result] || ['', '', ''], st = [];
+  h += `<div class="iresult ${I.result}"><span>${R[0]}</span><div><b>${R[1]}</b><small>${R[2]}</small></div></div>${ibars(I)}`;
+  if (I.plan) st.push(`📜 五年计划进行中，${G.dateStr(I.plan.due)}到期`);
+  if (S.flags.yank) st.push('📉 末位淘汰施行中：每个部门每月淘汰一人');
+  if (S.flags.bci_ok) st.push(S.ownModel ? `🧠 员工脑力折合 ${G.brainGpu(S)} 张卡` : '🧠 员工大脑帮着跑推理：API 成本 -35%');
+  else if (S.flags.bci_on && !S.flags.bci_shut) st.push('🧠 秘密实验部运转中');
+  if (S.flags.utopia_ok) st.push('🌾 示范公社：增长 +8%，口碑和士气每月上涨');
+  else if (S.flags.utopia_on && !S.flags.utopia_fail) st.push('🌾 乌托邦社区实验进行中');
+  if (S.flags.red_cell) st.push('📚 地下读书会还在');
+  if (reds && I.result === 'red') st.push(`☭ 读书会成员 ${reds} 人`);
+  if (st.length) h += `<ul class="istat">${st.map(s => `<li>${esc(s)}</li>`).join('')}</ul>`;
+  return h;
+}
+// 事件窗里的两条进度条（路线之争的每一级和结局窗）
+function ideoStrip(d) {
+  if (d.chain !== 'ideo' || !S?.ideo) return '';
+  const n = +(/^ideo_(\d+)$/.exec(d.id || '')?.[1] || 0);
+  const line = n ? `第 ${n}/${IDEO.IDEO_LEN} 级 · 股权 ${S.equity.toFixed(0)}%（终局须 ≥ ${IDEO.IDEO_EQUITY}%）${n >= 3 && !V.res ? ' · ' + leanShort() : ''}` : '';
+  return `<div class="pdx-ideo">${ibars(S.ideo)}${line ? `<small>${esc(line)}</small>` : ''}</div>`;
+}
+// 红色结局：顶部正中挂一枚镰刀锤子（原创线稿），下面是新的公司目标
+const EMBLEM_SVG = '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M41.7 76.2A30 30 0 1 0 41.7 19.8A28.3 28.3 0 1 1 41.7 76.2Z"/><path class="h" d="M44.5 73L27 90"/><path class="h" d="M35 41L79 85"/><rect x="-15" y="-6.5" width="30" height="13" rx="2" transform="translate(30 36) rotate(-45)"/></svg>';
+function emblemHTML() {
+  if (!S || !IDEO.isRed(S)) return '';
+  const g = IDEO.goalOf(S).name;
+  return `<div class="emblem" title="${esc(g)}"><i class="medal">${EMBLEM_SVG}</i><span>${esc(g)}</span></div>`;
 }
 const RTABS = [['board', 'board', '榜单'], ['chain', 'pin', '项目'], ['team', 'team', '团队'], ['safe', 'safe', '黑料'], ['perks', 'cards', '卡牌'], ['fin', 'ledger', '账本'], ['log', 'news', '日志']].map(([id, ic, n]) => [id, icon(ic, 18), n]);
 // 情境日志：进行中的特殊项目 + 各条事件链的进展
 function chainTab() {
   const proj = S.projects.map(p => {
-    const rate = G.projectRate(S, p), left = Math.max(0, p.need - p.done), ch = CHAINS[p.chain];
+    const rate = G.projectRate(S, p), left = Math.max(0, p.need - p.done), ch = CHAIN_INFO[p.chain];
     const eta = left <= 0 ? '月底验收' : p.kind === 'ap' ? '只能靠你亲自推' : rate > 0.01 ? `约 ${Math.ceil(left / rate)} 个月` : '停滞：没有人手或显卡';
     return `<div class="proj"><b>${ch ? ch.icon : '📌'} ${esc(p.name)}</b><small>${esc(p.desc)}</small><div class="bar"><i style="width:${pct(p.done, p.need)}%"></i></div><small>${KIND_NAME[p.kind]} · ${eta} · 期限 ${G.dateStr(p.due)}${p.due - S.t <= 2 && left > 0 ? ' <b class="bad">快超期了</b>' : ''}</small><button class="btn sm" data-a="push:${p.uid}" ${S.ap < 1 || left <= 0 ? 'disabled' : ''}>亲自攻关 ●</button></div>`;
   }).join('');
   const logs = Object.values(S.chains).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || b.t - a.t).map(c => {
-    const ch = CHAINS[c.id] || { title: c.id, icon: '📜' };
+    const ch = CHAIN_INFO[c.id] || { title: c.id, icon: '📜' };
     return `<div class="chainlog ${c.done ? 'done' : ''}"><b>${ch.icon} ${ch.title}</b>${c.done ? '<i>已完结</i>' : ''}${c.notes.slice().reverse().map(n => `<p><small>${G.dateStr(n.t)}</small>${esc(n.text)}</p>`).join('')}</div>`;
   }).join('');
   return (proj || '<p class="empty">目前没有进行中的特殊项目。有些事件会开启一条「事件链」，需要你投入研究员、工程师、显卡或者亲自花行动点去推进，这里会显示进度。</p>') + (logs ? `<h4>情境日志</h4>${logs}` : '');
@@ -240,17 +290,17 @@ function tipHTML(tip) {
 function modal() {
   const d = V.dlg;
   if (!d) return '';
-  const C = CAT[d.cat] || CAT.sys, ch = d.chain && CHAINS[d.chain], img = d.art ? artURL(d.art) : '';
+  const C = CAT[d.cat] || CAT.sys, ch = d.chain && CHAIN_INFO[d.chain], img = d.art ? artURL(d.art) : '';
   const bar = `<div class="pdx-bar"><span class="tag" style="--c:${C.color}">${C.name}</span>${ch ? `<span class="tag chain">${ch.icon} 事件链 · ${ch.title}</span>` : ''}${d.closable && !V.res ? '<button class="x" data-a="dlg:close">✕</button>' : ''}</div>`;
   const ttl = `<h2${img ? '' : ' class="pdx-title"'}><i>${d.icon || ''}</i>${esc(d.title)}</h2>`;
-  const head = bar + (img ? `<div class="pdx-art" style="background-image:url('${img}')">${d.portrait === 'longhair' ? LONGHAIR : ''}${ttl}</div>` : ttl);
+  const head = bar + (img ? `<div class="pdx-art" style="background-image:url('${img}')">${d.portrait === 'longhair' ? LONGHAIR : ''}${ttl}</div>` : ttl) + ideoStrip(d);
   if (V.res) {
     const fx = (V.res.chips || []).map(c => `<span class="fxl ${c.good == null ? '' : c.good ? 'good' : 'bad'}">${c.name} ${c.v}</span>`).join('');
     return `<div class="veil"><div class="pdx">${head}<div class="pdx-text">${V.res.ok != null ? `<span class="stamp ${V.res.ok ? 'ok' : 'no'}">${V.res.ok ? '成功' : '失败'}</span>` : ''}${nl(V.res.text)}</div>${fx ? `<div class="pdx-fx">${fx}</div>` : ''}<div class="pdx-opts"><button class="opt go" data-a="res">继续</button></div></div></div>`;
   }
   const opts = d.options.map((o, i) => (d.kind === 'cards'
     ? `<button class="pcard r${o.card.r || 1}" data-a="dlg:${i}"><span class="pi">${o.card.icon}</span><b>${esc(o.card.name)}</b><small>${nl(o.card.desc)}</small></button>`
-    : `<button class="opt" data-a="dlg:${i}" ${o.disabled ? 'disabled' : ''}><span class="ol"><b>${esc(o.label)}</b>${o.hint || o.why ? `<small>${esc(o.disabled && o.why ? o.why : o.hint)}</small>` : ''}</span>${o.chk ? `<i class="chk">${o.chk}</i>` : ''}${o.disabled ? '' : tipHTML(o.tip)}</button>`)).join('');
+    : `<button class="opt" data-a="dlg:${i}" ${o.disabled ? 'disabled' : ''}><span class="ol"><b>${o.side ? `<i class="side ${o.side}">${SIDE_TAG[o.side]}</i>` : ''}${esc(o.label)}</b>${o.hint || o.why ? `<small>${esc(o.disabled && o.why ? o.why : o.hint)}</small>` : ''}</span>${o.chk ? `<i class="chk">${o.chk}</i>` : ''}${o.disabled ? '' : tipHTML(o.tip)}</button>`)).join('');
   return `<div class="veil"><div class="pdx ${d.kind === 'cards' ? 'wide' : ''}">${head}<div class="pdx-text">${nl(d.text)}</div><div class="${d.kind === 'cards' ? 'pcards' : 'pdx-opts'}">${opts}</div></div></div>`;
 }
 function endScreen() {
@@ -384,8 +434,9 @@ function render() {
   V.hints = V.screen === 'play' ? hintsNow() : [];
   V.recActs = new Set(V.hints.filter(h => h.act && !h.later).map(h => h.act));
   if (V.screen === 'play' && !V.dlg && !V.wait) trackHints();
+  ui.classList.toggle('soviet', !!(S && IDEO.isRed(S) && (V.screen === 'play' || V.screen === 'end')));   // 红色结局：整套界面换苏联风
   ui.innerHTML = V.screen === 'title' ? title() : V.screen === 'wizard' ? wizard() : V.screen === 'meta' ? metaScreen()
-    : V.screen === 'play' ? topbar() + leftPanel() + rightPanel() + bottom() + liftHTML() + alertsHTML() + tutorHTML() + toastHTML() + popHTML() + modal()
+    : V.screen === 'play' ? topbar() + emblemHTML() + leftPanel() + rightPanel() + bottom() + liftHTML() + alertsHTML() + tutorHTML() + toastHTML() + popHTML() + modal()
       : topbar() + '<div class="dim"></div>' + endScreen();
   if (V.settings) ui.insertAdjacentHTML('beforeend', settingsHTML());
   if (V.fps && V.screen === 'play') ui.insertAdjacentHTML('beforeend', `<div class="fps">${fpsText()}</div>`);
@@ -410,7 +461,7 @@ function syncScene() {
       staff: S.staff.map(e => ({ id: e.uid, role: e.role, mood: G.clamp(S.morale + (parseInt(e.uid.slice(1), 10) * 7) % 21 - 10, 0, 100) })),
       racks: S.ownModel ? G.clamp(Math.ceil(Math.log2(S.gpu / 8 + 1)), 0, 12) : 0,
       furnace: S.ownModel && S.furnace?.on && free > 0 ? { heat: G.clamp(0.25 + free / Math.max(1, G.quota(S)) * 0.75, 0, 1) } : null,
-      night: String(S.policies.work) === '996', alert: !S.over && G.runway(S) < 3, floor: floorNow(),
+      night: String(S.policies.work) === '996', alert: !S.over && G.runway(S) < 3, floor: floorNow(), bci: !!S.flags.bci_ok,
     });
     const L = rect('.left'), R = rect('.right'), T = rect('.top'), B = rect('.bottom');
     office.setInsets(V.screen === 'play' && L ? { left: L.right + 8, right: R ? innerWidth - R.left + 8 : 16, top: T.bottom + 8, bottom: B ? innerHeight - B.top + 8 : 16 } : { left: 0, right: 0, top: 0, bottom: 0 });

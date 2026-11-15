@@ -264,17 +264,22 @@ export const RIVALS = [
 ];
 
 export const INVESTORS = ['红衫资本', 'A16Y', '高灵资本', '真哥基金', '五源六源', '猫头鹰环球', '金沙河创投', '光速跑路资本'];
+// 走上红色路线以后，美元基金不再和你谈；只剩人民币基金和国家队
+export const INVESTORS_EAST = ['高灵资本', '真哥基金', '五源六源', '金沙河创投', '人民算力基金', '红星产业引导基金'];
+export const EAST_RIVALS = ['deepsleep', 'bytejump'];
 
-// 各轮「达标线」：估值基数（万）、用户（万）、月收入（万）、显卡配额倍数
+// 各轮「达标线」：估值基数（万）、用户（万）、月收入（万）。显卡配额不再跟轮次绑定（见引擎里的 quota）
 export const STAGES = [
-  { name: '自筹', quota: 1 },
-  { name: '天使轮', base: 1200, users: 8, rev: 10, quota: 1.6 },
-  { name: 'A 轮', base: 7000, users: 60, rev: 40, quota: 3 },
-  { name: 'B 轮', base: 40000, users: 500, rev: 300, quota: 7 },
-  { name: 'C 轮', base: 200000, users: 2000, rev: 1200, quota: 20 },
-  { name: 'D 轮', base: 800000, users: 5000, rev: 3500, quota: 60 },
-  { name: 'IPO', base: 4000000, users: 10000, rev: 8000, quota: 60 },
+  { name: '自筹' },
+  { name: '天使轮', base: 1200, users: 8, rev: 10 },
+  { name: 'A 轮', base: 7000, users: 60, rev: 40 },
+  { name: 'B 轮', base: 40000, users: 500, rev: 300 },
+  { name: 'C 轮', base: 200000, users: 2000, rev: 1200 },
+  { name: 'D 轮', base: 800000, users: 5000, rev: 3500 },
+  { name: 'IPO', base: 4000000, users: 10000, rev: 8000 },
 ];
+// 老存档迁移用：以前配额 = 基数 × 这一档的倍数
+export const OLD_QUOTA_MULT = [1, 1.6, 3, 7, 20, 60, 60];
 
 export const DATA_SOURCES = {
   open: { name: '开源数据', mult: 1.0, desc: '免费、干净、人人都有' },
@@ -302,6 +307,9 @@ export const DIRT = {
   tax: { name: '阴阳合同', sev: 12, crime: 1, blurb: '税务稽查发现，公司一半员工的合同工资是 3500。' },
   nda: { name: '带走前东家机密', sev: 13, blurb: '前东家的律师函到了，附件是你离职当晚的 U 盘拷贝日志。' },
   coverup: { name: '掩盖事故', sev: 11, blurb: '当年参与「内部处理」的员工离职了，他的告别信写了九千字。' },
+  unfair_fire: { name: '违法辞退', sev: 9, blurb: '被开除的读书会成员把劳动仲裁申请书和公司的《价值观对齐通知》一起发上了围脖。' },
+  fake_plan: { name: '虚报计划完成', sev: 10, blurb: '有人对比了「超额完成」的报表和真实后台：多出来的那部分，是用 Excel 的填充柄拉出来的。' },
+  bci_lab: { name: '秘密人体实验', sev: 14, crime: 1, blurb: '一名员工在体检时被问起头上的压痕，随口说了句「公司地下二层的头盔」。记者第二天就到了楼下。' },
 };
 
 export const ENDINGS = {
@@ -337,6 +345,20 @@ export const ACHIEVEMENTS = {
   x996: { name: '福报传人', icon: '🌃', desc: '连续 24 个月实行 996' },
   leather: { name: '皮衣之友', icon: '🧥', desc: '在皮衣教主最艰难的时候挺了他' },
   allend: { name: '人生百态', icon: '🎭', desc: '解锁 8 种不同结局' },
+  road: { name: '未曾设想的道路', icon: '🛤️', desc: '国资入股后走完「路线之争」，终局时仍握有至少 40% 股权' },
+};
+
+// 公司目标：显示在「意识形态」页；走完路线之争以后会变，并带来长期效果
+export const GOALS = {
+  model: { name: '炼出 AGI，然后上市', desc: '' },
+  app: { name: '做出一亿人每天在用的 AI 产品', desc: '' },
+  red: { name: '为了共产主义乌托邦而制造 AGI', desc: '士气每月 +1、口碑每月 +0.3、监管压力增长 -40%、工资 -8%；融资估值 -15%，再也拿不到西方融资', mods: { moraleAdd: 1, repAdd: 0.3, regMult: 0.6, salaryMult: 0.92, raiseMult: 0.85 } },
+  cap: { name: '稳健经营，警惕泡沫，先活下来再谈 AGI', desc: '总成本 -5%、黑料曝光率 -15%、监管压力增长 -10%；炒作效果 -10%', mods: { costMult: 0.95, exposeMult: 0.85, regMult: 0.9, hypeGainMult: 0.9 } },
+};
+// 两条一次性事件链成功以后的长期效果（按 flag 生效）
+export const IDEO_FLAG_MODS = {
+  utopia_ok: { growthMult: 1.08, repAdd: 0.4, moraleAdd: 0.8 },     // 示范公社：口碑、招牌和士气
+  bci_ok: { moraleAdd: -0.8 },                                       // 脑机连接的副作用：梦里也在算梯度（算力见引擎 brainGpu）
 };
 
 // 局外成长商店（花「人脉点」）
@@ -372,5 +394,5 @@ export const CAT = {
   industry: { name: '行业风云', color: '#7b5cff' }, reg: { name: '监管', color: '#3a4460' }, geo: { name: '大国博弈', color: '#d1495b' },
   team: { name: '团队', color: '#2ec4a6' }, money: { name: '资本', color: '#e0a100' }, pr: { name: '舆情', color: '#ff6b4a' },
   tech: { name: '技术', color: '#3d8bff' }, rival: { name: '对手', color: '#555' }, wacky: { name: '无厘头', color: '#ff7ab6' },
-  dirt: { name: '黑料引爆', color: '#111' }, sys: { name: '公司大事', color: '#1e2233' },
+  dirt: { name: '黑料引爆', color: '#111' }, sys: { name: '公司大事', color: '#1e2233' }, ideo: { name: '路线之争', color: '#c8102e' },
 };

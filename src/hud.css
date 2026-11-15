@@ -612,3 +612,80 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
   .rotate-hint b { animation: rot-hint 1.8s ease-in-out infinite; }
   @keyframes rot-hint { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(90deg); } }
 }
+
+/* ───────── 意识形态页 ───────── */
+#ui .goal { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--gold-line); border-radius: 10px; background: var(--gold-wash); }
+#ui .goal > small:first-child { color: var(--gold); font-size: 10.5px; letter-spacing: .14em; }
+#ui .goal b { color: var(--ink-1); font-size: 15px; line-height: 1.4; }
+#ui .goal b + small { line-height: 1.55; }
+#ui .goal.red { border-color: rgba(227, 52, 60, .6); background: linear-gradient(135deg, rgba(200, 16, 46, .30), rgba(120, 8, 20, .16)); }
+#ui .goal.red b { color: #ffe08a; }
+#ui .ibars { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+#ui .ib { display: grid; grid-template-columns: 52px 1fr 28px; align-items: center; gap: 8px; font-size: 12px; }
+#ui .ib span { color: var(--ink-2); white-space: nowrap; }
+#ui .ib b { text-align: right; }
+#ui .ib .bar { height: 9px; overflow: hidden; border: 1px solid var(--line); border-radius: 5px; background: var(--recess); }
+#ui .ib .bar i { display: block; height: 100%; border-radius: 4px; }
+#ui .ib.red .bar i { background: linear-gradient(90deg, #8f0f1c, #e3343c); box-shadow: 0 0 8px rgba(227, 52, 60, .5); }
+#ui .ib.cap .bar i { background: linear-gradient(90deg, #a7781f, #f2c46d); box-shadow: 0 0 8px rgba(242, 196, 109, .4); }
+#ui .ib.red b { color: #ff8a80; }
+#ui .ib.cap b { color: var(--gold); }
+#ui .cast { display: flex; flex-direction: column; gap: 6px; }
+#ui .cast > div { padding: 7px 9px; border-left: 3px solid var(--line-bright); border-radius: 0 8px 8px 0; background: var(--recess); }
+#ui .cast > .red { border-left-color: #e3343c; }
+#ui .cast > .cap { border-left-color: var(--gold); }
+#ui .cast > .rep { border-left-color: var(--info); }
+#ui .cast b { margin-right: 6px; }
+#ui .cast p { margin: 2px 0 0; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+#ui .ipicks, #ui .istat { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+#ui .ipicks li { padding: 4px 8px; border-left: 3px solid var(--ink-3); border-radius: 0 6px 6px 0; background: var(--recess); font-size: 12px; }
+#ui .ipicks li.red { border-left-color: #e3343c; }
+#ui .ipicks li.cap { border-left-color: var(--gold); }
+#ui .ipicks small { margin-right: 6px; }
+#ui .istat { margin-top: 6px; }
+#ui .istat li { padding: 2px 0; font-size: 12px; }
+#ui .iresult { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--gold-line); border-radius: 10px; background: var(--gold-wash); }
+#ui .iresult > span { font-size: 28px; line-height: 1; }
+#ui .iresult b { display: block; font-size: 14px; }
+#ui .iresult small { line-height: 1.5; }
+#ui .iresult.red { border-color: rgba(227, 52, 60, .6); background: rgba(200, 16, 46, .2); }
+#ui .iresult.fail { border-color: var(--line-bright); background: var(--recess); }
+#ui b.warn { color: var(--gold); }
+#ui .q.red { color: #ffb3ad; background: rgba(227, 52, 60, .16); }
+/* 事件窗：路线之争的两条进度条，选项前面标出路线类型 */
+#ui .pdx-ideo { flex-shrink: 0; padding: 10px 23px 0; }
+#ui .pdx-ideo .ibars { margin: 0 0 4px; }
+#ui .pdx-ideo small { font-size: 11.5px; }
+#ui .opt .side { display: inline-block; margin-right: 7px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-style: normal; font-weight: 600; line-height: 18px; vertical-align: 1px; }
+#ui .opt .side.red { color: #ffe3e0; background: rgba(200, 16, 46, .62); }
+#ui .opt .side.cap { color: #2a1d05; background: var(--gold); }
+#ui .opt .side.mid { color: var(--ink-1); background: rgba(108, 182, 255, .28); }
+
+/* ───────── 红色结局：苏联风界面 ───────── */
+#ui.soviet {
+  --gold: #f5c542; --gold-light: #ffe08a; --gold-deep: #c8961e;
+  --ink-1: #fbefe0; --ink-2: #dcbfa8; --ink-3: #a5806b;
+  --base: #1a0405; --surface: #45100f; --tooltip: #2b0709;
+  --line: rgba(245, 197, 66, .16); --line-bright: rgba(245, 197, 66, .34);
+  --highlight: rgba(255, 224, 138, .08); --recess: rgba(24, 0, 3, .34);
+  --glass: linear-gradient(180deg, rgba(112, 14, 20, .93), rgba(58, 6, 10, .89));
+  --glass-soft: linear-gradient(180deg, rgba(112, 14, 20, .85), rgba(58, 6, 10, .80));
+  --gold-wash: rgba(245, 197, 66, .13); --gold-line: rgba(245, 197, 66, .55); --gold-glow: rgba(245, 197, 66, .24);
+  --shadow: inset 0 1px 0 var(--highlight), 0 18px 50px rgba(30, 0, 0, .5);
+  --gold-fill: linear-gradient(135deg, #ffe08a, #f5c542 55%, #c8961e);
+}
+#ui.soviet :is(.panel, .w, .pdx) { border-color: var(--gold-line); }
+#ui.soviet .tabs { background: repeating-linear-gradient(135deg, rgba(245, 197, 66, .07) 0 8px, transparent 8px 16px), var(--recess); }
+#ui.soviet .tab.on { background: rgba(245, 197, 66, .16); }
+#ui.soviet h4 { color: var(--gold); letter-spacing: .14em; }
+#ui.soviet .brand b::before { content: '★ '; color: var(--gold); }
+#ui.soviet .stage { border-color: var(--gold-line); background: #c8102e; color: #ffe08a; }
+#ui.soviet :is(.pdx-art h2, .pdx-title) { color: #ffe08a; letter-spacing: .16em; }
+#ui.soviet .pdx-art { border-bottom-color: #f5c542; }
+#ui.soviet .alerts { top: 160px; }
+/* 顶部正中的镰刀锤子 + 新的公司目标 */
+#ui .emblem { position: absolute; top: 80px; left: 50%; translate: -50% 0; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; }
+#ui .emblem .medal { display: grid; place-items: center; width: 54px; height: 54px; border: 2px solid #f5c542; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ea3a44, #a10c1c 72%); box-shadow: 0 0 0 3px rgba(120, 8, 16, .65), 0 6px 18px rgba(0, 0, 0, .45), 0 0 24px rgba(245, 197, 66, .28); }
+#ui .emblem svg { width: 38px; height: 38px; fill: #f5c542; }
+#ui .emblem svg .h { fill: none; stroke: #f5c542; stroke-width: 7; stroke-linecap: round; }
+#ui .emblem span { padding: 2px 14px; border: 1px solid rgba(245, 197, 66, .6); border-radius: 3px; background: linear-gradient(180deg, #c8102e, #8f0b1f); box-shadow: 0 4px 12px rgba(0, 0, 0, .35); color: #ffe08a; font-size: 12px; font-weight: 700; letter-spacing: .12em; white-space: nowrap; }

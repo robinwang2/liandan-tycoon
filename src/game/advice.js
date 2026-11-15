@@ -104,9 +104,11 @@ const RULES = [
     if (!r || pf < 0.9 || rw < 4) return null;                                         // 缺钱的时候由 cash 那条提醒
     const short = rw < 12, ripe = pf >= 1 && S.t - S.lastRaiseT >= 10 && S.equity >= 40;
     if (!short && !ripe) return null;
+    const chain = S.ideo?.on, after = S.equity * 0.85;                                 // 路线之争终局要握住四成股权
+    if (chain && after < 40 && !short) return null;                                    // 钱又不急，就别劝他融这一轮
     const name = STAGES[S.stage + 1].name, eq = num(S.equity);
     const why = short ? `账上的钱还能撑 ${Math.floor(rw)} 个月，趁业绩系数 ${pf.toFixed(2)} 还过得去，把下一轮融了。` : `业绩系数 ${pf.toFixed(2)}，已经达标，现在估值最好看。`;
-    return { id: 'raise', lv: 'gold', icon: 'handshake', title: `能融${/^[A-Z]/.test(name) ? ' ' : ''}${name}了`, text: `${why}路演能拿到三份报价，估值基准约 ${G.money(S, G.valuation(S))}。每轮要让出 12%–25% 的股权（你现在 ${eq}%${eq < 55 ? '，低于 45% 董事会就敢动你' : ''}）。${S.raiseBoost < 0.15 && avail(S, 'roadshow') ? '想把估值再抬一点，可以先做几次「路演预热」。' : ''}`, act: 'raise', later: r.later };
+    return { id: 'raise', lv: 'gold', icon: 'handshake', title: `能融${/^[A-Z]/.test(name) ? ' ' : ''}${name}了`, text: `${why}路演能拿到三份报价，估值基准约 ${G.money(S, G.valuation(S))}。每轮要让出 12%–25% 的股权（你现在 ${eq}%${eq < 55 ? '，低于 45% 董事会就敢动你' : ''}）。${chain ? `路线之争终局时你得握有四成股权，融完这一轮大约只剩 ${num(after)}%。` : ''}${S.raiseBoost < 0.15 && avail(S, 'roadshow') ? '想把估值再抬一点，可以先做几次「路演预热」。' : ''}`, act: 'raise', later: r.later };
   },
   function office(S) {
     const cap = G.teamCap(S);
@@ -165,6 +167,19 @@ const RULES = [
   },
   S => (S.hype < 10 && S.t > 6 ? onlyIfAct(withAct({ id: 'hype', lv: 'warn', icon: 'flame', title: '没人记得你了', text: `热度只剩 ${num(S.hype)}，拉新和估值都在往下掉。` }, S, 'hype')) : null),
   S => (S.rep < 30 ? onlyIfAct(withAct({ id: 'rep', lv: 'warn', icon: 'star', title: '口碑太差', text: `口碑 ${num(S.rep)}：用户留存和付费都在变差。做公益、发白皮书能补一点，☠ 捷径就先别走了。` }, S, 'goodpr')) : null),
+  // ── 路线之争 ──
+  function ideoEquity(S) {                                                      // 终局时股权要 ≥ 40%
+    const I = S.ideo;
+    if (!I?.on || S.equity >= 44) return null;
+    const low = S.equity < 40;
+    return { id: 'ideo-equity', lv: low ? 'bad' : 'warn', icon: 'pie', title: low ? '股权不到四成了' : '股权快守不住四成', text: `路线之争还剩 ${15 - I.n} 级。终局时你得握有至少 40% 股权，否则方向由董事会替你定，成就也拿不到。现在 ${S.equity.toFixed(0)}%：这段时间少融资；链里股权低于 45% 时会出现「回购」选项。`, go: { ltab: 'ideo' } };
+  },
+  function ideoNew(S) {                                                         // 刚走完：告诉玩家意识形态页有东西了
+    const I = S.ideo;
+    if (!I?.result || I.result === 'fail' || S.t - I.tEnd > 3) return null;
+    const red = I.result === 'red';
+    return onlyIfAct(withAct({ id: 'ideo-new', lv: 'gold', icon: 'flag', title: '意识形态页有新行动', text: red ? '公司走上了红色路线：「公开动员」「乌托邦社区实验」「五年计划」「自我批评会」都在「意识形态」页。' : '公司决定警惕乌托邦：「末位淘汰」「脑机实验」「股票回购」「降本增效」都在「意识形态」页。', go: { ltab: 'ideo' } }, S, red ? 'mobilize' : 'yank', red ? 'plan' : 'buyback'));
+  },
 ];
 
 const ORDER = { bad: 0, gold: 1, warn: 2 };

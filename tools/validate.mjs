@@ -13,6 +13,7 @@ const WHEN_KEYS = new Set([
   'moraleMax', 'regMin', 'regMax', 'bubbleMin', 'bubbleMax', 'dirtMin', 'hasDirt',
   'staffMin', 'hasRole', 'rankMax', 'rankMin', 'runwayMax', 'runwayMin',
   'officeMin', 'officeMax', 'equityMax', 'gpuMin', 'flag', 'notFlag', 'policy',
+  'equityMin', 'redMin', 'redMax', 'capMin', 'capMax',
 ]);
 const REQ_KEYS = new Set([...WHEN_KEYS, 'cash', 'attr']);
 const FX_KEYS = new Set([
@@ -25,7 +26,7 @@ const ATTRS = new Set(['tech', 'cha', 'mgmt', 'biz', 'net', 'luck']);
 const DIRTS = new Set([
   'bench_fake', 'bench_overfit', 'scrape', 'distill', 'fake_users', 'astroturf',
   'bribe', 'smuggle', 'cook_books', 'human_ai', 'overwork', 'fake_demo', 'hush',
-  'privacy', 'tax', 'nda', 'coverup',
+  'privacy', 'tax', 'nda', 'coverup', 'unfair_fire', 'fake_plan', 'bci_lab',
 ]);
 const RIVALS = new Set([
   'random', 'top', 'upstream', 'openbi', 'misan', 'goggle', 'xai', 'deepsleep',
@@ -65,7 +66,7 @@ const ART_KEYS = new Set([
   'office_night', 'garage', 'urban_village', 'market', 'bay', 'protest', 'robots',
   'lab', 'anomaly', 'awakening', 'headhunt', 'party', 'burrito', 'jacket', 'fengshui',
   'desert', 'seminar', 'police', 'handshake', 'bell', 'home', 'cat', 'crowd',
-  'meltdown', 'mystery',
+  'meltdown', 'mystery', 'redhall', 'commune', 'brainlab',
 ]);
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -283,6 +284,11 @@ try {
   if (error?.code !== 'ENOENT') throw error;
 }
 sources.push({ name: 'EVENTS_CHAINS', events: chainsModule.EVENTS_CHAINS });
+// 路线之争：结局后的随机事件（和事件包一样严格）+ 两条一次性事件链
+const ideoModule = await import(pathToFileURL(path.join(root, 'src/data/ideology.js')));
+sources.push({ name: 'IDEO_EVENTS', events: ideoModule.IDEO_EVENTS });
+sources.push({ name: 'UTOPIA_EVENTS', events: ideoModule.UTOPIA_EVENTS });
+sources.push({ name: 'BCI_EVENTS', events: ideoModule.BCI_EVENTS });
 
 const allEvents = [];
 for (const source of sources) {
@@ -324,6 +330,7 @@ for (const { event, where } of allEvents) {
 }
 
 const chains = chainsModule.CHAINS;
+const allChains = { ...(chains || {}), ...(ideoModule.IDEO_CHAINS || {}) };
 if (!isObject(chains)) problem('CHAINS', '导出值应为对象');
 else {
   for (const [id, chain] of Object.entries(chains)) {
@@ -346,10 +353,10 @@ for (const { value: project, where } of projects) {
     else projectIds.set(project.id, where);
   }
   if (!own(project, 'fail')) problem(where, '链项目必须提供超期 fail 事件');
-  if (isObject(chains) && !own(chains, project.chain)) problem(where, `project.chain 未登记: ${project.chain}`);
+  if (isObject(chains) && !own(allChains, project.chain)) problem(where, `project.chain 未登记: ${project.chain}`);
 }
 for (const { value: update, where } of chainUpdates) {
-  if (isObject(chains) && !own(chains, update.id)) problem(where, `chain.id 未登记: ${update.id}`);
+  if (isObject(chains) && !own(allChains, update.id)) problem(where, `chain.id 未登记: ${update.id}`);
 }
 
 const chainEvents = allEvents.filter(({ where }) => where.startsWith('EVENTS_CHAINS'));
@@ -393,8 +400,139 @@ else {
   });
 }
 
+// ───────── 路线之争（src/data/ideology.js）─────────
+const SIDES = new Set(['red', 'cap', 'mid']);
+const CHAIN_OPT_KEYS = new Set([...OPTION_KEYS, 'side', 'bars']);
+const POOL_KEYS = new Set([...CHAIN_OPT_KEYS, 'id', 'from', 'to', 'when']);
+const END_OPT_KEYS = new Set([...OPTION_KEYS, 'act']);
+const PURGE_ACTS = ['fire_all', 'reeducate', 'release', 'tolerate'];
+const NO_CTX = /\{(?:staff|rival|boss)\}/;
+const say = (v, where, max) => {
+  if (typeof v !== 'string' || !v.trim() || v.includes('待写')) problem(where, '缺少文案');
+  else if (max && [...v].length > max) problem(where, `超过 ${max} 字`);
+};
+function checkBars(bars, where) {
+  if (!checkKeys(bars, new Set(['red', 'cap']), where)) return;
+  for (const [key, amount] of Object.entries(bars)) {
+    if (typeof amount !== 'number' || Math.abs(amount) > 15) problem(where, `${key} 应为 -15~15 的数字`);
+  }
+}
+// 链上选项 = 普通选项 + side / bars（检定结果 ok / fail 里也可以带 bars）
+function checkChainOption(option, where, keys) {
+  if (!isObject(option)) { problem(where, '选项应为对象'); return; }
+  checkKeys(option, keys, where);
+  if (keys.has('side') && !SIDES.has(option.side)) problem(where, `side 非法: ${option.side}`);
+  if (own(option, 'bars')) checkBars(option.bars, `${where}.bars`);
+  const base = Object.fromEntries(Object.entries(option).filter(([key]) => OPTION_KEYS.has(key)));
+  for (const k of ['ok', 'fail']) {
+    if (!isObject(base[k]) || !own(base[k], 'bars')) continue;
+    checkBars(base[k].bars, `${where}.${k}.bars`);
+    const { bars: _bars, ...rest } = base[k];
+    base[k] = rest;
+  }
+  checkOption(base, where);
+  if (NO_CTX.test(JSON.stringify(option))) problem(where, '这条链里不能用 {staff}/{rival}/{boss}');
+}
+
+const stages = ideoModule.IDEO_STAGES;
+if (!Array.isArray(stages) || stages.length !== 15) problem('IDEO_STAGES', `应有 15 级，实际 ${stages?.length ?? 0} 级`);
+for (const [index, stage] of (Array.isArray(stages) ? stages : []).entries()) {
+  const at = `IDEO_STAGES[${index}]`;
+  if (!checkKeys(stage, new Set(['title', 'icon', 'art', 'text', 'opts']), at)) continue;
+  say(stage.title, `${at}.title`, 14);
+  say(stage.icon, `${at}.icon`);
+  if (!ART_KEYS.has(stage.art)) problem(at, `非法 art key: ${stage.art}`);
+  if (typeof stage.text !== 'string' || [...stage.text].length < 60) problem(at, 'text 缺失或太短');
+  if (NO_CTX.test(stage.text || '')) problem(at, '这条链里不能用 {staff}/{rival}/{boss}');
+  if (!Array.isArray(stage.opts) || stage.opts.length < 2 || stage.opts.length > 4) { problem(at, 'opts 必须有 2~4 个'); continue; }
+  stage.opts.forEach((option, j) => checkChainOption(option, `${at}.opts[${j}]`, CHAIN_OPT_KEYS));
+  for (const side of ['red', 'cap']) if (!stage.opts.some(o => o?.side === side)) problem(at, `至少要有一张 ${side}`);
+}
+
+const pool = Array.isArray(ideoModule.IDEO_POOL) ? ideoModule.IDEO_POOL : [];
+const poolIds = new Set(), bySide = { red: 0, cap: 0, mid: 0 };
+let poolWhen = 0;
+for (const [index, card] of pool.entries()) {
+  const at = `IDEO_POOL[${index}]`;
+  checkChainOption(card, at, POOL_KEYS);
+  if (!isObject(card)) continue;
+  if (typeof card.id !== 'string' || !card.id.trim()) problem(at, '缺少 id');
+  else if (poolIds.has(card.id)) problem(at, `id 重复: ${card.id}`);
+  else poolIds.add(card.id);
+  for (const k of ['from', 'to']) if (!Number.isInteger(card[k]) || card[k] < 1 || card[k] > 15) problem(at, `${k} 应为 1~15 的整数`);
+  if (card.from > card.to) problem(at, 'from 大于 to');
+  if (own(card, 'when')) { poolWhen++; checkConditions(card.when, WHEN_KEYS, `${at}.when`); }
+  if (SIDES.has(card.side)) bySide[card.side]++;
+}
+if (bySide.red < 18 || bySide.cap < 18 || bySide.mid < 10) problem('IDEO_POOL', `数量不够：red ${bySide.red}/18、cap ${bySide.cap}/18、mid ${bySide.mid}/10`);
+if (pool.length && poolWhen < pool.length / 2) problem('IDEO_POOL', `带 when 的卡不到一半（${poolWhen}/${pool.length}）`);
+for (const side of SIDES) {
+  const free = pool.filter(c => c?.side === side && !c.when && c.from <= 3 && c.to >= 15).length;
+  if (free < 4) problem('IDEO_POOL', `${side} 的万能卡（无条件、3~15 级）只有 ${free} 张，至少要 4 张`);
+}
+
+const endings = isObject(ideoModule.IDEO_ENDINGS) ? ideoModule.IDEO_ENDINGS : {};
+for (const key of ['red', 'cap', 'purge', 'fail']) {
+  const ending = endings[key], at = `IDEO_ENDINGS.${key}`;
+  if (!checkKeys(ending, new Set(['title', 'icon', 'art', 'text', 'options']), at)) continue;
+  say(ending.title, `${at}.title`, 14);
+  say(ending.text, `${at}.text`);
+  if (typeof ending.text === 'string' && [...ending.text].length < 60) problem(at, 'text 太短');
+  if (!ART_KEYS.has(ending.art)) problem(at, `非法 art key: ${ending.art}`);
+  if (!Array.isArray(ending.options) || !ending.options.length || ending.options.length > 4) { problem(at, 'options 应有 1~4 个'); continue; }
+  ending.options.forEach((option, j) => {
+    const where = `${at}.options[${j}]`;
+    checkKeys(option, END_OPT_KEYS, where);
+    const { act: _act, ...base } = option || {};
+    checkOption(base, where);
+    if (JSON.stringify(option).includes('待写')) problem(where, '文案未写完');
+    if (NO_CTX.test(JSON.stringify(option))) problem(where, '这里不能用 {staff}/{rival}/{boss}');
+  });
+  if (key === 'purge' && ending.options.map(o => o?.act).sort().join() !== [...PURGE_ACTS].sort().join()) problem(at, `act 必须恰好是 ${PURGE_ACTS.join(' / ')}`);
+}
+
+const ideoChains = isObject(ideoModule.IDEO_CHAINS) ? ideoModule.IDEO_CHAINS : {};
+const ideoRefs = new Set(references.map(ref => ref.id));
+for (const [cid, start, okFlag, badFlag, list] of [
+  ['utopia', 'utopia_1', 'utopia_ok', 'utopia_fail', ideoModule.UTOPIA_EVENTS],
+  ['bci', 'bci_1', 'bci_ok', 'bci_shut', ideoModule.BCI_EVENTS],
+]) {
+  const at = `IDEO_CHAINS.${cid}`;
+  if (!isObject(ideoChains[cid])) { problem(at, '未登记'); continue; }
+  for (const key of ['title', 'icon', 'intro']) say(ideoChains[cid][key], `${at}.${key}`);
+  if (!Array.isArray(list) || list.length < 4) { problem(at, `事件太少（${list?.length ?? 0} 个，至少 4 个）`); continue; }
+  if (!list.some(e => e?.id === start)) problem(at, `缺少开头事件 ${start}`);
+  for (const e of list) {
+    if (e?.chain !== cid) problem(at, `${e?.id} 的 chain 应为 ${cid}`);
+    if ((e?.weight ?? 1) !== 0) problem(at, `${e?.id} 应为 weight: 0（由引擎或 project/follow 触发）`);
+    if (e?.id !== start && !ideoRefs.has(e?.id)) problem(at, `${e?.id} 没有被任何 project / follow 指到`);
+  }
+  const flat = JSON.stringify(list);
+  for (const flag of [okFlag, badFlag]) if (!flat.includes(`"${flag}"`)) problem(at, `没有任何结局带 flag: '${flag}'`);
+  if (!chainUpdates.some(({ value }) => value.id === cid && value.done === true)) problem(at, '至少需要一个带 chain.done: true 的结局');
+}
+const ideoEvents = Array.isArray(ideoModule.IDEO_EVENTS) ? ideoModule.IDEO_EVENTS : [];
+const flagged = flag => ideoEvents.filter(e => [].concat(e?.when?.flag || []).includes(flag)).length;
+ideoEvents.forEach((e, i) => { if (![].concat(e?.when?.flag || []).some(f => ['red', 'capb', 'red_cell'].includes(f))) problem(`IDEO_EVENTS[${i}]`, "when.flag 必须含 'red' / 'capb' / 'red_cell'"); });
+if (flagged('red') < 4 || flagged('capb') < 4 || flagged('red_cell') < 1) problem('IDEO_EVENTS', `数量不够：red ${flagged('red')}/4、capb ${flagged('capb')}/4、red_cell ${flagged('red_cell')}/1`);
+
+const plan = isObject(ideoModule.PLAN_TEXT) ? ideoModule.PLAN_TEXT : {};
+say(plan.title, 'PLAN_TEXT.title', 14); say(plan.text, 'PLAN_TEXT.text');
+say(plan.okTitle, 'PLAN_TEXT.okTitle', 14); say(plan.okText, 'PLAN_TEXT.okText');
+say(plan.failTitle, 'PLAN_TEXT.failTitle', 14); say(plan.failText, 'PLAN_TEXT.failText');
+for (const k of ['users', 'model', 'rev']) { say(plan.targets?.[k]?.label, `PLAN_TEXT.targets.${k}.label`, 12); say(plan.targets?.[k]?.hint, `PLAN_TEXT.targets.${k}.hint`, 18); }
+for (const k of ['honest', 'fake']) { say(plan.failOpts?.[k]?.label, `PLAN_TEXT.failOpts.${k}.label`, 12); say(plan.failOpts?.[k]?.hint, `PLAN_TEXT.failOpts.${k}.hint`, 18); say(plan.failOpts?.[k]?.text, `PLAN_TEXT.failOpts.${k}.text`); }
+const actText = isObject(ideoModule.ACT_TEXT) ? ideoModule.ACT_TEXT : {};
+for (const k of ['mobilize', 'utopia', 'selfcrit', 'subbotnik', 'plan', 'yank', 'bci', 'buyback', 'costcut', 'spinoff']) {
+  const v = actText[k];
+  if (!Array.isArray(v) || v.length < 2 || v.length > 3 || v.some(s => typeof s !== 'string' || !s.trim())) problem(`ACT_TEXT.${k}`, '应为 2~3 句文案的数组');
+}
+const yank = isObject(ideoModule.YANK_TEXT) ? ideoModule.YANK_TEXT : {};
+say(yank.title, 'YANK_TEXT.title', 14); say(yank.text, 'YANK_TEXT.text');
+say(yank.go?.label, 'YANK_TEXT.go.label', 12); say(yank.go?.hint, 'YANK_TEXT.go.hint', 18); say(yank.go?.text, 'YANK_TEXT.go.text'); say(yank.no?.label, 'YANK_TEXT.no.label', 12);
+
 if (problems.length) {
   console.error(problems.join('\n'));
   process.exit(1);
 }
-console.log(`OK ${allEvents.length} events, ${Object.keys(chains || {}).length} chains, ${news.length} news`);
+console.log(`OK ${allEvents.length} events, ${Object.keys(chains || {}).length} chains, ${news.length} news, ideology ${stages.length} stages / ${pool.length} cards`);

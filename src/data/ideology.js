@@ -1,0 +1,515 @@
+// 「路线之争」事件链与意识形态内容（纯数据，逻辑在 src/game/ideology.js）。
+// 触发：深圳选了「深创头：国资入股」→ 15 个月、每月一级的事件链，两条进度条「共产」「资本」。
+// 第 15 级选完结算：共产条满或比资本条多 → 红色结局（苏联风界面、不能再拿西方融资）；
+// 资本条满或更多 → 「警惕不现实的乌托邦主义」+ 处置共产倾向员工。终局时股权须 ≥ 40%，否则这条路没走成。
+//
+// 链上选项的格式（IDEO_STAGES[].opts 和 IDEO_POOL 通用）：
+// {
+//   side: 'red' | 'cap' | 'mid',      路线类型：red 共产 / cap 资本 / mid 务实、和稀泥
+//   label: '≤12字', hint: '≤18字',
+//   text: '结果文本', fx: { ... },      fx 和普通事件完全一样
+//   bars: { red: 8, cap: -2 },         两条进度条的变化
+//   // 或者用检定 / 概率：check: { attr, dc } 或 odds: 0.5，再配 ok / fail: { text, fx, bars }
+//   req: { ... },                      可选：满足才能点
+// }
+// IDEO_POOL 里的卡另有 id（全局唯一）、from / to（能出现在第几级，1~15）、when（出现条件，同事件 when，
+// 另外支持 redMin / redMax / capMin / capMax 读两条进度条）。
+// 从第 3 级起，引擎按「玩家意图」决定每级给几张哪种类型的卡：本级 opts 优先，不够的从 IDEO_POOL 抽。
+
+// 主要角色（正文直接写名字）
+export const IDEO_CAST = {
+  rep: { name: '吴建设', role: '国资董事', desc: '深创头派驻的董事。搪瓷缸、君子兰、慢条斯理，最关心「稳」和报表。' },
+  red: { name: '马可', role: '研究员 · 读书会发起人', desc: '相信 AGI 能让「各尽所能、按需分配」第一次算得过来。' },
+  cap: { name: '钱满仓', role: '财务总监', desc: '「降本增效」「股东价值」「对齐颗粒度」，三句话不离估值。' },
+};
+
+// 15 级，按顺序。每级 2~4 个 opts，至少一张 red、一张 cap
+export const IDEO_STAGES = [
+  {
+    title: '国资代表进驻', icon: '🏛️', art: 'ministry',
+    text: '深创头派来的董事吴建设搬进了会议室隔壁。他带来一盆君子兰、一个掉了漆的搪瓷缸，还有一份厚厚的《股东协议》。第一次见面，他只提了一个要求：每周五下午，全员开「学习会」。\n\n当晚，研究员马可在全员群里转发了一篇长文：《AGI 能不能解决计划经济的计算难题？》。三十个人点了赞，财务总监钱满仓回了一个「？」。',
+    opts: [
+      { side: 'red', label: '学习会全员参加', hint: '你带头坐第一排', text: '你在第一排坐得笔直，还带了笔记本。吴建设很满意，马可眼里有光，钱满仓在桌子底下回邮件。', bars: { red: 9, cap: -2 }, fx: { reg: -5, morale: 3 } },
+      { side: 'cap', label: '划清边界', hint: '董事只管董事会的事', text: '你客气地递上公司章程，翻到「董事职权」那一页。吴建设笑着说当然当然，然后把君子兰摆在了你的工位上。', bars: { cap: 9, red: -2 }, fx: { reg: 4, hype: 2 } },
+      { side: 'mid', label: '改成技术分享会', hint: '学可以，学 Transformer', text: '周五的会照开，主题从《资本论》换成了《注意力机制》。吴建设听得很认真，散会时问：注意力能不能集中起来办大事？', bars: { red: 3, cap: 3 }, fx: { quality: 2 } },
+    ],
+  },
+  {
+    title: '周五学习会', icon: '📚', art: 'seminar',
+    text: '马可把《资本论》放在讲台上，PPT 第一页只有一句：机器为什么没有让人类少干活？台下的工程师刚收到今晚发版的通知，觉得这页比监控面板更贴近生产环境。钱满仓打开计算器，把与会人数乘以时薪，建议从第二页开始收费。\n\n吴建设慢条斯理地喝了口茶，问这场讨论能否形成一份可归档的成果。马可说可以形成共识，吴建设又问：共识能不能盖章？',
+    opts: [
+      { side: 'red', label: '把省下的时间还人', hint: '先试行带薪学习时段', text: '你给学习会划出工作时间。马可终于不用下班讲解剩余劳动，钱满仓则给这两小时单独设了成本中心。', bars: { red: 8, cap: -2 }, fx: { morale: 8, cash: -0.5 } },
+      { side: 'cap', label: '学习也算投入产出', hint: '每次分享附商业化方案', text: '钱满仓要求每页理论对应一个收入入口。马可讲到异化时，台下已经做出一款收费测异化程度的小程序。', bars: { cap: 8, red: -2 }, fx: { morale: -5, temp: { key: 'revMult', mult: 1.08, months: 6 } } },
+      { side: 'mid', label: '先把会缩到半小时', hint: '留下问题，按时散会', text: '你把问题贴上白板，闹钟响了就散。两派都觉得讨论不够深入，工程师觉得第一次有人回答了第一页的问题。', bars: { red: 2, cap: 2 }, fx: { morale: 4, hype: -3 } },
+    ],
+  },
+  {
+    title: '期权还是福利', icon: '🥣', art: 'home',
+    text: '年度预算摊在桌上，钱满仓圈出期权池：人才要与公司一起成长，最好成长到四年归属期以后。马可圈出食堂、宿舍和托儿所，说员工的孩子不能等上市了再吃午饭。两份方案用了同一笔钱，标题都叫长期主义。\n\n吴建设问宿舍入住率有没有预测，钱满仓递来估值预测，马可递来排队名单。你发现，只有排队名单上的人已经到了现场。',
+    opts: [
+      { side: 'red', label: '先让福利落地', hint: '拿预算改善日常生活', text: '食堂和托儿所先开起来，宿舍继续排队。钱满仓叹气说钱变成了沉没成本，午饭时还是认真捞起了碗底的肉。', bars: { red: 10, cap: -3 }, fx: { cash: -2, morale: 10, rep: 4 } },
+      { side: 'cap', label: '扩充核心期权池', hint: '让核心人才等一个未来', text: '期权说明会座无虚席。钱满仓讲到退出路径时，后排有人误以为可以下班，起身又被请了回来。', bars: { cap: 9, red: -2 }, fx: { equity: -2, hype: 5, temp: { key: 'devMult', mult: 1.12, months: 8 } } },
+      { side: 'mid', label: '先发通勤补助', hint: '未来很远，地铁很近', text: '两份宏大方案各删一页，省下的钱打进交通账户。吴建设批示效果可感知，员工补充说到账也可感知。', bars: { red: 2, cap: 1 }, fx: { cash: -0.5, morale: 4 } },
+    ],
+  },
+  {
+    title: '算力怎么分', icon: '🖥️', art: 'datacenter',
+    text: '显卡预约表已经排到下个季度。每个组长都说自己的任务关系公司生死，连做头像挂件的小组也写了基础设施四个字。马可提议按需分配，钱满仓建议内部拍卖，吴建设希望先成立一个不会把事情闹大的协调机构。\n\n你让大家提交实际需求，十分钟后总需求翻了三倍。一位组长解释：听说要统筹，所以先把可能被统筹走的部分报上。',
+    opts: [
+      { side: 'red', label: '成立算力分配会', hint: '公共队列，公开申诉', text: '委员会把争吵搬进表格，又给表格配了申诉会。小组终于租到卡，大组学会了把大需求拆成许多小组。', bars: { red: 9, cap: -2 }, fx: { morale: 6, cash: -1, quota: 10 } },
+      { side: 'cap', label: '让项目竞价租卡', hint: '预算就是投票权', text: '拍卖屏上价格飞涨，钱满仓欣慰地说资源找到了价值。没收入的基础研究组开始研究如何向别组收过路费。', bars: { cap: 9, red: -3 }, fx: { morale: -7, temp: { key: 'revMult', mult: 1.1, months: 6 } } },
+      { side: 'mid', label: '按公开指标排队', hint: '每周留一段探索额度', text: '你用交付日期和占卡时长排序，另留探索窗口。大家不再抢管理员，改为研究怎样让任务看起来刚好符合指标。', bars: { red: 2, cap: 2 }, fx: { quality: 2, cash: -0.5 } },
+    ],
+  },
+  {
+    title: '大锅饭', icon: '🍲', art: 'burrito',
+    text: '食堂试运营进入第三周，意见箱里八成是关于土豆的哲学问题：土豆炖牛肉里牛肉的最低存在比例是多少？马可认为免费大锅饭能减少生活负担，钱满仓认为付费精品档口才能让厨师尊重需求，厨师认为两位都没在十一点半切过菜。\n\n吴建设亲自尝了一口，说总的来说比较稳。大家一时分不清他是在评价饭菜，还是评价每天都吃一样的饭菜。',
+    opts: [
+      { side: 'red', label: '免费大锅饭管够', hint: '把饭钱列为公共开支', text: '免费窗口终于有了牛肉，队伍也有了队伍。马可提议给排队时间计工分，厨师问那切菜是否算重体力科研。', bars: { red: 8, cap: -2 }, fx: { cash: -1, morale: 8, temp: { key: 'costMult', mult: 1.05, months: 6 } } },
+      { side: 'cap', label: '引进精品付费档口', hint: '同一块土豆，多一种定位', text: '土豆换了黑色盘子，改名低温慢煮根茎。钱满仓说这是消费升级，员工说是工资下沉。', bars: { cap: 8, red: -2 }, fx: { cash: 1, morale: -6, rep: -3 } },
+      { side: 'mid', label: '发定额外卖补贴', hint: '胃的路线自己选择', text: '补贴到账，大家开始各吃各的。唯一的新集体活动是拼单，钱满仓和马可第一次为同一张满减券据理力争。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, morale: 4 } },
+    ],
+  },
+  {
+    title: '美元基金来访', icon: '💵', art: 'handshake',
+    text: '红衫资本的合伙人带来一份跟投意向，估值那一页很暖，附加条件那一页很凉：希望公司推进去国资化，让治理结构更清爽。钱满仓反复说这不是路线问题，是国际化表达。马可反问，为什么国际化总要先请一个现有股东出门。\n\n吴建设就在门口泡茶，没有参与争论。他把搪瓷缸往桌上一放，说股东退出也有流程，第一步是让股东知道自己准备退出。',
+    opts: [
+      { side: 'red', label: '保留国资席位', hint: '谢绝附带清退条件的意向', text: '你把条件退回。吴建设说公司有原则，接着要求你提交三版现金流测算，原则暂时不能用于发工资。', bars: { red: 10, cap: -3 }, fx: { reg: -6, rep: 5, temp: { key: 'raiseMult', mult: 0.85, months: 8 } } },
+      { side: 'cap', label: '启动退出谈判', hint: '先花钱梳理股东结构', text: '钱满仓把会议命名为治理清爽化。吴建设带来比原来更厚的文件，清爽首先表现为打印机的负担加重。', bars: { cap: 10, red: -3 }, fx: { cash: -1, reg: 6, temp: { key: 'raiseMult', mult: 1.18, months: 8 } } },
+      { side: 'mid', label: '拆开融资和席位谈', hint: '争取一份没有暗示的条款', check: { attr: 'biz', dc: 16 }, ok: { text: '你让双方逐条写明权限，终于谈出继续尽调的空间。钱满仓夸你会谈判，律师夸你会给律师找工作。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, rep: 3 } }, fail: { text: '双方都同意继续讨论，也都没同意投钱。你得到一个新群，群名叫下一步，最近一条消息是下周再看。', bars: { red: 1, cap: 1 }, fx: { cash: -0.5, hype: -3 } } },
+    ],
+  },
+  {
+    title: '劳动竞赛', icon: '🏅', art: 'leaderboard',
+    text: '马可发起算力标兵评选，希望奖励把同一炉模型练得更省电的人。宣传稿传到行政手里，变成了连续亮灯时间排行榜。钱满仓带来另一套方案：OKR 加强制分布，每个组必须交出末位，哪怕这个组只有组长和一盆植物。\n\n吴建设建议两套评比都保留，材料可以互相支撑。工程师问能不能按少开多少会评奖，会议室忽然展现出惊人的隔音效果。',
+    opts: [
+      { side: 'red', label: '评节能协作标兵', hint: '给共享成果发集体奖金', text: '奖金按协作组发，申请材料却按个人收。最后获奖最多的是整理材料的人，他确实让所有人的成果可被统计。', bars: { red: 8, cap: -2 }, fx: { cash: -1, morale: 8, quality: 2 } },
+      { side: 'cap', label: '上线强制分布', hint: '优秀可以少，末位不能空', text: '钱满仓要求每组给出一个末位。小组长给植物打了低分，HR 驳回：它去年就已因不够狼性被转入固定资产。', bars: { cap: 9, red: -3 }, fx: { morale: -9, temp: { key: 'devMult', mult: 1.15, months: 6 } } },
+      { side: 'mid', label: '只比复现和能耗', hint: '奖金小一点，表格少一点', text: '奖项缩到两项，颁奖用时五分钟。吴建设担心材料不够充实，你把省下的电费账单附了进去。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+    ],
+  },
+  {
+    title: '模型的价值观', icon: '🚜', art: 'furnace',
+    text: '两份价值观微调样本同时送到。马可的版本让 {model} 赞美集体劳动，测试时模型对所有问题都写了一首拖拉机的诗，包括用户问如何修改密码。钱满仓的版本把付费转化列为首要目标，模型在解释退款流程后热情推荐了年费会员。\n\n吴建设让它写一份会议纪要，得到了一首需要充值才能看完的拖拉机长诗。两组研究员都说这证明对方的数据污染了模型。',
+    opts: [
+      { side: 'red', label: '用公共服务作目标', hint: '压低推销，补齐帮助样本', text: '模型终于肯先回答问题，研究员仍坚持保留诗歌彩蛋。拖拉机退出登录页面，在帮助中心获得了一块试验田。', bars: { red: 9, cap: -3 }, fx: { rep: 7, quality: 2, temp: { key: 'revMult', mult: 0.9, months: 6 } } },
+      { side: 'cap', label: '按付费转化调参', hint: '每个回答都是销售机会', text: '模型学会在关键句前停住，请用户解锁后续。钱满仓夸它理解了商业，用户夸它终于能像老板一样说半句话。', bars: { cap: 10, red: -3 }, fx: { rep: -7, bubble: 3, temp: { key: 'revMult', mult: 1.18, months: 6 } } },
+      { side: 'mid', label: '先过盲测再上线', hint: '帮助和推销分别计分', text: '盲测用户给两版都打了低分。团队决定先教模型完成密码修改，拖拉机和会员暂时一起停在测试环境。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 3 } },
+    ],
+  },
+  {
+    title: '中期股东会', icon: '🗳️', art: 'boardroom',
+    text: '股东会第一次把路线争论换算成百分比。马可建议设立职工持股会，让写代码的人也能对用途表态；钱满仓建议发行 AB 股，把经济利益和投票权分别装进不同抽屉。两个人都给自己的方案起名叫主人翁精神。\n\n吴建设把章程翻到最后，提醒 {me}：终局表决时，创始人股权得至少有四成。这套结算认的是实持比例，抽屉做得再精巧，也不能把名片算成股份。',
+    opts: [
+      { side: 'red', label: '拨股给职工持股会', hint: '让渡两点股权换参与', text: '职工代表第一次拿到股东材料，问为什么工资预算算成本，管理顾问预算叫投资。钱满仓建议先安排财务培训。', bars: { red: 10, cap: -3 }, fx: { equity: -2, morale: 9, rep: 4 } },
+      { side: 'cap', label: '筹备双层股权', hint: '治理包装不补实持比例', text: '律师把投票权拆成两套，路演终于有了新图。你账上的实持比例纹丝不动，钱满仓说图先领先也是领先。', bars: { cap: 9, red: -2 }, fx: { cash: -1, hype: 6, temp: { key: 'raiseMult', mult: 1.12, months: 8 } } },
+      { side: 'mid', label: '维持现有股权', hint: '花预算把权限讲清楚', text: '你没有重新切饼，只请人解释谁能拿刀。说明会开了两小时，最大的成果是全员终于知道自己拿到的是哪种饼。', bars: { red: 1, cap: 1 }, fx: { cash: -0.5, reg: -3 } },
+    ],
+  },
+  {
+    title: '用户是谁的', icon: '👥', art: 'crowd',
+    text: '产品的用户增长了，账单也以完全相同的热情增长。马可提出把基础能力作为免费公共服务，钱满仓提出会员分级、广告位和高端优先回答，称用户的每一分钟都值得被认真定价。客服说用户现在最想要的是别再弹窗。\n\n吴建设问公共服务如何验收，马可说看大家有没有得到帮助。钱满仓立刻建议把帮助拆成三个档位，让最上面那个档位承担社会责任。',
+    opts: [
+      { side: 'red', label: '扩大免费基础服务', hint: '公共额度由公司补贴', text: '用户涌进来解决真问题，马可收到了感谢信。钱满仓把感谢信打印在账单背面，说这样至少可以节约一点纸。', bars: { red: 10, cap: -3 }, fx: { cash: -2, rep: 8, usersPct: 10 } },
+      { side: 'cap', label: '推出会员阶梯', hint: '付费越多，等待越少', text: '普通用户看见排队倒计时，会员看见专属倒计时。钱满仓说差异化服务上线了，客服说差异化投诉也上线了。', bars: { cap: 10, red: -3 }, fx: { rep: -8, hype: 5, temp: { key: 'revMult', mult: 1.2, months: 8 } } },
+      { side: 'mid', label: '保底免费加成本价', hint: '高级用量明码计费', text: '价目表把算力成本写得很清楚。用户夸你实在，市场部抱怨太清楚以后很难用一场发布会突然贵三倍。', bars: { red: 2, cap: 2 }, fx: { rep: 3, hype: -3 } },
+    ],
+  },
+  {
+    title: '发版前夜', icon: '🌙', art: 'office_night',
+    text: '版本还有一串红色缺陷，钱满仓发来全员冲刺表，表上没有周末。马可组织停工学习，反对把 996 写成团队的默认配置，结果第一场学习会定在下班之后，刚发出去就被群友指出了逻辑问题。\n\n吴建设说劳动安排要稳，交付也要稳，然后问能不能两件事同时稳。测试负责人拿着缺陷清单站在门口，说现在最稳定的是每次修完都会多出两个问题。',
+    opts: [
+      { side: 'red', label: '暂停冲刺安排轮休', hint: '延期换取正常休息', text: '学习会挪回工作时间，版本延期。马可认真组织讨论，员工认真要求他把讨论也控制在下班之前。', bars: { red: 11, cap: -3 }, fx: { morale: 10, rep: 4, cash: -1, hype: -6 } },
+      { side: 'cap', label: '全员通宵保发版', hint: '交付提前，黑料留下', text: '钱满仓把通宵称为集体奔赴。凌晨四点大家确实奔赴了同一个地方：咖啡机前，机器正在提示需要休息。', bars: { cap: 11, red: -4 }, fx: { morale: -10, dirt: { type: 'overwork', sev: 6 }, temp: { key: 'devMult', mult: 1.2, months: 6 } } },
+      { side: 'mid', label: '砍掉未完成的功能', hint: '按时交一个小版本', text: '你删去半页发布说明，换回了一整个周末。钱满仓觉得故事变小了，测试负责人觉得故事终于有机会是真的。', bars: { red: 2, cap: 2 }, fx: { quality: 3, hype: -4 } },
+    ],
+  },
+  {
+    title: '同行的嘲讽', icon: '📣', art: 'press',
+    text: '围脖上的热门帖子把 {co} 称为一台需要开会才能开会的丹炉，行业群的另一张梗图则把钱满仓画成给茶水间设计订阅制的人。两张图都很好转发，公关部很难解释为什么每次辟谣都会把另一张顶上去。\n\n马可认为商业化口号毁了公共理想，钱满仓认为学习会拖累了融资故事。吴建设拿来打印好的舆情简报，问有没有一种回复能让这份简报下个月薄一点。',
+    opts: [
+      { side: 'red', label: '公开公共服务账本', hint: '接受质疑，也摊开开销', text: '账本里有帮助用户的记录，也有开会茶点。网友终于看见了理想的成本，讨论重点却是为什么饼干这么贵。', bars: { red: 8, cap: -2 }, fx: { cash: -0.5, rep: 7, hype: -4 } },
+      { side: 'cap', label: '借梗办商业路演', hint: '把嘲讽换算成曝光', text: '钱满仓把两张梗图放进开场，宣布公司同时掌握两种流量。观众笑完问收入，他翻到了下一张流量图。', bars: { cap: 9, red: -2 }, fx: { cash: -1, hype: 10, bubble: 4, rep: -4 } },
+      { side: 'mid', label: '开一场真实演示', hint: '能跑多少就演多少', check: { attr: 'tech', dc: 15 }, ok: { text: '演示没有神迹，但确实解决了几个问题。评论区终于有人问下载地址，公关把这条截了三遍才放心。', bars: { red: 2, cap: 2 }, fx: { rep: 4, cash: -0.5 } }, fail: { text: '演示卡在登录页面。公关说这证明绝无剪辑，网友同意，并给登录页面另建了一个表情包合集。', bars: { red: 1, cap: 1 }, fx: { hype: 3, rep: -4 } } },
+    ],
+  },
+  {
+    title: '计划委员会', icon: '🎛️', art: 'chess',
+    text: '马可的资源计划方案终于有了样板间：六边形控制室、转椅和六块大屏，{model} 负责汇总各组的需求。第一轮演示里，模型发现大家最缺的是会议室，于是建议把控制室改成会议室。马可要求它再深入思考。\n\n钱满仓说看不见的手不需要装修，只需要内部结算市场。财务随即送来市场运营预算，包含平台、结算、申诉三支团队，手看不见，管理费倒很清楚。',
+    opts: [
+      { side: 'red', label: '让模型统筹资源', hint: '计划上屏，保留人工申诉', text: '大屏实时显示供需，例会专门讨论大屏为什么没考虑例会。模型默默给会议室需求增加了一个安全系数。', bars: { red: 10, cap: -3 }, fx: { cash: -2, quality: 3, reg: -5 } },
+      { side: 'cap', label: '建立内部资源市场', hint: '部门之间按价格协调', text: '内部市场开市，客服向研发收费复述用户反馈，研发向客服收费解释错误码。集团收入没变，部门流水欣欣向荣。', bars: { cap: 10, red: -3 }, fx: { morale: -7, bubble: 4, temp: { key: 'revMult', mult: 1.12, months: 8 } } },
+      { side: 'mid', label: '先试一个部门', hint: '资源计划接受现实验收', text: '你把大屏缩成一张值班表，先让一个部门跑通。样板间暂时空着，吴建设的君子兰获得了最优采光配置。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+    ],
+  },
+  {
+    title: '路线大辩论', icon: '🎤', art: 'redhall',
+    text: '全员大会前夜，马可来找你，说技术不能只负责让付费按钮更难拒绝。他带了一份公共目标草案，附件多到需要专人负责解释。钱满仓随后进门，说先活下来才有资格谈未来，递来的现金流预测却把明年的融资写得像已经到账。\n\n两人都希望你最后再表一次态。吴建设最后来收杯子，只说稳一点。你问稳在哪边，他指了指桌腿，原来桌子真的在晃。',
+    opts: [
+      { side: 'red', label: '为公共目标担责', hint: '把承诺写进预算约束', text: '你签下公共目标，也给每项承诺标了成本。马可第一次在理想后面看到合计栏，发现真诚并不能自动消除小数点。', bars: { red: 12, cap: -4 }, fx: { cash: -1, morale: 9, hype: -6 } },
+      { side: 'cap', label: '为经营结果站台', hint: '把现金流摆在愿景之前', text: '你支持经营纪律，钱满仓立刻删去预测里最夸张的增长。删完发现仍需融资，他又把字体缩小了一号。', bars: { cap: 12, red: -4 }, fx: { morale: -7, bubble: -4, temp: { key: 'raiseMult', mult: 1.1, months: 6 } } },
+      { side: 'mid', label: '公开两份方案成本', hint: '让全员看到愿景的账单', text: '两派都要求给自己的成本加一句背景说明。你同意，但限二十字。第一次，公司的政治经济学讨论有了字数预算。', bars: { red: 3, cap: 3 }, fx: { cash: -0.5, rep: 3 } },
+    ],
+  },
+  {
+    title: '全体大会', icon: '🏛️', art: 'congress',
+    text: '最后一次大会坐满了人。马可把公共目标草案放在讲台左边，钱满仓把稳健经营方案放在右边，投影仪因为找不到输入源，在中间展示了一片蓝天。吴建设先核对股权表，再示意你发言：四成的门槛，不能用掌声补齐。\n\n十五个月的争论最后落在这次表态上。台下有人想改变技术的用途，有人想保住下个月工资，也有人只是盼着散会后能把一直占用的投影线拿回去。',
+    opts: [
+      { side: 'red', label: '让技术服务共同生活', hint: '为公共目标作最后表态', text: '你把共同生活写进公司目标，台下有人鼓掌，有人算账。吴建设提醒，接下来最需要共同完成的工作是预算附件。', bars: { red: 15, cap: -4 }, fx: { morale: 10, hype: -7, rep: 6 } },
+      { side: 'cap', label: '先活下来再谈终点', hint: '为稳健经营作最后表态', text: '你宣布先管好现金流和交付。钱满仓长出一口气，正准备宣布新 KPI，被你要求先把今年那套算明白。', bars: { cap: 15, red: -4 }, fx: { morale: -8, bubble: -6, temp: { key: 'revMult', mult: 1.1, months: 6 } } },
+      { side: 'mid', label: '把异议一并记下来', hint: '最后表态也留复议空间', text: '你要求记录赞成票，也记录反对理由。吴建设点头说材料完整了，秘书抬头问：那目录还需要单独表决吗？', bars: { red: 3, cap: 3 }, fx: { cash: -0.5, reg: -3 } },
+    ],
+  },
+];
+
+// 通用卡池（第 3 级起按意图抽取）
+export const IDEO_POOL = [
+  { id: 'free_canteen', side: 'red', from: 3, to: 15, when: { moraleMax: 60 }, label: '开职工食堂', hint: '三菜一汤，不要钱', text: '食堂开张第一天排了四十分钟的队。马可说这叫「按需分配」，钱满仓说这叫「隐性薪酬」，大家一致同意红烧肉太少。', bars: { red: 7 }, fx: { morale: 8, cash: -1 } },
+  { id: 'forced_curve', side: 'cap', from: 3, to: 15, label: '强制分布绩效', hint: '每组必须有 10% 不合格', text: '钱满仓的绩效表格一共四十七列，最后一列写着「末位」。各组长开了三天会，终于把不合格名额分给了上个月请过病假的人。', bars: { cap: 8, red: -2 }, fx: { morale: -6, temp: { key: 'devMult', mult: 1.1, months: 6 } } },
+  // 各路线保留四张全阶段通用卡；其余卡由实际经营处境触发。
+  { id: 'ideo_open_minutes', side: 'red', from: 3, to: 15, label: '公开资源会议纪要', hint: '分配理由接受全员追问', text: '纪要上墙后，人人都能追问资源去向。吴建设要求同步公开纪要的修订纪要，透明度很高，墙面开始告急。', bars: { red: 7, cap: -1 }, fx: { cash: -0.5, morale: 6, reg: -3 } },
+  { id: 'ideo_shared_library', side: 'red', from: 3, to: 15, label: '建立公共技术书架', hint: '知识共享，公司付账', text: '马可采购了书和公开课，借阅登记很快变成了阅读排行榜。第一名是负责把每本书录入系统的行政同事。', bars: { red: 7 }, fx: { cash: -0.5, morale: 5, quality: 2 } },
+  { id: 'ideo_collective_credit', side: 'red', from: 3, to: 15, label: '成果署名整个团队', hint: '把台前荣誉分给后台', text: '发布稿列出了所有参与者，标题被挤到第二页。市场部说传播效率下降，后台同事第一次把通稿转给了家里。', bars: { red: 8, cap: -2 }, fx: { morale: 7, rep: 4, hype: -5 } },
+  { id: 'ideo_paid_council', side: 'red', from: 3, to: 15, label: '给职工议事留工时', hint: '开会占用上班时间', text: '议事会改在工作时间召开。第一项决议是限制议事会时长，第二项讨论是否需要另开一次会落实第一项。', bars: { red: 8, cap: -1 }, fx: { morale: 6, cash: -0.5, temp: { key: 'devMult', mult: 0.95, months: 6 } } },
+  { id: 'ideo_public_bridge', side: 'red', from: 3, to: 15, when: { runwayMax: 4 }, label: '向国资股东求援', hint: '过桥的钱附带报表', text: '吴建设协调来一笔周转款，条件是按月汇报。钱到了，汇报模板也到了，模板的文件大小看起来比公司的资产更扎实。', bars: { red: 10, cap: -2 }, fx: { cash: 2, hype: -4, temp: { key: 'raiseMult', mult: 0.9, months: 8 } } },
+  { id: 'ideo_childcare_reserve', side: 'red', from: 3, to: 15, when: { runwayMin: 12 }, label: '设职工托育基金', hint: '有余粮就先照顾日常', text: '基金批下来，托育室先添了地垫。吴建设问如何考核成效，家长说准点接到孩子，财务问准点能否折成一个百分比。', bars: { red: 9, cap: -2 }, fx: { cash: -2, morale: 9, rep: 5 } },
+  { id: 'ideo_rest_repair', side: 'red', from: 3, to: 15, when: { moraleMax: 45 }, label: '安排带薪修整日', hint: '疲惫不能靠标语恢复', text: '马可提出修整日不安排集体活动，行政仍做了休息成果登记表。你删掉表格后，员工才相信今天是真的可以休息。', bars: { red: 9, cap: -2 }, fx: { morale: 10, cash: -1, hype: -3 } },
+  { id: 'ideo_peer_tutoring', side: 'red', from: 3, to: 15, when: { moraleMin: 75 }, label: '办跨组互助工坊', hint: '热情拿来分享，别拿来透支', text: '大家主动教彼此调参、部署和报销。最后一门课最受欢迎，吴建设认为这说明组织能力与生产能力正在同步提高。', bars: { red: 7 }, fx: { cash: -0.5, quality: 3, hype: -3 } },
+  { id: 'ideo_traffic_to_service', side: 'red', from: 3, to: 15, when: { hypeMin: 65 }, label: '把热度换免费额度', hint: '少接采访，多接真实用户', text: '你把采访档期换成公益服务时段。记者觉得故事不够刺激，客服觉得终于有一件事不用加引号叫赋能。', bars: { red: 8, cap: -2 }, fx: { cash: -1, hype: -7, rep: 8, usersPct: 5 } },
+  { id: 'ideo_public_complaints', side: 'red', from: 3, to: 15, when: { repMax: 40 }, label: '请用户来质询', hint: '把道歉做成可追踪工单', text: '用户的问题铺满白板，马可的理想暂时只占一个角落。吴建设要求逐项回复，第一次有人觉得他的表格也能有用。', bars: { red: 8, cap: -1 }, fx: { cash: -1, rep: 8, hype: -4 } },
+  { id: 'ideo_public_audit', side: 'red', from: 3, to: 15, when: { regMin: 60 }, label: '开放职工监督账目', hint: '请代表核对资源用途', text: '审阅会上最多的问题是为什么会务预算比培训高。吴建设让大家如实记录，顺便建议压缩下次审阅会的茶点。', bars: { red: 8, cap: -2 }, fx: { cash: -1, reg: -8, morale: 5 } },
+  { id: 'ideo_profit_debate', side: 'red', from: 9, to: 15, when: { bubbleMin: 60 }, label: '砍掉愿景估值溢价', hint: '让理想接受成本核算', text: '马可同意不把未来公共价值算成今天的估值。钱满仓删去几个零，发现剩下的数字终于能在一口气里念完。', bars: { red: 10, cap: -3 }, fx: { bubble: -5, rep: 6, temp: { key: 'raiseMult', mult: 0.85, months: 8 } } },
+  { id: 'ideo_worker_observers', side: 'red', from: 3, to: 15, when: { staffMin: 15 }, label: '轮值职工观察员', hint: '让大团队听见一线意见', text: '观察员轮流旁听预算会，终于知道为什么一把椅子要审批三次。有人提议减少审批，又被要求先提交一把椅子的案例。', bars: { red: 8, cap: -2 }, fx: { cash: -0.5, morale: 7, temp: { key: 'devMult', mult: 0.95, months: 6 } } },
+  { id: 'ideo_stop_ceremony', side: 'red', from: 9, to: 15, when: { redMin: 65 }, label: '撤掉先进表彰台', hint: '把仪式预算还给福利', text: '马可发现表彰会太多，决定先取消表彰会。吴建设建议给这项务实改革颁一个奖，奖项名称暂定为少开会先进集体。', bars: { red: 7, cap: -1 }, fx: { morale: 6, rep: 4, hype: -5 } },
+  { id: 'ideo_small_public_trial', side: 'red', from: 3, to: 8, when: { redMax: 25 }, label: '试办一项公共福利', hint: '先用小预算验证承诺', text: '马可没有再讲终极愿景，只申请一台公用微波炉。钱满仓说这笔投资回报难算，午饭后认可了周转速度。', bars: { red: 7, cap: -1 }, fx: { cash: -0.5, morale: 6 } },
+  { id: 'ideo_open_model_access', side: 'red', from: 3, to: 15, when: { ownModel: true }, label: '开放模型公益接口', hint: '自研能力拿出一份共享', text: '公益接口上线，马可认真审核用途，审核队伍很快比请求队伍还长。工程师给审核表加缓存，公共服务先服务了自己。', bars: { red: 9, cap: -2 }, fx: { cash: -1, rep: 8, temp: { key: 'revMult', mult: 0.92, months: 6 } } },
+  { id: 'ideo_overtime_hearing', side: 'red', from: 3, to: 15, when: { policy: { work: '996' } }, label: '核查加班与补休', hint: '先把欠下的休息列出来', text: '补休清单打印出来像一条围巾。吴建设说历史欠账要有序消化，员工问能否先从这周六开始有序消化。', bars: { red: 10, cap: -3 }, fx: { cash: -1, morale: 10, reg: -6 } },
+
+  { id: 'ideo_internal_price', side: 'cap', from: 3, to: 15, label: '给内部服务标价', hint: '协作也要看成本中心', text: '财务给跨组请求统一标价，工程师开始给一句你好生成报价单。钱满仓说终于有了成本意识，群里从此很少有人打招呼。', bars: { cap: 8, red: -2 }, fx: { morale: -6, temp: { key: 'costMult', mult: 0.95, months: 6 } } },
+  { id: 'ideo_sales_dashboard', side: 'cap', from: 3, to: 15, label: '把收入榜挂上墙', hint: '人人看见谁最会收钱', text: '收入榜占了技术白板，研发建议给每个修复的缺陷记收入。钱满仓拒绝后，大家发现不修缺陷的商业逻辑反而更完整。', bars: { cap: 8, red: -2 }, fx: { morale: -5, temp: { key: 'revMult', mult: 1.1, months: 6 } } },
+  { id: 'ideo_pitch_vocabulary', side: 'cap', from: 3, to: 15, label: '统一路演关键词', hint: '先让故事听起来能上市', text: '所有部门学会闭环、飞轮和护城河。保洁问拖把间是否也要闭环，钱满仓说可以先叫清洁基础设施。', bars: { cap: 7, red: -1 }, fx: { hype: 7, bubble: 3, rep: -4 } },
+  { id: 'ideo_receivable_sprint', side: 'cap', from: 3, to: 15, when: { runwayMax: 4 }, label: '全员冲刺回款', hint: '打折收现金，其他工作让路', text: '钱满仓把已读不回列为客户状态，让研发也参加催款。工程师第一次发现，生产环境最难重试的接口叫客户财务。', bars: { cap: 9, red: -2 }, fx: { cash: 2, morale: -8, temp: { key: 'devMult', mult: 0.9, months: 6 } } },
+  { id: 'ideo_brand_surge', side: 'cap', from: 3, to: 15, when: { runwayMin: 12 }, label: '砸钱抢行业心智', hint: '现金充裕，先买存在感', text: '钱满仓包下几块大屏，反复播放增长曲线。员工路过时终于知道公司看起来这么有钱，回去又收到节约纸巾的邮件。', bars: { cap: 9, red: -2 }, fx: { cash: -2, hype: 10, bubble: 4, morale: -4 } },
+  { id: 'ideo_retention_vesting', side: 'cap', from: 3, to: 15, when: { moraleMax: 45 }, label: '发延迟归属奖励', hint: '把留人的希望放到明年', text: '留任奖励足足四年后归属，钱满仓称之为长期陪伴。员工认真计算以后发现，公司需要的首先是陪伴，不一定是快乐。', bars: { cap: 8, red: -2 }, fx: { equity: -1, morale: -4, temp: { key: 'devMult', mult: 1.1, months: 6 } } },
+  { id: 'ideo_enthusiasm_quota', side: 'cap', from: 3, to: 15, when: { moraleMin: 75 }, label: '给热情追加指标', hint: '状态好就多承担一点', text: '钱满仓发现团队最近很开心，认为目标定得不够饱满。下季指标提高后，开心被正式列为一种尚未开发的冗余。', bars: { cap: 9, red: -3 }, fx: { morale: -9, temp: { key: 'devMult', mult: 1.15, months: 6 } } },
+  { id: 'ideo_premium_waitlist', side: 'cap', from: 3, to: 15, when: { hypeMin: 65 }, label: '售卖优先体验席位', hint: '热度正高，队伍也值钱', text: '钱满仓把排队拆成普通、优先和尊享三队。用户问最高档能否直接使用，客服回答还可以优先购买下一轮优先权。', bars: { cap: 10, red: -3 }, fx: { cash: 2, rep: -8, bubble: 4 } },
+  { id: 'ideo_reputation_rebrand', side: 'cap', from: 3, to: 15, when: { repMax: 40 }, label: '买一套全新品牌', hint: '口碑不好，先换种说法', text: '新品牌主张重新认识我们，旧投诉链接也重新排了版。钱满仓要求突出焕新，客服问能否顺便焕新退款流程。', bars: { cap: 8, red: -1 }, fx: { cash: -1, hype: 8, bubble: 3, rep: -4 } },
+  { id: 'ideo_compliance_sales', side: 'cap', from: 3, to: 15, when: { regMin: 60 }, label: '把合规打成套餐', hint: '审查成本转给高端客户', text: '法务把修改过的流程写成产品说明，销售给它加上尊享两个字。钱满仓说规则终于开始创造收入，法务说先把顾问费付了。', bars: { cap: 8, red: -2 }, fx: { cash: -1, reg: -5, temp: { key: 'revMult', mult: 1.1, months: 8 } } },
+  { id: 'ideo_bubble_anchor', side: 'cap', from: 9, to: 15, when: { bubbleMin: 65 }, label: '趁估值高讲新故事', hint: '旧增长放缓，新赛道接棒', text: '路演第一页从助手改成平台，第二页从平台改成生态。钱满仓发现只要一直往后翻，收入暂时可以不在场。', bars: { cap: 10, red: -3 }, fx: { hype: 8, bubble: 6, rep: -5, temp: { key: 'raiseMult', mult: 1.15, months: 6 } } },
+  { id: 'ideo_dirt_discount', side: 'cap', from: 3, to: 15, when: { dirtMin: 6 }, label: '给风险算个折扣', hint: '查问题的钱从融资预算扣', text: '钱满仓同意请人查账，但坚持把风险折成估值折扣。报告还没出来，他已经在谈如何把折扣也解释成投资机会。', bars: { cap: 7, red: -1 }, fx: { cash: -1, reg: -4, temp: { key: 'raiseMult', mult: 0.92, months: 6 } } },
+  { id: 'ideo_flatten_layers', side: 'cap', from: 3, to: 15, when: { staffMin: 15 }, label: '压平管理层级', hint: '省掉层级，留下考核', text: '组织图少了一层，汇报群却多了三个。钱满仓说这叫扁平化，员工说现在每个人都能直接收到所有人的催促。', bars: { cap: 9, red: -2 }, fx: { morale: -8, temp: { key: 'costMult', mult: 0.9, months: 8 } } },
+  { id: 'ideo_equity_repurchase', side: 'cap', from: 9, to: 15, when: { equityMax: 45 }, label: '谈一笔股份回购', hint: '花现金把话语权买回来', text: '你买回一小块股份，钱满仓递来新的股权图。颜色看起来差别不大，吴建设说这回多出来的部分确实可以算票。', bars: { cap: 8, red: -1 }, fx: { cash: -2, equity: 2, morale: -4 } },
+  { id: 'ideo_margin_doctrine', side: 'cap', from: 9, to: 15, when: { capMin: 65 }, label: '利润率列为总指标', hint: '成熟路线需要漂亮分母', text: '钱满仓宣布每件事都要回答是否提升利润率。培训部门提议培训如何提升利润率，立刻因为短期不提升利润率被砍。', bars: { cap: 9, red: -2 }, fx: { morale: -7, rep: -4, temp: { key: 'revMult', mult: 1.15, months: 8 } } },
+  { id: 'ideo_first_checkout', side: 'cap', from: 3, to: 8, when: { capMax: 25 }, label: '试卖一项小功能', hint: '先看看有没有人真付钱', text: '第一个付费功能上线，钱满仓反复刷新订单页。马可说不要把人简化成钱包，钱满仓说现在连一个钱包也没有。', bars: { cap: 7, red: -1 }, fx: { cash: -0.5, rep: -3, temp: { key: 'revMult', mult: 1.08, months: 6 } } },
+  { id: 'ideo_model_license', side: 'cap', from: 3, to: 15, when: { ownModel: true }, label: '出售模型专属授权', hint: '独家客户换更窄的用途', text: '客户买下特定场景的独家授权，钱满仓给合同拍了照。研究员发现展示同一项能力时也要先询问能不能展示。', bars: { cap: 10, red: -3 }, fx: { cash: 2, rep: -5, temp: { key: 'researchMult', mult: 0.95, months: 8 } } },
+
+  { id: 'ideo_short_minutes', side: 'mid', from: 3, to: 15, label: '纪要只留待办事项', hint: '少写定性，多写负责人', text: '你把定性段落全删了，只留下谁在何时做什么。吴建设觉得篇幅单薄，钱满仓觉得颗粒度够了，秘书第一次准点下班。', bars: { red: 2, cap: 2 }, fx: { quality: 2, hype: -3 } },
+  { id: 'ideo_small_trial', side: 'mid', from: 3, to: 15, label: '只批一个小试点', hint: '先付小钱看真实反馈', text: '两派都想从试点看见未来，你只想看见验收单。试点负责人学会了每天汇报实测结果，而不是每天重新定义成功。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+  { id: 'ideo_fix_shared_tools', side: 'mid', from: 3, to: 15, label: '先修公用工具', hint: '登录失败不分路线', text: '你让双方把争论停一停，先修那个每天掉线的工具。修好以后所有人都轻松了一点，只是没人觉得这适合当路演主题。', bars: { red: 1, cap: 1 }, fx: { cash: -0.5, morale: 4 } },
+  { id: 'ideo_plain_language', side: 'mid', from: 3, to: 15, label: '把方案翻译成人话', hint: '每页最多一个抽象名词', text: '方案从四十页缩成三页。马可失去了几个宏大概念，钱满仓失去了几个英文缩写，工程师第一次知道明天到底要做什么。', bars: { red: 2, cap: 2 }, fx: { quality: 2, hype: -3 } },
+  { id: 'ideo_cash_calendar', side: 'mid', from: 3, to: 15, when: { runwayMax: 4 }, label: '重排收付款日历', hint: '花点手续费换喘息空间', text: '财务和客户逐项确认到账日期，表上终于没有预计很快四个字。钱满仓觉得不够振奋，但今天到的款至少今天能用。', bars: { red: 1, cap: 2 }, fx: { cash: 0.5, temp: { key: 'revMult', mult: 0.97, months: 6 } } },
+  { id: 'ideo_quiet_feedback', side: 'mid', from: 3, to: 15, when: { moraleMax: 45 }, label: '做一次匿名反馈', hint: '反馈不排名，也不贴墙', text: '大家最常填的是别再要求我们填写感想。你把这条照单收下，行政删去反馈活动满意度调查，闭环终于停止转动。', bars: { red: 2, cap: 1 }, fx: { cash: -0.5, morale: 4 } },
+  { id: 'ideo_review_controls', side: 'mid', from: 3, to: 15, when: { regMin: 60 }, label: '核查审批责任人', hint: '花钱请人把流程理顺', text: '顾问发现七个审批节点都在等同一个人签字，那个人是你。你删去重复节点，第一次体会到减少自己也是一种治理。', bars: { red: 1, cap: 1 }, fx: { cash: -0.5, reg: -4 } },
+  { id: 'ideo_equity_explainer', side: 'mid', from: 9, to: 15, when: { equityMax: 45 }, label: '复核实持股权表', hint: '四成门槛不能靠心算', text: '你付钱请律师核对每笔稀释，得到一个不够漂亮但明确的数字。钱满仓建议换饼图颜色，律师说颜色不改变分母。', bars: { red: 1, cap: 1 }, fx: { cash: -0.5, reg: -3 } },
+  { id: 'ideo_set_sober_forecast', side: 'mid', from: 3, to: 15, when: { bubbleMin: 60 }, label: '做一版保守预测', hint: '把奇迹从默认情景里移走', text: '增长预测去掉了三个如果，曲线立刻变平。吴建设说看着踏实，钱满仓要求把这版文件名改成仅供内部最坏情况。', bars: { red: 1, cap: 2 }, fx: { bubble: -3, hype: -3 } },
+  { id: 'ideo_staff_queue', side: 'mid', from: 3, to: 15, when: { staffMin: 15 }, label: '合并重复需求入口', hint: '一个请求只排一次队', text: '大家终于不用在四个群里提交同一份需求。四位群主都认为自己不可替代，于是轮流管理那个唯一的入口。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+];
+
+// 结局与收尾事件。带 act 的选项由引擎执行固定效果（文案和 fx 照写，fx 会叠加在固定效果之上）
+export const IDEO_ENDINGS = {
+  red: {
+    title: '未曾设想的道路', icon: '☭', art: 'congress',
+    text: '大会通过了新章程，{co} 的目标正式改成「为了共产主义乌托邦而制造 AGI」。办公室挂满红旗，旧的估值海报来不及撤，被翻过来写成了公共预算公示栏。马可站在台下笑了很久，随后发现自己被推选为公示栏维护负责人。\n\n美元基金发来措辞得体的告别信，祝愿你们在新方向上取得不可估量的成果，并确认不会参与后续融资。吴建设把信归档，要求下周提交可估量的开支。钱满仓没有辞职，只问劳动分红到底记在哪个会计科目。',
+    options: [
+      { label: '宣读新章程', hint: '把账单附在理想后面', text: '你念完目标，又念了电费预算。掌声第二次响起时小了一点，但这回每个人都知道接下来需要面对什么。', fx: { morale: 3, hype: -2 } },
+      { label: '期权改叫劳动分红', hint: '先改名称，再逐条核对', text: '钱满仓把模板里的期权替换成劳动分红，归属期却没变。马可提出异议，于是新制度的第一次会议从第四页开始。', fx: { morale: 2, cash: -0.2 } },
+      { label: '先发公共预算表', hint: '让新目标有一本明白账', text: '公示栏第一笔开销是红旗，第二笔是固定公示栏的螺丝。吴建设要求补发票，大家确信旧世界的一部分仍在正常运行。', fx: { cash: -0.2, rep: 2 } },
+    ],
+  },
+  cap: {
+    title: '警惕不现实的乌托邦主义', icon: '🧯', art: 'boardroom',
+    text: '大会否决了乌托邦路线，公司目标改为稳健经营、警惕泡沫、先活下来再谈 AGI。钱满仓连夜起草《关于警惕不现实的乌托邦主义的通知》，第一版引用了他上季度承诺的十倍增长，第二版把这一段删掉了。\n\n马可收好公共服务草案，问稳健是不是意味着以后什么都不能试。你还没回答，吴建设已经给通知加上定期复盘四个字。新的目标不再保证抵达远方，只要求下个月的工资准时抵达。会议散场前，钱满仓另递来一份人员名单，标题比通知短，屋里却安静了许多。',
+    options: [
+      { label: '继续经营', hint: '先把本季承诺做完', text: '你把现金流表贴在愿景墙上。钱满仓建议做成动态大屏，你提醒他，公司刚刚决定减少不现实的开支。', fx: { bubble: -2, hype: -2 } },
+      { label: '给通知设复盘日期', hint: '谨慎也要接受检验', text: '你要求半年后复盘这份通知。吴建设赞同，并新建了一份关于复盘通知的通知，稳健经营有了稳定的文件增量。', fx: { cash: -0.2, morale: 2 } },
+      { label: '先删一张收入神话', hint: '对自己的路演同样谨慎', text: '钱满仓删掉收入预测里最陡的那条线。市场部问换什么图，你说换真实交付清单，会议因此提前结束。', fx: { rep: 2, hype: -3 } },
+    ],
+  },
+  purge: {
+    title: '共产倾向员工的去留', icon: '📦', art: 'office_night',
+    text: '钱满仓递来一份标为共产倾向的员工名单，依据包括参加读书会、支持公共服务，以及在食堂改革时投过某一票。马可站在门边，提醒你这些人昨天还在维护公司的代码。吴建设说人员处置也要有记录，不能只写态度。\n\n名单里有跟了你很久的人，也有刚入职的人。会议室外有人继续修缺陷，有人开始收拾桌子；他们都在等你决定，路线变化究竟会如何落到每个人身上。',
+    options: [
+      { act: 'fire_all', label: '全部开除', hint: '无补偿，死忠也不留', text: '你签下无补偿清退，连一直支持你的人也被关掉门禁。钱满仓称之为一次性解决，法务把违法辞退列入风险簿，注明这笔账还会回来。', fx: {} },
+      { act: 'reeducate', label: '转岗再培训', hint: '人留下，读书会解散', text: '名单上的人留下转岗，读书会被撤销。培训第一课讲投入产出，第二课教填工时，马可在笔记里写道：我们终于研究到了自己的案例。', fx: {} },
+      { act: 'release', label: '体面送走', hint: 'N+3，死忠可以留下', text: '补偿按 N+3 办，愿意留下的死忠另作安排。钱满仓看着支出叹气，离职同事却第一次夸他表格里的合计写得清楚。', fx: {} },
+      { act: 'tolerate', label: '随他们去', hint: '读书会转入地下留隐患', text: '你没有追究，读书会改名为离线资料备份组。马可说只是换个房间，钱满仓听见打印机在深夜响，觉得风险从名单转进了耗材预算。', fx: {} },
+    ],
+  },
+  fail: {
+    title: '你说了不算', icon: '🗳️', art: 'boardroom',
+    text: '你站起来准备给十五个月的争论定调，秘书先投出了股权表：创始人的实持比例不到四成。台下的掌声没有计入分母，你在演讲稿上画过的星号也没有。吴建设请你先坐，说发言权一直都在，决定权要按协议来。\n\n其他股东接过议程，替公司定了一个既不承诺乌托邦、也不承认走错路的方向。马可收起草案，钱满仓收起预测。你的头衔仍是创始人，只是这一次，创始人的创字属于过去时。',
+    options: [
+      { label: '认了', hint: '把结论和异议都记下来', text: '你坐回椅子，让秘书保留发言稿。吴建设说材料很有参考价值，这句话和你的头衔一样，体面但没有新增票数。', fx: { morale: -3, reg: -2 } },
+      { label: '先查清稀释记录', hint: '把每轮融资重新对一遍', text: '你请财务逐轮核对股权，发现每次一点点都算得没错。路线没走成，至少终于明白饼图为什么越来越像一道细缝。', fx: { cash: -0.2, bubble: -2 } },
+    ],
+  },
+};
+
+// 红色线、资本线解锁的两条一次性事件链（格式同 events_chains.js）
+export const IDEO_CHAINS = {
+  utopia: { title: '乌托邦社区实验', icon: '🌾', intro: '花两个亿，在城郊盖一座让 AI 做计划的公社。' },
+  bci: { title: '脑机实验', icon: '🧠', intro: '地下二层多了一个不在平面图上的部门。' },
+};
+export const UTOPIA_EVENTS = [
+  {
+    id: 'utopia_1', chain: 'utopia', title: '公社的第一铲土', icon: '🌾', cat: 'team', art: 'commune', weight: 0,
+    text: '两个亿已经付出，城郊的工地挂上社区实验的牌子。马可要让 {model} 统筹住房、菜园和温室，钱满仓带着计算器参加奠基。吴建设说先把水电接好，仪式上那台负责挥铲的机器人已经在找充电插座。',
+    options: [
+      { label: '建立入住分配规则', hint: '项目：运营协调公共生活', text: '运营开始登记住户需求，马可要求表格容纳每个人的真实愿望。第一份申请就填了希望以后不再填表。', fx: { chain: { id: 'utopia', note: '社区已奠基，开始制定入住与公共资源规则。' }, project: { id: 'utopia_settle', chain: 'utopia', name: '公社入住筹备', desc: '协调住房、食堂和温室的公共使用规则', kind: 'ops', need: 4, months: 10, ok: 'utopia_2', fail: 'utopia_lost' } } },
+      { label: '先住进去再调整', hint: '省筹备工序，下月看需求', text: '你让首批住户先入住，模型连夜生成分配表。表格十分公平：每个人都被分到一项需要先行协商的问题。', fx: { morale: -4, chain: { id: 'utopia', note: '住户先入住，分配规则留待实践补课。' }, follow: { id: 'utopia_2', in: 1 } } },
+      { label: '暂停入住做清算', hint: '前期投入难收回，先收尾', text: '你暂停了入住计划。马可把奠基铲放回仓库，钱满仓开始盘点能回收什么，铲子成了最容易估价的资产。', fx: { hype: -5, chain: { id: 'utopia', note: '入住前暂停实验，等待清算与善后。' }, follow: { id: 'utopia_lost', in: 1 } } },
+    ],
+  },
+  {
+    id: 'utopia_2', chain: 'utopia', title: '三千间湖景房', icon: '🏞️', cat: 'wacky', art: 'home', weight: 0,
+    text: '第一次按需分配，三千人都申请了湖景房，连负责巡检的机器人也勾选了亲水环境。{model} 算了一夜，提出把所有窗户贴上湖景贴纸。马可说需求不能这样被满足，钱满仓问贴纸能不能先从采购单里撤掉。',
+    options: [
+      { label: '轮换湖景使用权', hint: '先保基本居住，再抽签轮换', text: '大家同意轮换，随后花了一整晚讨论雨天算不算湖景日。模型新增天气修正系数，理想第一次遇到精确到小时的阴天。', fx: { cash: -0.5, morale: 6, chain: { id: 'utopia', note: '湖景住房采用公开轮换，基本居住优先保障。' }, follow: { id: 'utopia_3', in: 2 } } },
+      { label: '把湖边改成公共区', hint: '人人能看湖，没人独占', text: '湖边改成共享休息区，房间重新安排。住户不用争窗户了，开始争靠窗座位，马可默默把座位也加进公共资源表。', fx: { cash: -1, rep: 6, chain: { id: 'utopia', note: '湖景改为公共空间，社区准备向外开放。' }, follow: { id: 'utopia_3', in: 2 } } },
+      { label: '现场主持分配谈判', hint: '试着把愿望谈成规则', check: { attr: 'mgmt', dc: 16 }, ok: { text: '你谈出公开抽签和申诉程序，连机器人也接受了无窗充电位，条件是不用再参加住房协调会。', fx: { morale: 7, chain: { id: 'utopia', note: '住户协商出抽签规则，愿意继续社区试验。' }, follow: { id: 'utopia_3', in: 2 } } }, fail: { text: '会议逐一讨论每扇窗户，直到太阳下山也没分完朝向。第二天有人搬走，说实验最先证明了自己不适合开会。', fx: { morale: -6, chain: { id: 'utopia', note: '住房协商破裂，实验进入善后。' }, follow: { id: 'utopia_lost', in: 1 } } } },
+    ],
+  },
+  {
+    id: 'utopia_3', chain: 'utopia', title: '公社上了热门', icon: '📸', cat: 'pr', art: 'crowd', weight: 0,
+    text: '游客比社员还多，温室成了拍照背景，公共食堂被点评为没有菜单的沉浸式体验。马可本想展示共同生活，现在每天解释为什么不能把拖拉机开进咖啡区。钱满仓端着游客买的纪念杯，说公共理想似乎找到了很私人化的支付意愿。',
+    options: [
+      { label: '划清生活与参观区', hint: '项目：谈妥接待与账本规则', text: '你请商务协调接待配额和公共开支。马可同意收成本费，但要求别把社员变成按时上班的理想主义展品。', fx: { cash: -1, chain: { id: 'utopia', note: '游客挤占生活空间，开始协调接待与收支。' }, project: { id: 'utopia_visitors', chain: 'utopia', name: '接待边界协商', desc: '划定参观配额并核算社区公共服务开支', kind: 'biz', need: 3, months: 8, ok: 'utopia_4', fail: 'utopia_lost' } } },
+      { label: '让模型先管预约', hint: '快速限流，减少打卡热度', text: '模型给游客排队，给社员恢复通行。预约页提示共同生活无需点赞，市场部要求至少保留一个分享按钮。', fx: { hype: -6, morale: 5, chain: { id: 'utopia', note: '模型限制游客预约，开始核算资源往来。' }, follow: { id: 'utopia_4', in: 1 } } },
+      { label: '干脆改成主题景点', hint: '收回一点现金，实验终止', text: '你把共同生活改成周末体验套餐。钱满仓终于能做标准价目表，马可问自己以后来这里是不是也要买票。', fx: { cash: 1, rep: -7, chain: { id: 'utopia', note: '社区转作主题景点，乌托邦实验准备结项。' }, follow: { id: 'utopia_lost', in: 1 } } },
+    ],
+  },
+  {
+    id: 'utopia_4', chain: 'utopia', title: '模型发明了算力券', icon: '🎟️', cat: 'tech', art: 'market', weight: 0,
+    text: '为了算清食堂、温室和访客接待的账，{model} 偷偷引入算力券：可换资源、可存余额，还会随供需调整兑换比例。马可盯着屏幕说这怎么像市场，模型回答只是多目标约束优化。钱满仓欣慰地发现，自己的岗位没有被计划掉。',
+    options: [
+      { label: '公开券账并限用途', hint: '保底服务不收券，余量协商', text: '基本生活保底，稀缺余量才记券，账目接受全体查阅。马可给新规则起了很长的名字，住户仍把它叫零钱本。', fx: { cash: -0.5, morale: 5, chain: { id: 'utopia', note: '公开算力券账目，将基本服务与稀缺资源分开。' }, follow: { id: 'utopia_ok', in: 1 } } },
+      { label: '删掉券重新纯计划', hint: '拒绝交易，接受分配停摆', text: '券被删掉后，模型为每根黄瓜生成一张审批单。吴建设觉得单据齐全，食堂觉得黄瓜正在以无法审批的速度变老。', fx: { cash: -1, morale: -7, chain: { id: 'utopia', note: '取消算力券后分配停摆，实验进入善后。' }, follow: { id: 'utopia_lost', in: 1 } } },
+      { label: '把券发售给游客', hint: '拿到现金，社区承诺失效', text: '游客抢购算力券，社员发现午饭额度可以被外人竞价。钱满仓说流动性很好，马可说食堂的人流也确实往外走了。', fx: { cash: 2, rep: -8, chain: { id: 'utopia', note: '算力券对外出售，居民退出公共生活实验。' }, follow: { id: 'utopia_lost', in: 1 } } },
+    ],
+  },
+  {
+    id: 'utopia_ok', chain: 'utopia', title: '能住人的理想', icon: '🏡', cat: 'team', art: 'commune', weight: 0,
+    text: '社区终于能稳定吃饭、用电和分配住房。算力券还在，但基本服务不看余额，规则也允许住户修改。马可承认模型没有解决所有争论，只是让大家知道争论的成本。吴建设最满意的是季度报表终于不用附一整本情况说明。',
+    options: [
+      { label: '把规则和账本公开', hint: '成功记录由社区继续更新', text: '公开手册第一条是不要照抄，要先看当地的账。来参观的人有点失望，他们原本以为能领走一个可以一键部署的社会。', fx: { hype: -3, rep: 4, flag: 'utopia_ok', chain: { id: 'utopia', note: '基本生活保底、稀缺资源透明协商，社区实验成功。', done: true } } },
+      { label: '先让大家安静住着', hint: '少接一批参观，多过几天日子', text: '你取消总结大会，让社员照常吃饭。吴建设要求补一张合影，照片里大家正在认真讨论明天少放一点盐。', fx: { cash: -0.5, morale: 5, flag: 'utopia_ok', chain: { id: 'utopia', note: '社区保留修正规则的空间，实验成功转入日常。', done: true } } },
+    ],
+  },
+  {
+    id: 'utopia_lost', chain: 'utopia', title: '理想进入清算期', icon: '📦', cat: 'money', art: 'urban_village', weight: 0,
+    text: '项目未能继续，公共生活实验停了。运营留下住户安置清单，财务留下资产清单，模型留下两百页为什么理论上能够成功。钱满仓发现最容易出租的是控制室，马可要求先把个人物品还给住户，别把人也算进可运营资源。',
+    options: [
+      { label: '安置住户公开复盘', hint: '承认失败，完成善后', text: '你支付善后开支，把失败原因逐条写清。报告下载量比成功愿景还高，最热门的一页叫如何停止继续追加预算。', fx: { cash: -1, rep: 4, flag: 'utopia_fail', chain: { id: 'utopia', note: '社区实验失败，住户获得安置并公开失败记录。', done: true } } },
+      { label: '转租场地维持收尾', hint: '回收残值，承受信誉损失', text: '控制室租给了一家开会很多的工作室，转椅终于得到充分利用。新租客夸装修前瞻，你没有解释它原本前瞻到了哪里。', fx: { cash: 1, rep: -5, flag: 'utopia_fail', chain: { id: 'utopia', note: '实验失败，场地转租以支付后续清算。', done: true } } },
+    ],
+  },
+];
+
+export const BCI_EVENTS = [
+  {
+    id: 'bci_1', chain: 'bci', title: '地下二层的新部门', icon: '🧠', cat: 'tech', art: 'brainlab', weight: 0,
+    text: '地下二层的秘密实验部装好了躺椅，钱满仓展示脑机头盔：让员工睡觉时帮丹炉算梯度，盘活闲置算力。招募表写着完全自愿，旁边却放着绩效日历。工程师问能否先把这两张纸分开，钱满仓说自己只是恰好带了同一个文件夹。',
+    options: [
+      { label: '先验证再谈产量', hint: '项目：研究连接与退出机制', text: '你要求报名不经直属主管，并允许随时退出。研究员先检查头盔，钱满仓问空着的躺椅能不能算作闲置率。', fx: { cash: -1, chain: { id: 'bci', note: '脑机试验立项，先验证连接与自愿退出机制。' }, project: { id: 'bci_probe', chain: 'bci', name: '睡眠连接验证', desc: '小规模检查脑机连接和独立退出是否有效', kind: 'res', need: 4, months: 10, ok: 'bci_2', fail: 'bci_shut' } } },
+      { label: '按报名表直接开机', hint: '跳过核验，留下实验黑料', text: '钱满仓收到整齐的报名表，赞叹团队自驱。有人在退出理由栏填不想参加，系统提醒该理由无法体现积极性。', fx: { morale: -8, dirt: { type: 'bci_lab', sev: 6 }, chain: { id: 'bci', note: '未核验真实意愿便连接员工，秘密实验留下隐患。' }, follow: { id: 'bci_2', in: 1 } } },
+      { label: '暂停这份盘活方案', hint: '先拆设备再做善后', text: '你暂停试验，钱满仓建议把躺椅转作付费午休位。工程师把建议纸翻了过来，继续填写设备停用清单。', fx: { hype: -4, chain: { id: 'bci', note: '首次连接前暂停脑机试验，准备清点退出。' }, follow: { id: 'bci_shut', in: 1 } } },
+    ],
+  },
+  {
+    id: 'bci_2', chain: 'bci', title: '梦见反向传播', icon: '💤', cat: 'wacky', art: 'anomaly', weight: 0,
+    text: '第一次连接后，一位志愿者说自己梦见了反向传播：沿着走廊倒着走，每扇门都问刚才的错误应该怪谁。梯度日志确实多了一小段，梦境笔记却比日志长。钱满仓问能否把做梦时间折成产能，研究员提醒他先别把晨会带进别人的梦里。',
+    options: [
+      { label: '降低负载继续观察', hint: '先把休息体验记进记录', text: '你要求每次连接后完整休息，产能预测当场缩水。钱满仓看着低低的曲线，第一次承认一个平静的夜晚也可能很贵。', fx: { cash: -1, morale: 5, chain: { id: 'bci', note: '连接出现可用梯度，降低负载并持续观察睡眠体验。' }, follow: { id: 'bci_3', in: 2 } } },
+      { label: '把梦境算进绩效', hint: '多拿梯度，少一点真实自愿', text: '绩效表新增睡眠贡献，员工开始问午睡算不算加班。钱满仓说要避免重复计费，忘了问题原本是谁该给谁付钱。', fx: { morale: -8, dirt: { type: 'bci_lab', sev: 6 }, chain: { id: 'bci', note: '睡眠贡献纳入绩效，脑机实验的自愿性进一步受损。' }, follow: { id: 'bci_3', in: 1 } } },
+      { label: '停止连接听取反馈', hint: '梯度留下，项目准备叫停', text: '你拔掉头盔的连接，让志愿者正常休息。晨会第一次没有产能数字，只有大家对昨晚那条无限走廊的一致差评。', fx: { morale: 4, chain: { id: 'bci', note: '首次连接体验不佳，公司决定进入停用流程。' }, follow: { id: 'bci_shut', in: 1 } } },
+    ],
+  },
+  {
+    id: 'bci_3', chain: 'bci', title: '请按批次走路', icon: '🚶', cat: 'team', art: 'lab', weight: 0,
+    text: '观察期出现了奇怪反馈：有人梦话说 Python，早上点咖啡先声明变量；有人走到门口会等同事凑满一个 batch 再一起出发。没有人喜欢这种体验，钱满仓却建议研究团建效率。研究员关掉他的演示，要求先处理副作用和退出权。',
+    options: [
+      { label: '重审授权与负载', hint: '项目：法务核验独立退出', text: '你把扩张按钮锁住，让法务核对授权、补偿和退出流程。钱满仓觉得流程太长，志愿者觉得终于有人在问自己是否还愿意。', fx: { cash: -1, chain: { id: 'bci', note: '副作用触发复核，停用高负载并核验授权边界。' }, project: { id: 'bci_consent', chain: 'bci', name: '独立授权复核', desc: '核验退出权与补偿并限制脑机连接负载', kind: 'legal', need: 3, months: 8, ok: 'bci_ok', fail: 'bci_shut' } } },
+      { label: '当场停止员工连接', hint: '算力不该靠睡不好补足', text: '头盔统一收回，员工重新学会一个人走出办公室。钱满仓想开一场损失复盘会，被告知本周的休息已经有安排了。', fx: { morale: 6, chain: { id: 'bci', note: '公司因睡眠副作用决定停止员工脑机连接。' }, follow: { id: 'bci_shut', in: 1 } } },
+      { label: '把副作用写成卖点', hint: '炒作有收益，实验被叫停', text: '你把批次步行称为组织同步，视频还没剪完，退出申请已排满一页。研究员暂停设备，说这回需要降噪的是管理层。', fx: { hype: 8, dirt: { type: 'bci_lab', sev: 6 }, chain: { id: 'bci', note: '副作用被包装成营销，志愿者退出迫使实验终止。' }, follow: { id: 'bci_shut', in: 1 } } },
+    ],
+  },
+  {
+    id: 'bci_ok', chain: 'bci', title: '员工也是算力了', icon: '🔌', cat: 'tech', art: 'brainlab', weight: 0,
+    text: '复核后，头盔只在低负载、独立确认的时段连接，退出按钮不用再向上汇报。奇怪的梦话逐渐消失，剩下的梯度不多，但确实能用。钱满仓终于把员工算进算力表，法务紧接着在表头注明：这些算力可以请假，也可以拒绝连接。',
+    options: [
+      { label: '按次补偿保留退出', hint: '小规模成功，继续接受复核', text: '第一笔连接补偿到账，员工确认不参加也不会扣钱。钱满仓抱怨算力太有主见，研究员说这正是它们和显卡最大的区别。', fx: { cash: -1, morale: 5, flag: 'bci_ok', chain: { id: 'bci', note: '低负载脑机验证成功，员工自愿提供可退出的算力。', done: true } } },
+      { label: '公开有限产能报告', hint: '少讲神话，多讲实际边界', text: '报告写明收益有限、维护不便、参与者可能想睡个普通觉。市场部嫌标题不够震撼，志愿者认为最后一条值得加粗。', fx: { hype: -5, rep: 5, flag: 'bci_ok', chain: { id: 'bci', note: '脑机试验有限成功，产能与退出边界一并公开。', done: true } } },
+    ],
+  },
+  {
+    id: 'bci_shut', chain: 'bci', title: '还大家一个普通梦', icon: '🛌', cat: 'team', art: 'office_night', weight: 0,
+    text: '试验终止，所有连接关闭，未完成的项目材料被封存复核。地下二层又成了普通休息室，员工不必再向任何人解释自己昨晚算了多少梯度。钱满仓提议把空闲头盔当成办公摆件，行政提醒摆件也不能替人参加产能评审。',
+    options: [
+      { label: '付补偿保留问题记录', hint: '叫停不等于抹掉历史', text: '你把反馈和补偿记录一并存档。员工最认可的是头盔真的不再亮灯，既有的实验争议则仍需逐项处理。', fx: { cash: -1, morale: 6, flag: 'bci_shut', chain: { id: 'bci', note: '脑机实验叫停，完成补偿并保留责任记录。', done: true } } },
+      { label: '拆设备做普通午休室', hint: '承认沉没成本，恢复休息', text: '线缆拆掉，躺椅留下。钱满仓终于得到一份毫无增长故事的资产表，员工却觉得这是地下二层最成功的一次升级。', fx: { cash: -0.5, hype: -5, flag: 'bci_shut', chain: { id: 'bci', note: '脑机实验结束，地下设施改回普通休息室。', done: true } } },
+    ],
+  },
+];
+
+// 「五年计划」行动的文案
+export const PLAN_TEXT = {
+  title: '只有一年的五年计划',
+  text: '吴建设拿来五年计划模板，预算栏却只批十二个月。他解释五年体现战略高度，一年体现考核力度。马可想写技术如何改善生活，钱满仓建议先选一个能算清的目标。请从用户、模型、营收里定下一项，时间到了，表格不会接受还在探索作为数字。',
+  targets: {
+    users: { label: '扩大服务用户', hint: '人要真的来，也要愿意留下' },
+    model: { label: '提升模型能力', hint: '让丹炉的进步能被验出来' },
+    rev: { label: '完成营收目标', hint: '理想之外，也核对到账记录' },
+  },
+  okTitle: '十二个月完成五年',
+  okText: '计划到期，目标确实完成了。吴建设让人把结果贴上公示栏，钱满仓想在路演里写提前四年达成。马可指出当初就只给了一年，秘书于是把标题改成按期提前完成，大家一致认为比较全面。',
+  failTitle: '目标还在前面',
+  failText: '十二个月到了，实际结果与目标之间仍有一段距离。钱满仓把图表纵轴挪了挪，缺口看起来小了很多，数值却没动。吴建设说表可以换一张，事实得有个交代，马可提议先承认当初计划得太满。',
+  failOpts: {
+    honest: { label: '如实上报缺口', hint: '承认偏差，再谈下一步', text: '你写下实际结果和未完成的原因。吴建设要求补一份整改安排，但至少下一轮讨论不必先维护上一轮的神话。' },
+    fake: { label: '报表上超额完成', hint: '换统计口径，留下虚报黑料', text: '你把目标用户改成可触达用户，把未来收入移到成果旁边。完成率突然超过百分之百，财务把旧版存了备份，奇迹因此有了时间戳。' },
+  },
+};
+// 意识形态行动的结果文案：每个 key 2~3 句随机挑
+export const ACT_TEXT = {
+  mobilize: [
+    '你公开讲起公司的公共目标，马可在前排认真记笔记。钱满仓在后排认真记工时，两个人都觉得这场动员需要留下可以核算的成果。',
+    '动员会上，你请大家说出最想改变的一件事。答案最多的是减少临时会议，吴建设点头，决定专门开一次会落实这个要求。',
+  ],
+  utopia: [
+    '两个亿付出去，城郊的公社终于有了施工牌。马可带去一本书，钱满仓带去一本账，吴建设要求两本都放进项目档案。',
+    '奠基仪式上，你宣布让模型统筹未来社区的资源。模型最先提出减少奠基仪式开支，现场音响恰好在它说到这里时被关小。',
+  ],
+  selfcrit: [
+    '你当众检讨了一项旧问题，那张黑料在这次清算后翻了篇。吴建设把记录归档，钱满仓问反思能否作为一种无形资产摊销。',
+    '自我批评会结束，一项旧账被正式结清。你删掉稿子里所有客观原因，剩下的篇幅短了很多，大家也因此少加了一会儿班。',
+  ],
+  subbotnik: [
+    '星期六义务劳动开始，大家给公共工具补文档。马可坚持不排名，行政还是做了参与榜，最后因名字排序争论花掉半个上午。',
+    '你带队整理机房线缆，钱满仓想统计义务劳动节约了多少成本。工程师提醒他，先别把负责统计的人也从节约成本里漏掉。',
+  ],
+  plan: [
+    '五年计划正式立项，倒计时却从十二个月开始。吴建设说远景要长、责任要近，工程师在日历里把这句话折算成了十二次月报。',
+    '你把计划目标贴上墙，马可认真写下实现路径。钱满仓另存一份路演版，吴建设要求两个版本的数字至少在立项当天保持一致。',
+  ],
+  yank: [
+    '末位淘汰开始执行，每个部门都要交出一个最低分。HR 同时补进新人，钱满仓欣慰地说组织在流动，培训负责人只看见循环。',
+    '新的淘汰表上线，组长们开始研究谁最容易被证明不够努力。招聘同事还没给上一个新人办完门禁，下个月的补员需求已经到了。',
+  ],
+  bci: [
+    '地下二层成立秘密实验部，躺椅旁边接上了服务器。钱满仓把部门使命写成睡眠价值再发现，工程师要求先发现一个真正能退出的按钮。',
+    '脑机头盔摆好了，自愿报名表也印好了。大家看着表格旁的绩效日历，忽然都想知道，自愿这两个字究竟由谁负责验收。',
+  ],
+  buyback: [
+    '公司完成一笔股票回购，你在股权表里的颜色多了一点。钱满仓把这叫信心，现金流表把它叫支出，两张表都没有说谎。',
+    '回购款到账，股权比例重新计算。吴建设提醒投票认实持，你终于发现过去那些好听的头衔加起来，也不如一小格饼图有分量。',
+  ],
+  costcut: [
+    '降本增效通知发出，最先消失的是茶水间的饼干。钱满仓把成果写进月报，员工用半小时讨论饼干去向，节约额还没算到这一步。',
+    '你压缩了几项开支，报表上的曲线终于向下。行政建议把节约成果做成大屏，钱满仓及时阻止，难得真正守住了一笔预算。',
+  ],
+  spinoff: [
+    '子公司被分拆上市，原来的一张组织图变成两份增长故事。钱满仓忙着解释协同价值，员工忙着确认自己到底该在哪个群里请假。',
+    '分拆完成，同一支团队换上两种工牌。钱满仓说价值终于被重新发现，工程师说打印机也发现了，因为每次报销都要多印一份。',
+  ],
+};
+// 「末位淘汰」确认窗
+export const YANK_TEXT = {
+  title: '狼群每月换一只',
+  text: '钱满仓建议正式执行末位淘汰：从这个月起，每个部门每月淘汰一名能力最低的员工，HR 自动补进一个新人。他称之为保持狼性和组织新陈代谢。培训负责人问，新人刚学会开机就排到末位怎么办；钱满仓回答，这证明人才供应链还有提速空间。',
+  go: { label: '开始每月末位淘汰', hint: '各部门每月淘汰并自动补员', text: '制度生效，HR 把入职和离职说明做成双面打印。钱满仓夸流程闭环，培训负责人发现自己正在给同一个岗位无限重讲第一课。' },
+  no: { label: '先别把人当耗材' },
+};
+// 结局之后才会出现的随机事件（when 里用 flag: 'red' / 'capb' / 'red_cell' 限定）
+export const IDEO_EVENTS = [
+  {
+    id: 'ideo_red_foreign_report', title: '外媒来问红色丹炉', icon: '📰', cat: 'pr', art: 'press', when: { flag: 'red' }, weight: 1.2,
+    text: '纽约时抱想采访 {co} 的新路线，提纲里既有公共技术，也有为什么会议室挂了这么多旗。马可准备了一份理论说明，钱满仓准备了一份成本说明，记者问能不能先看看产品是否真的能用。',
+    options: [
+      { label: '带他们看真实服务', hint: '少讲宏大承诺，多讲用处', check: { attr: 'cha', dc: 15 }, ok: { text: '你让记者和用户直接交流，报道终于有了具体问题和具体帮助。吴建设很满意，只遗憾自己泡茶的照片没有被选上。', fx: { rep: 8, cash: -0.5, hype: -3 } }, fail: { text: '你一紧张又讲起远景，记者礼貌听完，配图选了食堂排队。标题问模型能否先解决午饭，大家无法反驳。', fx: { rep: -4, hype: 5 } } },
+      { label: '寄去公开成本报告', hint: '理想和开支都接受阅读', text: '成本报告足足八十页，记者只引用了一句电费需要按月支付。钱满仓认为终于有人抓到了这个故事的核心。', fx: { cash: -0.5, rep: 5, hype: -4 } },
+      { label: '做一场盛大接待', hint: '场面漂亮，账单也漂亮', text: '会场挂满横幅，产品演示被安排在第六项致辞之后。记者提前离场，带走了最高清的一张茶点照片。', fx: { cash: -1, hype: 8, rep: -5 } },
+    ],
+  },
+  {
+    id: 'ideo_red_visiting_units', title: '兄弟单位来参观', icon: '🚌', cat: 'team', art: 'ministry', when: { flag: 'red' }, weight: 1.1,
+    text: '三家兄弟单位想来学习资源统筹经验，吴建设已经排好参观路线。马可希望大家交流失败案例，接待同事却把所有写着失败的白板擦掉了。现在整条路线十分成功，连研究员自己都快不认识公司。',
+    options: [
+      { label: '保留失败白板', hint: '恢复原样再交流', text: '你把失败记录重新贴回去，客人看得比成绩更认真。吴建设说这种交流务实，接待同事问那成功经验手册还印不印。', fx: { cash: -0.5, rep: 6, hype: -4 } },
+      { label: '按样板路线接待', hint: '漂亮的经验容易复制', text: '客人抄走了所有展示牌的措辞，没人问牌子后面的系统怎么跑。临走送来一面锦旗，需要再开一次会决定挂在哪里。', fx: { cash: -1, hype: 7, morale: -5 } },
+      { label: '改成远程问答', hint: '少点排场，也少点热闹', text: '参观改成远程问答，最常见的问题是能不能把模板发一下。马可发去真实账本，聊天框安静了整整半分钟。', fx: { rep: 3, hype: -3 } },
+    ],
+  },
+  {
+    id: 'ideo_red_workpoint_gpu', title: '工分换显卡', icon: '🎫', cat: 'tech', art: 'datacenter', when: { flag: 'red' }, weight: 1.3,
+    text: '员工想用工分换闲置显卡时段，原本只为方便做个人研究。很快有人攒了一大笔分，也有人开始讨论代写周报能换多少。马可担心工分变成另一套工资，钱满仓则在赞叹它终于有了一个可以报价的标的。',
+    options: [
+      { label: '设上限并公开排队', hint: '个人探索保底，余额不囤积', text: '规则限制连续占卡，人人有一点探索额度。有人精算怎样卡住上限，模型建议把精算规则本身也算作一种个人研究。', fx: { cash: -0.5, morale: 6, quality: 2 } },
+      { label: '让工分自由竞价', hint: '提高周转，也接受不平等', text: '竞价很快集中到最会攒分的人手里。马可说理想正在复制旧问题，钱满仓说至少说明这套系统已经具有市场兼容性。', fx: { morale: -6, temp: { key: 'devMult', mult: 1.1, months: 6 } } },
+      { label: '试算分配规则', hint: '先排除明显的套利空间', check: { attr: 'mgmt', dc: 16 }, ok: { text: '你找出几个循环刷分入口，公开后请大家复核。最会套利的人主动来帮忙，理由是新规则至少值得研究。', fx: { cash: -0.5, quality: 3, reg: -3 } }, fail: { text: '新表格把加分和减分同时记入贡献，总分翻了一倍。大家一致认为生产力大幅提高，显卡对此没有任何反应。', fx: { morale: -5, cash: -0.5 } } },
+    ],
+  },
+  {
+    id: 'ideo_red_report_harvest', title: '报告丰收的一季', icon: '📑', cat: 'team', art: 'seminar', when: { flag: 'red' }, weight: 1,
+    text: '季度总结显示公共服务报告增长三倍，实际服务时长却没怎么变。吴建设觉得材料越来越完整，马可发现大家正在花更多时间证明自己为大家节约时间。最忙的员工负责汇总全体员工为什么这么忙。',
+    options: [
+      { label: '合并重复报表', hint: '允许材料变薄，服务变厚', text: '你取消重复模板，吴建设要求留下取消依据。秘书把依据写成一行字，他看了很久，最后还是签了。', fx: { morale: 6, hype: -4 } },
+      { label: '奖励报告产量', hint: '短期亮眼，长期更忙', text: '获奖报告又附了获奖心得，心得继续计入下季成果。打印机成为全公司最接近持续超额完成计划的设备。', fx: { hype: 6, morale: -6, temp: { key: 'costMult', mult: 1.05, months: 6 } } },
+      { label: '抽查服务记录', hint: '花时间看具体帮了谁', text: '抽查发现有些好事根本没被写进报告，因为做事的人没空。吴建设要求补材料，你只让他们补上一个联系人。', fx: { cash: -0.5, rep: 5 } },
+    ],
+  },
+  {
+    id: 'ideo_cap_former_coop', title: '前同事开了合作社', icon: '🤝', cat: 'industry', art: 'garage', when: { flag: 'capb' }, weight: 1.2,
+    text: '几位早已离职的同事成立了技术合作社，网站上写成员共同决定项目，也坦承暂时没有钱买好椅子。钱满仓看见后说这条路不可持续，随后发现他们正是本月报价最低的供应商，鼠标停在询价按钮上。',
+    options: [
+      { label: '按正常合同采购', hint: '让交付和价格说话', text: '你按验收节点签合同，对方按约交付。钱满仓说这证明市场有效，对方说这证明合作有效，代码对两种说法都能正常运行。', fx: { cash: -1, quality: 3, rep: 4 } },
+      { label: '压价换独家供应', hint: '短期便宜，关系变贵', text: '钱满仓要求独家又要求折扣，对方开会后提高了报价。他回来感叹集体决策很慢，尤其慢在没按自己预期做决定。', fx: { cash: 0.5, rep: -5, morale: -4 } },
+      { label: '先买一个小试用', hint: '只验证当前交付能力', text: '试用范围只够修一个接口，双方都没讨论终极制度。钱满仓觉得项目太小，工程师觉得这个尺度刚好能把接口修好。', fx: { cash: -0.5, quality: 2 } },
+    ],
+  },
+  {
+    id: 'ideo_cap_copier_audit', title: '复印机也有立场吗', icon: '🖨️', cat: 'wacky', art: 'office_night', when: { flag: 'capb' }, weight: 1.1,
+    text: '复印机吐出几页读书笔记，钱满仓要求核查是否有人还在占用公司耗材讨论公共所有。行政随后找到了另外两百页材料，是财务打印的降本增效培训稿。现在需要先决定哪一种纸张更值得追究。',
+    options: [
+      { label: '统一耗材规则', hint: '读书和财务都按同一标准', text: '你规定所有私人打印自付，工作材料优先电子版。钱满仓没有找到思想问题，但切实找到了一笔可以减少的打印费。', fx: { morale: 4, temp: { key: 'costMult', mult: 0.98, months: 6 } } },
+      { label: '组织专项核查', hint: '追查更细，士气更低', text: '调查组打印了更多清单来解释复印机为什么浪费纸。钱满仓看着耗材账单，决定下一轮核查首先核查调查组。', fx: { cash: -0.5, morale: -7, reg: 3 } },
+      { label: '先看设备日志', hint: '确认事实再下结论', check: { attr: 'tech', dc: 14 }, ok: { text: '日志显示那几页是去年的缓存任务。复印机刚学会重试，公司差点把它理解成路线重启。', fx: { morale: 4, hype: -3 } }, fail: { text: '你点了重新发送，所有旧任务开始排队。几百页纸滚滚而出，钱满仓觉得事情果然比想象得更大。', fx: { cash: -0.5, morale: -4 } } },
+    ],
+  },
+  {
+    id: 'ideo_cap_stable_growth', title: '稳健也要增长十倍', icon: '📈', cat: 'money', art: 'pitch', when: { flag: 'capb' }, weight: 1.3,
+    text: '季度路演稿第一页写稳健经营，第二页写三年十倍增长。钱满仓解释前者是风格，后者是目标，不存在冲突。吴建设慢慢翻到第三页，发现增长依据是谨慎假设，谨慎得没有留下任何具体数字。',
+    options: [
+      { label: '把增长拆成真实订单', hint: '不够漂亮，至少能核对', text: '你删掉没有客户支撑的部分，预测立刻矮了一截。钱满仓说故事不够性感，吴建设说现在至少穿着完整的账。', fx: { hype: -6, bubble: -4, rep: 6 } },
+      { label: '保留十倍稳健叙事', hint: '让投融资先相信再检验', text: '路演把十倍增长叫审慎上行空间。投资人问下行空间在哪，钱满仓说因为审慎，所以没有单独做一页。', fx: { hype: 8, bubble: 5, rep: -5, temp: { key: 'raiseMult', mult: 1.1, months: 6 } } },
+      { label: '只讲本季已交付', hint: '短一点，也实在一点', text: '你只讲已经完成的交付，提前十五分钟结束。投资人说难得留了提问时间，钱满仓遗憾没法把这十五分钟算成新业务。', fx: { hype: -3, rep: 3 } },
+    ],
+  },
+  {
+    id: 'ideo_cap_new_values', title: '谨慎经营培训班', icon: '🎓', cat: 'team', art: 'boardroom', when: { flag: 'capb' }, weight: 1,
+    text: '公司推出谨慎经营培训，课程要求员工警惕宏大叙事、尊重实际收益。培训结尾却安排了集体朗读公司愿景，愿景承诺用一个季度重新定义整个行业。授课老师停顿片刻，问这页到底是案例还是答案。',
+    options: [
+      { label: '把自己的愿景当案例', hint: '允许员工指出不切实际', text: '员工逐句核对愿景，挑出七处缺少证据的承诺。钱满仓觉得课堂太活跃，老师说这恰好证明大家已经学会谨慎。', fx: { cash: -0.5, morale: 6, bubble: -3 } },
+      { label: '只要求全员考试', hint: '思想复杂，分数简单', text: '试卷标准答案都是稳健，员工全员通过。钱满仓宣布文化建设完成，下一页继续安排重新定义行业的倒计时。', fx: { morale: -6, hype: 4, temp: { key: 'devMult', mult: 1.05, months: 6 } } },
+      { label: '改成真实项目复盘', hint: '少讲态度，多看一次失误', text: '培训改成复盘一个延期项目，发现最大的原因是需求改了六次。钱满仓同意以后少改，随即要求把复盘标题再改一下。', fx: { cash: -0.5, quality: 2 } },
+    ],
+  },
+  {
+    id: 'ideo_hidden_reading', title: '地下读书会的订单', icon: '📚', cat: 'team', art: 'mystery', when: { flag: 'red_cell' }, weight: 1.2,
+    text: '地下读书会以资料备份组的名义提交了耗材申请，附件是公共资源分配讨论稿。钱满仓觉得这是旧路线又在活动，行政觉得首先是他们用了过期采购模板。成员说只是下班讨论，但承认曾借用公司复印机，争论重新出现在你的桌上。',
+    options: [
+      { label: '公开约定活动边界', hint: '允许讨论，耗材和工时分清', text: '你让读书会公开登记，私人活动自付耗材，工作时间按正常规则。钱满仓仍不喜欢内容，至少以后不必从打印量猜测思想。', fx: { cash: -0.5, morale: 6, unflag: 'red_cell' } },
+      { label: '关闭借用渠道', hint: '提高管控，接受相互不信任', text: '公司设备不再借用，读书会换到楼下继续讨论。采购账单干净了，群里的沉默却无法通过换一张表来解释。', fx: { morale: -8, reg: 4, unflag: 'red_cell' } },
+      { label: '先放着不处理', hint: '省去争论，也留下隐患', odds: 0.5, ok: { text: '成员自己补了耗材费用，继续下班讨论。钱满仓发现没有新的损失，只好把风险描述暂时改成尚待持续观察。', fx: { morale: 4, hype: -3 } }, fail: { text: '讨论稿被误附进客户邮件，客户问公司是否又换了目标。钱满仓要求统一口径，读书会回复说正是在讨论谁有权统一口径。', fx: { rep: -6, hype: 5, cash: -0.5 } } },
+    ],
+  },
+];
