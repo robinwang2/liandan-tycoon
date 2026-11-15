@@ -9,11 +9,10 @@ import { EVENT_ART, CAT_ART } from '../data/event_art.js';
 import { EVENTS_CORE } from '../data/events_core.js';
 import { EVENTS_PACK } from '../data/events_pack.js';
 import { NEWS } from '../data/news.js';
-import { IDEO_EVENTS, UTOPIA_EVENTS, BCI_EVENTS } from '../data/ideology.js';
-import { IDEO_DYN, ideoMonth } from './ideology.js';
+import { IDEO_DYN, IDEO_STATIC, ideoMonth, heatDrag } from './ideology.js';
 
-// 路线之争：结局后的随机事件进随机池（靠 flag 限定）；链事件和动态事件 weight 0，只能被排进来
-const ALL = [...EVENTS_CORE, ...EVENTS_CHAINS, ...EVENTS_PACK, ...IDEO_EVENTS, ...UTOPIA_EVENTS, ...BCI_EVENTS, ...IDEO_DYN];
+// 路线之争（深圳版 + 湾区版）：结局后的随机事件进随机池（靠 flag 限定）；链事件、红色恐慌和动态事件 weight 0，只能被排进来
+const ALL = [...EVENTS_CORE, ...EVENTS_CHAINS, ...EVENTS_PACK, ...IDEO_STATIC, ...IDEO_DYN];
 export const EV = Object.fromEntries(ALL.map(e => [e.id, e]));
 
 // ───────── 工具 ─────────
@@ -47,6 +46,7 @@ export function mod(S, key) {
   for (const f in IDEO_FLAG_MODS) if (S.flags[f]) add(IDEO_FLAG_MODS[f]);
   for (const tm of S.temp) if (tm.key === key) v = mult ? v * (tm.mult ?? 1) : v + (tm.add ?? 0);
   if (key === 'devMult' && S.co.route === 'app') v *= 1.15;
+  if (key === 'raiseMult' || key === 'b2bMult') v *= heatDrag(S, key);   // 湾区：反共压力拖累融资估值和企业订单
   return v;
 }
 
@@ -99,6 +99,8 @@ export function exposeP(S, d) {
   const L = power(S, 'legal'), big = S.staff.filter(e => e.quirk === 'dazui').length;
   return 0.011 * (d.sev / 10) * (1 + S.hype / 120) * (1 + Math.min(1.5, S.users / 3000)) * mod(S, 'exposeMult') * (1 + 0.25 * big) / (1 + L / 12);
 }
+// 这个月底至少爆出一张黑料的概率（行动提示和界面的危机等级共用）；f 只看某一类黑料，比如涉嫌违法的
+export const leakRisk = (S, f) => 1 - S.dirt.filter(d => d.t <= S.t - 1 && (!f || f(d))).reduce((k, d) => k * (1 - exposeP(S, d)), 1);
 // 整个赛道当下的用户盘子：AI 普及率逐年上升；一家公司最多吃下六成
 export const market = S => TRACKS[S.co.track].cap * Math.min(1, 0.02 * 1.057 ** S.t);
 // 你最多能吃下多大份额：看产品体验、模型竞争力和热度
@@ -232,6 +234,7 @@ const FX = {
   end: (S, v) => { endGame(S, v); },
   // 路线之争的两条进度条；记下哪条先满（两条都满时看谁先到）
   ideo: (S, v) => { const I = S.ideo; if (!I) return; for (const k of ['red', 'cap']) if (v[k]) { I[k] = clamp(I[k] + v[k], 0, 100); if (I[k] >= 100 && !I.full) I.full = k; } },
+  heat: (S, v) => { if (S.ideo) S.ideo.heat = clamp((S.ideo.heat || 0) + v, 0, 100); },   // 湾区的反共压力
 };
 export const FX_KEYS = Object.keys(FX);
 export function applyFx(S, fx, ctx = {}) { if (fx) for (const k in fx) FX[k]?.(S, fx[k], ctx); }
@@ -240,7 +243,7 @@ export function applyFx(S, fx, ctx = {}) { if (fx) for (const k in fx) FX[k]?.(S
 const READ = {
   t: S => S.t, stage: S => S.stage, users: S => S.users + S.fake, hype: S => S.hype, rep: S => S.rep, morale: S => S.morale, reg: S => S.reg, bubble: S => S.bubble,
   dirt: S => dirtTotal(S), staff: S => S.staff.length, rank: S => rank(S), runway: S => runway(S), office: S => S.co.office, equity: S => S.equity, gpu: S => S.gpu,
-  red: S => S.ideo?.red ?? 0, cap: S => S.ideo?.cap ?? 0,
+  red: S => S.ideo?.red ?? 0, cap: S => S.ideo?.cap ?? 0, heat: S => S.ideo?.heat ?? 0,
 };
 export function cond(S, w) {
   if (!w) return true;
@@ -263,6 +266,7 @@ export function cond(S, w) {
 }
 function whyNot(S, req) {
   if (req.notFlag && [].concat(req.notFlag).includes('red') && S.flags.red) return '西方资本已经不和你谈了';
+  if (req.notFlag && [].concat(req.notFlag).includes('rose') && S.flags.rose) return '主流 VC 已经不接你的电话了';
   if (req.cash != null && S.cash < req.cash * unit(S)) return `需要现金 ${money(S, req.cash * unit(S))}`;
   if (req.attr) for (const a in req.attr) if (S.founder.attrs[a] < req.attr[a]) return `需要${ATTR_NAME[a]} ≥ ${req.attr[a]}`;
   return '条件不满足';
@@ -312,7 +316,7 @@ function instEvent(S, ev, ctx) {
   });
   if (ev.scene) S.fxq.push(ev.scene);
   const val = k => (typeof ev[k] === 'function' ? ev[k](S, ctx, API) : ev[k]);          // 标题、图标、插画也可以按局势变
-  return { kind: 'event', id: ev.id, cat: ev.cat, icon: val('icon'), title: fmt(S, val('title'), ctx), text: fmt(S, text, ctx), options, art: val('art') || EVENT_ART[ev.id] || CAT_ART[ev.cat] || 'boardroom', chain: ev.chain, portrait: ev.portrait, delay: ev.delay };
+  return { kind: 'event', id: ev.id, cat: ev.cat, icon: val('icon'), title: fmt(S, val('title'), ctx), text: fmt(S, text, ctx), options, art: val('art') || EVENT_ART[ev.id] || CAT_ART[ev.cat] || 'boardroom', chain: ev.chain, portrait: val('portrait'), delay: ev.delay };
 }
 
 function scandalDialog(S, d) {
@@ -376,7 +380,8 @@ const SNAP = [
   ['reg', '监管压力', S => S.reg, -1], ['bubble', '泡沫', S => S.bubble, 0], ['users', '用户', S => S.users + S.fake, 1, 'users'], ['quality', '产品体验', S => S.quality, 1],
   ['equity', '股权', S => S.equity, 1, 'pct'], ['quota', '显卡配额', S => quota(S), 1], ['tech', '模型能力', S => (S.ownModel ? myCap(S) : 0), 1, 'f1'], ['bench', '跑分', S => S.model?.bench ?? 0, 1, 'f1'],
   ['dirt', '黑料', S => S.dirt.length, -1], ['proj', '特殊项目', S => S.projects.length, 0], ['staff', '员工', S => S.staff.length, 1], ['ap', '下月行动点', S => S.apNext, 1], ['perks', '董事会卡', S => S.perks.length, 1],
-  ['red', '共产', S => S.ideo?.red ?? 0, 0], ['capb', '资本', S => S.ideo?.cap ?? 0, 0],
+  ['red', S => (S.ideo?.v === 'us' ? '社会主义' : '共产'), S => S.ideo?.red ?? 0, 0], ['capb', S => (S.ideo?.v === 'us' ? '资本主义' : '资本'), S => S.ideo?.cap ?? 0, 0],
+  ['heat', '反共压力', S => S.ideo?.heat ?? 0, -1],
 ];
 const snap = S => SNAP.map(r => r[2](S));
 function diff(S, a, b) {
@@ -385,7 +390,7 @@ function diff(S, a, b) {
     const d = b[i] - a[i];
     if (Math.abs(d) < (f === 'money' ? 0.05 : f === 'users' ? 0.05 : 0.5) && !(f === 'f1' && Math.abs(d) >= 0.1)) return;
     const v = f === 'money' ? money(S, d, true) : f === 'users' ? (d > 0 ? '+' : '-') + fmtUsers(Math.abs(d)) : f === 'pct' ? (d > 0 ? '+' : '') + d.toFixed(1) + '%' : (d > 0 ? '+' : '') + (f === 'f1' ? d.toFixed(1) : Math.round(d));
-    out.push({ k, name, v, good: pol === 0 ? null : d * pol > 0 });
+    out.push({ k, name: typeof name === 'function' ? name(S) : name, v, good: pol === 0 ? null : d * pol > 0 });
   });
   return out;
 }
@@ -450,6 +455,7 @@ export function newGame(setup, meta) {
   if (own.m_perk) S.q.push({ type: 'draft' });
   if (setup.region === 'bay') S.sched.push({ id: 'chepole_1', at: 3 });
   S.sched.push({ id: 'leather_rumor', at: ri(S, 9, 30) });
+  S.ideoAt = ri(S, 28, 40);                                           // 路线之争：中后期某个月，早期投资人退出，国资 / 公地资本来接盘老股
   refreshCands(S);
   S.ap = apMax(S);
   if (setup.tutorial) S.tut = { on: true, open: {}, queue: [], dirt0: S.dirt.length };
@@ -535,7 +541,8 @@ export function fxLines(S, fx) {
     else if (k === 'perk') out.push(['获得一张董事会卡', true]);
     else if (k === 'project') out.push([`开启特殊项目「${v.name}」`, null]);
     else if (k === 'end') out.push(['本局结束', null]);
-    else if (k === 'ideo') { if (v.red) out.push([`共产 ${sg(v.red)}`, null]); if (v.cap) out.push([`资本 ${sg(v.cap)}`, null]); }
+    else if (k === 'ideo') { const us = S.ideo?.v === 'us'; if (v.red) out.push([`${us ? '社会主义' : '共产'} ${sg(v.red)}`, null]); if (v.cap) out.push([`${us ? '资本主义' : '资本'} ${sg(v.cap)}`, null]); }
+    else if (k === 'heat') out.push([`反共压力 ${sg(v)}`, v < 0]);
   }
   return out;
 }
@@ -644,7 +651,7 @@ export function endMonth(S) {
   if (S.reg >= 100 && !S.cd.crack) { S.cd.crack = S.t + 10; queueEvent(S, 'crackdown'); }
   if (!S.burstT && S.t > 24 && ((S.bubble >= 78 && rnd(S) < 0.14) || (S.t >= 56 && rnd(S) < 0.12))) queueEvent(S, 'bubble_burst');
   if (S.stage >= 2 && !S.cd.coup && ((S.equity < 45 && (S.rep < 30 || S.morale < 28 || S.exposed >= 35) && rnd(S) < 0.35) || (S.equity < 25 && rnd(S) < 0.04))) { S.cd.coup = S.t + 18; queueEvent(S, 'coup'); }
-  if (S.stage >= 2 && !S.cd.acq && rnd(S) < 0.04 + (S.hype > 60 ? 0.03 : 0)) { S.cd.acq = S.t + 14; queueEvent(S, 'acq_offer', { rival: pick(S, S.flags.red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.rivals.slice(0, 4)).id }); }   // 红色公司：西方巨头不再来收购
+  if (S.stage >= 2 && !S.cd.acq && rnd(S) < 0.04 + (S.hype > 60 ? 0.03 : 0)) { S.cd.acq = S.t + 14; queueEvent(S, 'acq_offer', { rival: pick(S, S.flags.red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.flags.rose ? S.rivals.filter(r => r.id === 'misan') : S.rivals.slice(0, 4)).id }); }   // 红色公司：西方巨头不再来收购；「共享繁荣」的公司只剩同为公益公司的厌世智能还肯谈
   for (const [id, ctx] of projEvents) queueEvent(S, id, ctx);
   // 随机事件
   const n = S.tut?.on && S.t <= 2 ? 0 : (rnd(S) < 0.82 ? 1 : 0) + (S.t > 10 && rnd(S) < 0.18 ? 1 : 0);
@@ -670,6 +677,7 @@ export const saveGame = S => store.set(SAVE_KEY, S);
 export const loadGame = () => {                                      // 兼容旧存档
   const S = store.get(SAVE_KEY); if (!S || S.v !== 1 || S.over) return null;
   S.projects ??= []; S.chains ??= {}; S.quotaAdd ??= 0; S.co.office = clamp(S.co.office | 0, 1, OFFICES.length - 1);
+  if (S.ideoAt == null && !S.ideo) S.ideoAt = Math.max(S.t + 2, 30);
   if (S.quotaEarn == null) S.quotaEarn = Math.max(0, S.quotaBase * (OLD_QUOTA_MULT[S.stage] ?? 1) - quotaFloor(S));   // 老存档的配额按轮次算：差额记成「长约」，别让玩家一读档就被现货价坑
   return S;
 };

@@ -5,18 +5,18 @@ const MOODS = {
   calm:    { root: 48, scale: [0, 2, 3, 7, 10], chords: [0, 5, 3, 7], bpm: 64, density: .19, bright: 1100 },
   focus:   { root: 50, scale: [0, 2, 3, 7, 10], chords: [0, 7, 5, 3], bpm: 82, density: .48, bright: 1600 },
   tense:   { root: 45, scale: [0, 3, 5, 7, 10], chords: [0, 5, 3, 7], bpm: 68, density: .17, bright: 850 },
-  crisis:  { root: 43, scale: [0, 1, 5, 6, 10], chords: [0, 1, 6, 5], bpm: 78, density: .23, bright: 700 },
+  crisis:  { root: 43, scale: [0, 1, 3, 6, 7, 10], chords: [0, 1, 0, 6], bpm: 104, density: .3, bright: 900 },   // 危机：见 crisisStep
   triumph: { root: 50, scale: [0, 2, 4, 7, 9], chords: [0, 5, 7, 0], bpm: 88, density: .65, bright: 3000 },
   defeat:  { root: 45, scale: [0, 3, 5, 7, 10], chords: [0, 5, 3, 0], bpm: 48, density: .16, bright: 650 },
 };
-const NAMES = new Set('click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify lift ding error type rain_start'.split(' '));
+const NAMES = new Set('click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify lift ding error type rain_start burn freeze bloom'.split(' '));
 const clamp = (x, lo, hi, fallback) => typeof x === 'number' && Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : fallback;
 const hz = midi => 440 * 2 ** ((midi - 69) / 12);
 
 export function createAudio() {
   let ctx, timer, master, buses, noise, reverb, currentMusic;
   let disposed = false, unlocked = false, muted = false, warned = false, hidden = false;
-  let mood = 'off', volume = { ...VOLUMES }, seed = 0x6d2b79f5;
+  let mood = 'off', volume = { ...VOLUMES }, seed = 0x6d2b79f5, flavor = '';   // flavor：意识形态换了界面以后，配乐跟着换音色
   let scene = { mode: 'title', region: 'bay', night: 0, staff: 0, heat: 0, racks: 0, rain: 0, alert: false, month: 0 };
   let nextAmbient = 0, nextMod = 0;
   const nodes = new Set(), voices = new Set(), generations = new Set(), layers = {};
@@ -130,6 +130,10 @@ export function createAudio() {
       case 'error': [0, .11].forEach(d => tone(d, 160, .075, .09, { cutoff: 450 })); break;
       case 'type': { let delay = 0; for (let i = 0, n = 5 + Math.floor(random() * 4); i < n; i++) { tone(delay, range(430, 740), .018, .045, { wave: 'triangle', cutoff: 1500 }); delay += range(.035, .105); } break; }
       case 'rain_start': dust(0, 1.8, .065, 180, 'lowpass'); break;
+      // 换界面的过场：烧起来 / 冻上 / 长出来
+      case 'burn': tone(0, 95, .7, .2, { end: 38 }); dust(0, 2.0, .15, 520, 'lowpass'); dust(.2, 1.6, .06, 1400); for (let i = 0; i < 12; i++) dust(range(.05, 1.8), .03, .07, range(2500, 5000), 'highpass'); break;
+      case 'freeze': tone(0, 2600, 1.1, .045, { end: 520, wave: 'square', cutoff: 3200 }); dust(0, 1.3, .07, 5200, 'highpass'); for (let i = 0; i < 6; i++) tone(.12 + i * .11, range(1400, 2800), .05, .03, { wave: 'square', cutoff: 4000 }); break;
+      case 'bloom': [523, 587, 659, 784, 880, 1047].forEach((f, i) => tone(i * .16, f, .7, .045, { wave: 'triangle', cutoff: 2600, attack: .03 })); dust(0, 1.8, .035, 900); break;
     }
   }
   function makeNoise() {
@@ -213,6 +217,9 @@ export function createAudio() {
   function musicStep(g, at) {
     const c = g.config, beat = 60 / c.bpm, minor = !['title', 'triumph'].includes(mood);
     const make = options => voice({ at, bus: g.bus, owner: g, cutoff: c.bright, ...options });
+    // 主旋律的音色跟着意识形态走：苏联风是铜管味的锯齿波，社区合作社风是短促的拨弦，冷色科技风是方波合成器
+    const lead = flavor === 'soviet' ? { wave: 'sawtooth', cutoff: Math.min(c.bright, 1400) } : flavor === 'cold' ? { wave: 'square', cutoff: Math.max(c.bright, 2400) } : { wave: 'triangle' };
+    if (mood === 'crisis') return crisisStep(g, at, beat, make, lead);
     if (g.beat % 8 === 0) {
       g.chord = c.chords[Math.floor(random() * c.chords.length)];
       const root = c.root + g.chord;
@@ -222,13 +229,37 @@ export function createAudio() {
     }
     if (random() < c.density) {
       const index = mood === 'triumph' ? g.note++ % 5 : mood === 'defeat' ? 4 - g.note++ % 5 : Math.floor(random() * 5);
-      make({ freq: hz(c.root + 12 + c.scale[index]), wave: 'triangle', dur: range(.65, 1.5), gain: range(.025, .055) });
+      make({ freq: hz(c.root + 12 + c.scale[index]), dur: flavor === 'rose' ? range(.3, .6) : range(.65, 1.5), gain: range(.025, .055), ...lead });
     }
     if ((mood === 'focus' && g.beat % 2 === 0) || mood === 'crisis') {
       make({ freq: mood === 'crisis' ? 48 : 70, dur: .2, gain: .035, cutoff: 280 });
       if (mood === 'crisis') make({ at: at + .19, freq: 44, dur: .16, gain: .022, cutoff: 250 });
     }
+    // 专注时的节奏型也带上意识形态的味道：军鼓、拨弦沙锤、电子踩镲
+    if (mood === 'focus' && flavor === 'soviet' && g.beat % 4 === 2) make({ freq: 1, dur: .1, gain: .045, noiseKind: 'white', filter: 'bandpass', cutoff: 1800 });
+    if (mood === 'focus' && flavor === 'rose' && g.beat % 2 === 1) make({ freq: 1, dur: .06, gain: .03, noiseKind: 'pink', filter: 'bandpass', cutoff: 3200 });
+    if (mood === 'focus' && flavor === 'cold') make({ at: at + beat / 2, freq: 1, dur: .02, gain: .025, noiseKind: 'white', filter: 'highpass', cutoff: 9000 });
     g.beat++; g.next = at + beat * range(.97, 1.03);
+  }
+  // 危机：快拍子、减三和弦铺底、心跳一样的八分音符低音、秒针一样的滴答，每四小节一声拉长的上行警报。拍子不抖，越听越催
+  function crisisStep(g, at, beat, make, lead) {
+    const c = g.config, b = g.beat % 16;
+    if (g.beat % 8 === 0) {
+      g.chord = c.chords[Math.floor(g.beat / 8) % c.chords.length];
+      const r = c.root + g.chord;
+      make({ chord: [r, r + 3, r + 6].map(hz), dur: beat * 8, attack: .9, gain: .07, cutoff: 900 });
+    }
+    const root = c.root + g.chord - 12;
+    make({ freq: hz(root), dur: .17, gain: .075, attack: .005, cutoff: 320, wave: 'triangle' });
+    make({ at: at + beat / 2, freq: hz(root + (b % 4 === 3 ? 13 : 12)), dur: .15, gain: .05, attack: .005, cutoff: 360, wave: 'triangle' });
+    make({ at: at + beat / 2, freq: 1, dur: .03, gain: .05, noiseKind: 'white', filter: 'highpass', cutoff: 6500 });
+    if (b % 4 === 0) make({ freq: 62, end: 38, dur: .3, gain: .16, cutoff: 200 });
+    if (flavor === 'soviet' && b % 4 === 2) make({ freq: 1, dur: .12, gain: .07, noiseKind: 'white', filter: 'bandpass', cutoff: 1800 });     // 军鼓：像急行军
+    if (flavor === 'cold') make({ at: at + beat / 4, freq: 1, dur: .02, gain: .03, noiseKind: 'white', filter: 'highpass', cutoff: 9000 });  // 十六分踩镲：像机器在报错
+    if (flavor === 'rose' && b % 2 === 1) make({ freq: 1, dur: .07, gain: .035, noiseKind: 'pink', filter: 'bandpass', cutoff: 3000 });     // 沙锤
+    if (b === 12) make({ freq: hz(c.root + 24), end: hz(c.root + 31), dur: beat * 3, attack: beat * 1.5, gain: .03, ...lead, cutoff: 1800 });
+    if (random() < c.density) make({ freq: hz(c.root + 12 + c.scale[Math.floor(random() * c.scale.length)]), dur: range(.35, .6), gain: range(.03, .05), ...lead });
+    g.beat++; g.next = at + beat;
   }
   function tick() {
     if (disposed || !ctx || ctx.state !== 'running' || hidden) return;
@@ -327,6 +358,7 @@ export function createAudio() {
       if ('alert' in state) scene.alert = Boolean(state.alert);
       if (ctx) ambience();
     }),
+    setFlavor: safe(value => { if (!disposed) flavor = ['soviet', 'rose', 'cold'].includes(value) ? value : ''; }),
     setMusic: safe(value => { if (!disposed && (value === 'off' || Object.hasOwn(MOODS, value)) && mood !== value) { mood = value; changeMusic(); } }),
     setVolume: safe(values => {
       if (disposed || !values || typeof values !== 'object') return;

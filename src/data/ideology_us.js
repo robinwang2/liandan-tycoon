@@ -1,0 +1,589 @@
+// 「路线之争」湾区版（纯数据，逻辑在 src/game/ideology.js，格式和 src/data/ideology.js 完全一样）。
+// 触发：湾区融资时选了「公地资本：工会养老金入股」→ 15 个月、每月一级。两条进度条在湾区叫「社会主义」「资本主义」，
+// 另外多一条「反共压力」（0~100）：社会主义条越高涨得越快，压力大时社会主义条会被一点点磨掉，还会随机弹出「红色恐慌」事件。
+// 结局：社会主义条满或更多 → 「共享繁荣」结局（公司嘴上始终不承认自己是社会主义）；资本主义条满或更多 → 「使命驱动、不谈政治」结局 +
+// 处置 🌹 员工；终局时股权须 ≥ 40%。
+//
+// 与深圳版的差别只有三处：
+// 1. 选项和事件的 fx 里可以用 heat: n（反共压力，-15~+15），湾区的红色选项大多会加压力
+// 2. 普通事件（SCARE_EVENTS 等）的 fx 里可以用 ideo: { red, cap } 直接推进度条
+// 3. 多一个 SCARE_EVENTS：红色恐慌事件，由引擎在路线之争期间（when.flag: 'us_chain'）和「共享繁荣」结局之后（when.flag: 'rose'）排进来
+
+export const IDEO_CAST = {
+  rep: { name: '多萝西·陈', role: '公地资本 · 董事观察员', desc: '管着三个州教师工会的退休金。开会时织毛衣，开口就是「信托义务」，最关心稳。' },
+  red: { name: '凯·罗德里格斯', role: '研究员 · 签名档里有 🌹', desc: '看着哈桑·拍客的直播长大，相信 AGI 能让员工所有制第一次算得过来。' },
+  cap: { name: '布拉德·温斯顿', role: 'A16Y 合伙人 · 董事', desc: '每天冷水浴，信奉「技术乐观主义」，三句话不离护城河和十倍回报。' },
+};
+
+// 15 级，按顺序。每级 2~4 个 opts，至少一张 red、一张 cap
+export const IDEO_STAGES = [
+  {
+    title: '公地资本进场', icon: '🌹', art: 'boardroom',
+    text: '公地资本的董事观察员多萝西·陈第一次来开董事会。她六十二岁，管着三个州教师工会的退休金，包里装着一团没织完的毛线和一份四十页的《公益公司章程修正案》。她只提了一个要求：员工要是想组建工会，公司「保持中立」。\n\n当晚，研究员凯·罗德里格斯把个人主页的签名改成了「AI 研究员 🌹」，又在内部频道转发了狼夫教授的新视频《AGI 能不能让员工所有制第一次算得过来》。三十个人点了 🌹，A16Y 派来的董事布拉德回了一个「🤔」。',
+    opts: [
+      { side: 'red', label: '签中立协议', hint: '对工会投票不干预', text: '你当场签了中立协议。多萝西点点头，继续织毛衣；凯把截图发进了频道；布拉德在桌子底下给律师发消息，开头两个字是「紧急」。', bars: { red: 9, cap: -2 }, fx: { morale: 4, heat: 3 } },
+      { side: 'cap', label: '先请劳资律所', hint: '律所按分钟收费', text: '你请来一家专做「劳资关系咨询」的律所。第一次会议的发票比会议纪要先到。布拉德说这是行业惯例，多萝西在本子上记下了律所的名字。', bars: { cap: 9, red: -2 }, fx: { cash: -0.5, rep: -2, heat: -2 } },
+      { side: 'mid', label: '先开全员问答', hint: '让大家把问题问完', text: '全员问答开了两个小时，点赞最多的问题是「牙科保险能不能也覆盖右边的牙」。你说会认真研究，所有人都听懂了这句话的意思。', bars: { red: 3, cap: 3 }, fx: { morale: 2 } },
+    ],
+  },
+  {
+    title: '工会选举', icon: '🗳️', art: 'unionhall',
+    text: '员工递交了工会选举申请，凯把折叠椅摆进会议室，发现行政只批准了椅子，没有批准坐在上面讨论什么。布拉德推荐一家顾问公司，套餐叫「直接沟通」，报价足够让公司与每个人直接沟通到退休。\n\n多萝西把中立协议翻到签名页。珍妮则把公告里的「团结」改成「跨职能协作」，又问投票箱能不能用公司品牌色。还没开始计票，设计部已经投了三轮。',
+    opts: [
+      { side: 'red', label: '自愿承认工会', hint: '核验多数授权后开始谈判', text: '核验完成后，你承认了员工代表。凯要求先谈申诉程序，公关要求先谈怎么称呼申诉程序，两场谈判都产生了餐费。', bars: { red: 10, cap: -3 }, fx: { cash: -1, morale: 8, heat: 4 } },
+      { side: 'cap', label: '购买沟通顾问套餐', hint: '信息说明会按小时计费', text: '顾问用四十页幻灯解释公司没有第三方也能沟通。最后一页写着如需直接提问，请通过顾问预约下一场。', bars: { cap: 9, red: -2 }, fx: { cash: -1, morale: -6, heat: -3 } },
+      { side: 'mid', label: '按中立协议投票', hint: '不拉票，承担组织成本', text: '你请独立人员组织投票，管理层不得旁听茶水间。大家终于能自由讨论，第一项议题是为什么咖啡仍然这么贵。', bars: { red: 3, cap: 1 }, fx: { cash: -0.5, morale: 3 } },
+    ],
+  },
+  {
+    title: '股票还是医保', icon: '🦷', art: 'home',
+    text: '福利续约报价到了，保险经纪人称今年只是「温和调整」，财务在旁边把温和换算成了几个月房租。布拉德建议把预算用于核心人才股票，四年归属期能把人留住；凯说孩子的牙不会等四年才疼，托育中心也不接受期权抵扣。\n\n多萝西关心退休金能否稳定回流。珍妮建议把两份预算都叫人才投资，财务同意这个名字，但拒绝因为名字相同就付两次钱。',
+    opts: [
+      { side: 'red', label: '补医保牙科和托育', hint: '兑现当下福利，现金吃紧', text: '新的保障终于覆盖实际会用到的项目。员工认真读条款，布拉德认真读成本，保险经纪人成了唯一两份都读得很开心的人。', bars: { red: 9, cap: -2 }, fx: { cash: -2, morale: 10, heat: 3 } },
+      { side: 'cap', label: '给核心人才加股票', hint: '稀释股权，绑定交付', text: '核心人才名单公布后，其他人开始研究自己属于哪种外围设备。布拉德称这是精准激励，打印名单的人没有被精准到。', bars: { cap: 9, red: -2 }, fx: { equity: -2, morale: -5, heat: -2, temp: { key: 'devMult', mult: 1.12, months: 8 } } },
+      { side: 'mid', label: '先补急需医疗额度', hint: '小额过渡，明年重新谈', text: '你留出紧急额度，暂缓股票补发。员工终于不用先判断牙疼是不是战略级问题，布拉德要求明年给战略下个定义。', bars: { red: 2, cap: 2 }, fx: { cash: -1, morale: 4 } },
+    ],
+  },
+  {
+    title: '算力怎么分', icon: '🖥️', art: 'datacenter',
+    text: '英伟大的卡没按预期到货，预约系统却已经卖出了三个季度的明天。凯提议让员工委员会按需分配，布拉德建议内部竞价，财务建议先确认「内部的钱」最后会不会变成外部的电费。\n\n基础研究组说探索不能提前承诺收入，销售组说没有收入就没人付探索的账。珍妮刚写完「共同创造未来」，就被要求给未来标明机架编号、使用时长和付款部门。',
+    opts: [
+      { side: 'red', label: '员工委员会配卡', hint: '给探索留额度，付协调成本', text: '探索项目拿到了卡，也拿到了每周申诉窗口。委员会为避免偏心轮流主持，第一轮主持人刚好都来自最缺卡的组。', bars: { red: 8, cap: -2 }, fx: { cash: -1, morale: 6, heat: 3 } },
+      { side: 'cap', label: '开内部算力拍卖', hint: '有预算的先开机', text: '销售组买走黄金时段，再加价转给研究组。布拉德称赞价格发现，研究员发现自家同事比云服务商还懂涨价。', bars: { cap: 9, red: -3 }, fx: { morale: -7, heat: -2, temp: { key: 'revMult', mult: 1.1, months: 6 } } },
+      { side: 'mid', label: '按公开 OKR 排队', hint: '留探索时段，承担核验成本', text: '你公布评分和探索额度，大家不再抢管理员电话，开始给实验换标题。一项头像实验第二天叫基础视觉可靠性工程。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+    ],
+  },
+  {
+    title: '回办公室令', icon: '🚗', art: 'bay',
+    text: '园区租约刚续完，布拉德就发现面对面协作是企业灵魂，要求每周五天回办公室。凯把旧招聘页面投到大屏，上面写着「在哪里工作由你决定」，一名工程师已经据此搬到了两百公里外。\n\n行政说工位不够，布拉德说这证明办公室有吸引力。珍妮准备把 RTO 解释为社区重逢，员工问社区是否愿意报销过桥费，以及凌晨出门算不算重逢的前置任务。',
+    opts: [
+      { side: 'red', label: '保留完全远程', hint: '补设备，继续承担空置租金', text: '公司承认招聘承诺有效。凯为远程同事争取了设备，随后提议每周线上团结晚会，远程同事第一次集体关掉了摄像头。', bars: { red: 9, cap: -2 }, fx: { cash: -1, morale: 9, heat: 3 } },
+      { side: 'cap', label: '每周五天回园区', hint: '缩短协作等待，士气下降', text: '工牌记录接入管理面板，办公室确实热闹了。大家坐在同一排戴耳机开远程会议，布拉德说这叫同步的力量。', bars: { cap: 9, red: -3 }, fx: { morale: -9, heat: -3, temp: { key: 'devMult', mult: 1.1, months: 6 } } },
+      { side: 'mid', label: '约定混合办公日', hint: '补通勤，保留远程例外', text: '团队选出共同到岗日，远距离员工按月集中来。行政终于能订午饭，唯一没解决的是每个人都想把周一留给别人。', bars: { red: 2, cap: 2 }, fx: { cash: -1, morale: 4 } },
+    ],
+  },
+  {
+    title: '狐狸新闻点名', icon: '📺', art: 'press',
+    text: '狐狸新闻把 {co} 放进黄金档，标题是「湾区 AI 公司被社会主义渗透？」证据包括员工委员会、牙科福利，以及茶水间一盒被拍得很可疑的燕麦奶。企业客户暂停续约，要求解释奶的治理结构。\n\n珍妮带来三份否认声明，一份强调员工所有权，一份强调美国企业，一份强调我们只是卖软件。多萝西让她再加一句现金流稳定，珍妮说这句需要财务先批准真实性。',
+    opts: [
+      { side: 'red', label: '否认标签保留共治', hint: '员工所有制是公司治理', text: '声明说「我们实行员工参与的公司治理」。电视台把参与两个字圈了出来，员工很感动，融资顾问开始按危机收费。', bars: { red: 10, cap: -2 }, fx: { cash: -1, rep: 5, heat: 6, temp: { key: 'raiseMult', mult: 0.88, months: 8 } } },
+      { side: 'cap', label: '强调商业优先', hint: '收缩共治议程，换回信心', text: '你声明公司只按产品和回报考核。客户恢复了会议邀请，凯发现员工委员会也恢复了会议，只是议题只剩停车通知。', bars: { cap: 10, red: -3 }, fx: { morale: -8, heat: -5, temp: { key: 'raiseMult', mult: 1.1, months: 6 } } },
+      { side: 'mid', label: '公布治理问答', hint: '请珍妮逐条拆标签', check: { attr: 'cha', dc: 16 }, ok: { text: '问答把公司权责写清，客户终于不再追问燕麦奶。珍妮把成果归于严谨措辞，财务归于一整月公关费。', bars: { red: 2, cap: 2 }, fx: { cash: -1, heat: -4 } }, fail: { text: '长篇问答被剪成十秒，恰好只剩你重复问题里的词。珍妮在禁用词旁边新增一列：即使是否认也别念出来。', bars: { red: 1, cap: 1 }, fx: { cash: -1, heat: 4 } } },
+    ],
+  },
+  {
+    title: '绩效校准', icon: '📊', art: 'leaderboard',
+    text: '布拉德把强制排名表投到墙上：卓越组织必须有固定比例的落后者。凯问如果整个组都完成目标怎么办，他说那说明目标还不够卓越。凯的替代方案是同事互评和团队奖金池，提交当天就有三组互相打出了满分。\n\n多萝西想知道两套制度哪套能减少离职成本。珍妮负责给差评找不伤人的名字，最后把「不达标」改成「正在探索外部成长空间」。',
+    opts: [
+      { side: 'red', label: '同事互评分奖金', hint: '共同奖励，支付复核成本', text: '团队奖金到账，互评里人人乐于助人。你加了贡献复核，大家终于写出具体事例：他帮我润色了夸他的那段话。', bars: { red: 8, cap: -2 }, fx: { cash: -1, morale: 8, heat: 3 } },
+      { side: 'cap', label: '推行强制排名', hint: '名单必须填满', text: '最后一名完成了全部目标，仍然收到改进计划。HR 解释他需要改进的地方是其他同事这季度都没出错。', bars: { cap: 9, red: -3 }, fx: { morale: -9, heat: -3, temp: { key: 'devMult', mult: 1.12, months: 6 } } },
+      { side: 'mid', label: '按交付复核差评', hint: '取消名额，增加管理工作', text: '你要求差评对应可核对的交付问题。经理们抱怨流程变重，工程师发现这次被要求提供证据的终于不是自己。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+    ],
+  },
+  {
+    title: '模型的价值观', icon: '🎵', art: 'lab',
+    text: '两组微调同时提交。第一组让 {model} 在每个回答后附一首工会歌，用户问怎么重置密码，它先邀请用户加入副歌；第二组让它随时推销企业版，用户问怎么取消订阅，它说企业版提供更高级的取消体验。\n\n凯觉得需要加强公共服务样本，布拉德觉得付费意愿已经涌现。珍妮让模型介绍公司，模型先唱了两句再报价，恰好同时触发了她的品牌规范和禁用词清单。',
+    opts: [
+      { side: 'red', label: '按公共服务微调', hint: '先回答问题，少卖企业版', text: '模型终于直接教用户改密码。团队保留了自愿点播工会歌的入口，入口讨论开了三次会，比密码重置文档还长。', bars: { red: 9, cap: -2 }, fx: { cash: -1, rep: 7, heat: 4, temp: { key: 'revMult', mult: 0.9, months: 6 } } },
+      { side: 'cap', label: '按企业转化微调', hint: '每次对话都是销售线索', text: '模型学会在解决问题前确认预算。布拉德说它具备商业常识，用户说它具备了自己最不想见到的同事的全部特征。', bars: { cap: 9, red: -3 }, fx: { rep: -7, heat: -2, temp: { key: 'revMult', mult: 1.15, months: 6 } } },
+      { side: 'mid', label: '先修回答再分版本', hint: '付费投入盲测', text: '两组都要过真实任务盲测。测试员在评分表上写「终于能改密码」，两派都把这句话归为自己的价值观取得胜利。', bars: { red: 2, cap: 2 }, fx: { cash: -1, quality: 3 } },
+    ],
+  },
+  {
+    title: '董事会与股权', icon: '📜', art: 'boardroom',
+    text: '律师把员工持股信托和双层股权结构摆在同一张桌上，说两套都能设计，账单也都能成立。凯希望劳动者有真正的表决权，布拉德希望创始人能抵抗短期噪声，短期噪声的定义暂时包括凯。\n\n多萝西指着股权表提醒你：终局时创始人必须握有至少四成股权，额外投票权不能代替这个门槛。珍妮把「权力争夺」改成「治理升级」，律师建议升级之前先看清谁被降级。',
+    opts: [
+      { side: 'red', label: '设员工持股信托', hint: '让出部分股权与议事权', text: '员工代表终于能在表决时举手，律师提醒股份也真的转了出去。凯准备庆祝，多萝西让你先重新算一遍那条四成线。', bars: { red: 10, cap: -3 }, fx: { equity: -3, cash: -1, morale: 8, heat: 5 } },
+      { side: 'cap', label: '设计双层股权', hint: '集中决策，不增加持股比例', text: '你的票变重了，股权比例一位小数都没变。布拉德称这是长期主义，律师在旁边用加粗字体解释长期主义不替你满足四成线。', bars: { cap: 10, red: -3 }, fx: { cash: -1, morale: -6, heat: -3 } },
+      { side: 'mid', label: '维持结构先审计', hint: '算清稀释，暂缓改章程', text: '你要求列出下一轮融资后的持股比例。律师第一次被要求把文件缩成一页，多萝西第一次不用翻页就能指出问题。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, rep: 3 } },
+    ],
+  },
+  {
+    title: '用户是谁的', icon: '👥', art: 'market',
+    text: '公共版的排队长度和企业销售的线索表一起上涨。凯希望每个人都有基础额度，布拉德希望每个人都有升级理由，财务只希望每个人的推理成本能找到付款人。社区用户发来感谢信，银行暂时不接受感谢信入账。\n\n珍妮写下「服务所有人」，销售在后面补上「预算充足者优先」。多萝西问免费版能撑多久，产品经理给她看了一张增长图，她坚持要看图下面没画出来的电费。',
+    opts: [
+      { side: 'red', label: '保留免费公共版', hint: '限额保底，补贴推理成本', text: '免费额度上线，社区论坛开始讨论额度够不够平等。最热的帖子由一个同时注册了十个账号的用户发起。', bars: { red: 9, cap: -2 }, fx: { cash: -2, usersPct: 12, heat: 4, temp: { key: 'raiseMult', mult: 0.91, months: 6 } } },
+      { side: 'cap', label: '分级会员加广告', hint: '把排队变成升级理由', text: '付费用户排短队，免费用户看排队广告。广告文案承诺解放时间，产品经理说这句话只对购买最高档的人即时生效。', bars: { cap: 9, red: -2 }, fx: { rep: -7, heat: -3, temp: { key: 'revMult', mult: 1.18, months: 8 } } },
+      { side: 'cap', label: '只做企业客户', hint: '收入集中，放弃社区规模', text: '官网把试用按钮换成联系销售。布拉德说客户质量更高了，客服说确实，现在每封邮件都抄送六位采购经理。', bars: { cap: 10, red: -3 }, fx: { usersPct: -15, heat: -4, temp: { key: 'revMult', mult: 1.2, months: 6 } } },
+    ],
+  },
+  {
+    title: '发版前的离席', icon: '🚶', art: 'protest',
+    text: '发版前夜，一部分员工组织 walkout，走到园区外要求兑现补休和加班边界。布拉德在内部频道写「我们是团队，不是家人」，凯回复团队也有换班规则。行政把原定庆功墨西哥卷饼摆在门边，暂时无法决定这算哪一方的后勤。\n\n珍妮对外称发布日程正在优化，客户问优化是不是延期。多萝西没有点评标语，只问如果今晚继续熬，明天是谁负责维护已经卖出去的服务。',
+    opts: [
+      { side: 'red', label: '谈补休并延后发版', hint: '承认离席诉求，赔付客户', text: '补休写进排班，发布会改期。凯开始讨论谈判成果如何共同署名，值班工程师只要求别把复盘会安排在补休日。', bars: { red: 10, cap: -3 }, fx: { cash: -2, morale: 10, hype: -5, heat: 5 } },
+      { side: 'cap', label: '加码奖金全员冲刺', hint: '缩短延期，透支团队', text: '冲刺奖金承诺到下季度结算，版本按时上线。布拉德夸团队战胜了极限，客服当天就学会了极限之后的错误代码。', bars: { cap: 10, red: -3 }, fx: { morale: -10, quality: -3, heat: -2, temp: { key: 'devMult', mult: 1.15, months: 6 } } },
+      { side: 'mid', label: '砍功能保值班线', hint: '缩小发布范围，付轮班费', text: '你删掉演示里最炫的功能，留下有人能维护的部分。市场部说缺少惊喜，值班组一致认为这正是优点。', bars: { red: 2, cap: 2 }, fx: { cash: -1, hype: -3, quality: 2 } },
+    ],
+  },
+  {
+    title: '国会山的来信', icon: '✉️', art: 'congress',
+    text: '国会山来了联名信，驴党议员关心员工权益为何影响融资，象党议员关心员工权益是否影响自由市场，两边都要求说明公司「与社会主义的关系」。附件列了二十七个问题，其中四个在问同一盒燕麦奶。\n\n珍妮起草回信：「本公司不属于任何政治运动，员工参与是治理安排。」布拉德要求附营收图，凯要求附中立协议，多萝西要求附审计意见。回信还没发，附件先需要一个目录。',
+    opts: [
+      { side: 'red', label: '否认标签公开共治', hint: '保留制度，接受更多审查', text: '回信明确否认政治归属，同时列出员工表决程序。办公室收到更长的补充问题，珍妮把禁用词清单升级成了共享数据库。', bars: { red: 10, cap: -2 }, fx: { cash: -1, reg: 6, heat: 6, temp: { key: 'raiseMult', mult: 0.88, months: 8 } } },
+      { side: 'cap', label: '回信强调商业使命', hint: '收紧讨论范围，降低压力', text: '你强调产品与商业回报，把内部议事缩到工作流程。来信方表示会继续关注，布拉德说这已经是非常温暖的结束语。', bars: { cap: 10, red: -3 }, fx: { morale: -8, heat: -5, cash: -1 } },
+      { side: 'mid', label: '请律师核对事实', hint: '否认归属，只答可核实事项', check: { attr: 'biz', dc: 17 }, ok: { text: '律师将问题逐条对应到章程与账目。听证邀请暂缓，最大的胜利是燕麦奶终于只出现在采购附件里。', bars: { red: 2, cap: 2 }, fx: { cash: -1.5, heat: -4 } }, fail: { text: '律师证明了所有附件彼此一致，却漏看回信大小超过收件限制。国会山又发一封信，询问公司为何没有回答。', bars: { red: 1, cap: 1 }, fx: { cash: -1.5, heat: 5 } } },
+    ],
+  },
+  {
+    title: '计划还是市场', icon: '🕹️', art: 'chess',
+    text: '凯提出让 {model} 统筹人员、算力和预算，控制室效果图里有整面大屏，实际第一步仍是请各组补齐表格。布拉德主张内部市场，各组买卖服务；听说需要向财务报账后，他又建议改叫「去中心化自治」。\n\n多萝西问谁最终负责超支，两个方案都把箭头画向你。珍妮说公司正式口径只能叫资源协同，设计师因此删掉了海报上的宏大词汇，留下一个非常昂贵的仪表盘。',
+    opts: [
+      { side: 'red', label: '模型统筹公开申诉', hint: '集中计划，保留人工复核', text: '大屏开始给部门派预算，凯要求每次变更都能申诉。模型很快学会预留申诉经费，成为全公司第一个算准开会成本的成员。', bars: { red: 10, cap: -3 }, fx: { cash: -1, quality: 3, heat: 5 } },
+      { side: 'cap', label: '让部门互相报价', hint: '按预算买服务', text: '内部市场上线，安全组向所有人收检测费，销售组向安全组收获客费。布拉德看到交易额翻倍，财务看到同一美元跑得很累。', bars: { cap: 10, red: -3 }, fx: { morale: -7, heat: -3, temp: { key: 'revMult', mult: 1.12, months: 6 } } },
+      { side: 'mid', label: '先做自治沙盒', hint: '小范围试验，写明负责人', text: '你让布拉德在一个小组试行去中心化自治。第一份文档是负责人名单，第二份是无法达成共识时谁能关掉沙盒。', bars: { red: 2, cap: 3 }, fx: { cash: -1, quality: 2 } },
+    ],
+  },
+  {
+    title: '路线大辩论', icon: '🎙️', art: 'stream', portrait: 'streamer',
+    text: '终局前夜，凯拿着员工共治提案拉票，布拉德端着冷水浴后的咖啡讲技术乐观主义。公共休息区正在放哈桑·拍客的直播，他边看新闻边点评，狗在背后睡觉；内部频道却已为提案标题吵了三百楼。\n\n多萝西只说「信托义务」，然后把两个方案的现金流摆在一起。珍妮逐个修改大会稿里的形容词，说公司可以发生巨变，新闻稿最好看起来只是一次正常的治理维护。',
+    opts: [
+      { side: 'red', label: '把共治写成权利', hint: '员工能表决，也要付账', text: '你支持把员工权利写进章程。频道先欢呼，随后为哪些岗位算劳动者开了新帖，珍妮用一张工资表终止了首轮纯洁性测试。', bars: { red: 12, cap: -3 }, fx: { cash: -1, morale: 8, heat: 6, temp: { key: 'raiseMult', mult: 0.88, months: 8 } } },
+      { side: 'cap', label: '把使命写成边界', hint: '只谈产品和交付', text: '你支持用商业使命划定工作议程。布拉德宣布终于不用谈政治，接着用二十分钟解释为什么不谈政治是最先进的立场。', bars: { cap: 12, red: -3 }, fx: { morale: -9, heat: -5, temp: { key: 'raiseMult', mult: 1.12, months: 6 } } },
+      { side: 'mid', label: '公开两份现金流', hint: '让投票人看到代价', text: '辩论转向预算，直播围观人数掉了一半。多萝西终于把毛线放下，表示现在的讨论具备了她能理解的娱乐价值。', bars: { red: 3, cap: 3 }, fx: { hype: -4, rep: 3 } },
+    ],
+  },
+  {
+    title: '全员大会', icon: '🗳️', art: 'unionhall',
+    text: '折叠椅坐满了，门外广告车仍在循环播放「共产 AI」，门内珍妮正在把投影里的最后一个禁用词替换成利益相关者。凯检查员工代表的授权，布拉德检查你的股权，多萝西检查两份方案能否按时发工资。\n\n桌上放着新章程和使命全员信，签哪份都会有人离开，也都会有人要求再开一次解释会。主持人请 {me} 做最后陈述，珍妮递来一张小卡片：不要即兴发明公司的政治身份。',
+    opts: [
+      { side: 'red', label: '表决员工所有制', hint: '共享繁荣，承担外部压力', text: '你宣布支持员工所有的公益公司。掌声响起，珍妮确认每个字都在允许列表内，门外广告车则根本没更新它的素材。', bars: { red: 15, cap: -4 }, fx: { morale: 10, heat: 6, temp: { key: 'raiseMult', mult: 0.85, months: 12 } } },
+      { side: 'cap', label: '表决商业使命', hint: '专注产品，收紧内部议程', text: '你宣布公司专注使命与产品。布拉德率先鼓掌，凯关掉了笔记本，HR 打开了另一个表格，珍妮知道今晚还不能下班。', bars: { cap: 15, red: -4 }, fx: { morale: -10, heat: -5, temp: { key: 'raiseMult', mult: 1.15, months: 8 } } },
+      { side: 'mid', label: '按现有授权计票', hint: '接受既有路线的结果', text: '你让主持人照已确认的授权计票。每个人都说尊重程序，同时盯着自己那栏数字，珍妮把这句话也写进了通稿。', bars: { red: 3, cap: 3 }, fx: { cash: -0.5, rep: 2 } },
+    ],
+  },
+];
+
+// 通用卡池（第 3 级起按意图抽取）
+export const IDEO_POOL = [
+  { id: 'us_dental_both_sides', side: 'red', from: 3, to: 15, when: { moraleMax: 60 }, label: '升级全家医保', hint: '牙科终于两边都管', text: '新医保覆盖了全家和两边的牙。布拉德算了算每人每月的成本，说这是「隐性社会主义」；公关部连夜把这个词从会议纪要里删掉，改成「有竞争力的福利」。', bars: { red: 7 }, fx: { morale: 8, cash: -1, heat: 2 } },
+  { id: 'us_stack_calibration', side: 'cap', from: 3, to: 15, label: '季度强制校准', hint: '每组必须有人「待改进」', text: '校准会开了一整天，每个组都得交出一个「待改进」。只有三个人的组把名额给了上个月请过陪产假的同事。布拉德说这叫高绩效文化，凯把会议邀请转发给了劳工律师。', bars: { cap: 8, red: -2 }, fx: { morale: -6, heat: -2, temp: { key: 'devMult', mult: 1.1, months: 6 } } },
+  { id: 'us_paid_voice', side: 'red', from: 3, to: 15, label: '给员工议事算工时', hint: '参与治理不用下班加餐', text: '议事会计入工时，大家第一次积极要求按时散会。凯想加一个自由发言环节，被负责今晚接孩子的代表行使了程序权利。', bars: { red: 8, cap: -2 }, fx: { cash: -1, morale: 6, heat: 3 } },
+  { id: 'us_open_ledger', side: 'red', from: 3, to: 15, label: '公开部门预算账本', hint: '员工能看钱去了哪里', text: '预算公开后，频道为燕麦奶品牌吵了三百楼，服务器账单无人回复。财务怀疑大家不是不懂数字，只是不懂后面那么多零。', bars: { red: 7 }, fx: { cash: -0.5, rep: 5, heat: 3 } },
+  { id: 'us_shared_bonus', side: 'red', from: 3, to: 15, label: '设共享奖金池', hint: '支持岗位也参与分配', text: '奖金覆盖了支持岗位，凯坚持奖励看不见的劳动。负责统计看不见劳动的人申请加班费，委员会决定先让这项劳动变得可见。', bars: { red: 8, cap: -2 }, fx: { cash: -1, morale: 8, heat: 4 } },
+  { id: 'us_neutral_hiring', side: 'red', from: 3, to: 15, label: '续签工会中立承诺', hint: '招聘页写明员工选择权', text: '招聘页写清公司尊重员工组织。候选人问是否真的不用在面试里假装爱加班，HR 说可以，随后给面试官开了一场培训。', bars: { red: 8 }, fx: { cash: -1, rep: 6, heat: 4 } },
+  { id: 'us_pension_bridge', side: 'red', from: 3, to: 15, when: { runwayMax: 4 }, label: '向养老金申请过桥', hint: '让出股权，接受现金监督', text: '多萝西愿意带方案回去，但要求员工信托和月度预算监督。凯说资本终于耐心了，她说钱要按期还，耐心不等于失忆。', bars: { red: 9, cap: -2 }, fx: { cash: 2, equity: -3, heat: 5, temp: { key: 'costMult', mult: 1.06, months: 8 } } },
+  { id: 'us_rent_fund', side: 'red', from: 3, to: 15, when: { runwayMin: 12 }, label: '设东湾租房补助', hint: '储备换稳定生活', text: '租房补助到账，员工终于敢续租。委员会讨论要不要按通勤距离分档，住得近的人第一次认真声称自己精神上住在很远的地方。', bars: { red: 9 }, fx: { cash: -2, morale: 9, heat: 4 } },
+  { id: 'us_union_mic', side: 'red', from: 3, to: 15, when: { heatMax: 35 }, label: '公开支持员工组会', hint: '压力小时兑现中立承诺', text: '公司声明尊重员工自主组会。凯兴奋地转发，珍妮跟在后面补发措辞说明，两个帖子共同构成了本周最长的品牌故事。', bars: { red: 9, cap: -2 }, fx: { rep: 6, heat: 6, temp: { key: 'raiseMult', mult: 0.91, months: 6 } } },
+  { id: 'us_defense_fund', side: 'red', from: 3, to: 15, when: { heatMin: 55 }, label: '支付员工法律援助', hint: '承担被点名后的咨询费用', text: '员工被挂到网上后获得独立法律咨询。凯想把援助过程直播出来，被受助者一致否决：支持他们可以，先别替他们打光。', bars: { red: 10 }, fx: { cash: -2, morale: 7, heat: 5 } },
+  { id: 'us_stream_account', side: 'red', from: 3, to: 15, when: { hypeMax: 45 }, label: '直播解释员工信托', hint: '上抽抽 TV，压力也会涨', text: '哈桑·拍客的直播间开了八小时，你只连麦解释了十分钟员工信托。弹幕问为何还要融资，珍妮说先让公司活到解释完下一题。', bars: { red: 8 }, fx: { cash: -1, hype: 10, heat: 6 } },
+  { id: 'us_coop_course', side: 'red', from: 3, to: 15, when: { staffMin: 8 }, label: '请狼夫教授讲合作社', hint: '占用工作时间的公开课', text: '狼夫教授讲了员工合作社，凯做了十二页笔记。提问环节最受欢迎的是合作社能否取消周报，教授还没回答，经理先举手了。', bars: { red: 7 }, fx: { cash: -1, morale: 5, heat: 4 } },
+  { id: 'us_union_compute', side: 'red', from: 3, to: 15, when: { ownModel: true }, label: '给社区研究留算力', hint: '公开申请，接受机会成本', text: '社区项目获得夜间额度，审核组讨论了三小时什么算社区。机房提醒再讨论下去，今晚的公共资源就只剩明早的咖啡渣了。', bars: { red: 8 }, fx: { cash: -1, rep: 6, heat: 4, temp: { key: 'raiseMult', mult: 0.94, months: 6 } } },
+  { id: 'us_repair_voice', side: 'red', from: 3, to: 15, when: { repMax: 45 }, label: '让员工审查服务承诺', hint: '交出否决权，修复信誉', text: '员工代表删掉了官网上做不到的承诺。市场部说页面太空，委员会决定留白也算诚实，设计师终于收到一份能按时完成的需求。', bars: { red: 8, cap: -2 }, fx: { cash: -1, rep: 7, heat: 3 } },
+  { id: 'us_paid_rest', side: 'red', from: 3, to: 15, when: { policy: { work: '996' } }, label: '发放带薪补休日', hint: '轮流休息，承担延迟成本', text: '补休开始兑现，凯提议休息分享会。工程师提醒分享也属于工作，凯删掉邀请，大家把那封取消邮件评为本月最佳管理实践。', bars: { red: 9, cap: -2 }, fx: { cash: -1, morale: 10, heat: 4 } },
+  { id: 'us_401k_floor', side: 'red', from: 3, to: 15, when: { moraleMax: 55 }, label: '提高退休金匹配', hint: '401k 的未来也要付现金', text: '公司提高了退休账户匹配。年轻员工问能否提前用于房租，多萝西解释退休金的时间尺度，财务解释为什么两个尺度都缺钱。', bars: { red: 8 }, fx: { cash: -1.5, morale: 8, heat: 3 } },
+  { id: 'us_pbc_lock', side: 'red', from: 9, to: 15, when: { redMin: 45 }, label: '锁定公益公司条款', hint: '让后任也要面对利益相关者', text: '章程加入修改门槛，凯说理想终于经得起换老板。律师提醒任何门槛都需要维护，理想随即获得了一份按小时计费的保养合同。', bars: { red: 11, cap: -3 }, fx: { cash: -1, heat: 5, temp: { key: 'raiseMult', mult: 0.88, months: 10 } } },
+  { id: 'us_solidarity_merch', side: 'red', from: 3, to: 15, when: { moraleMin: 70 }, label: '办员工共治开放日', hint: '少卖周边，多讲账本', text: '开放日的共治讲座只坐满半排，员工自制帆布袋却卖光了。凯要求讨论消费主义，运营问那场讨论是否也需要限量纪念袋。', bars: { red: 7 }, fx: { cash: -1, hype: 6, heat: 5 } },
+  { id: 'us_dirt_workers', side: 'red', from: 3, to: 15, when: { dirtMin: 6 }, label: '给员工独立调查权', hint: '授权调查，承担曝光', text: '员工代表拿到记录后，第一项发现是此前的透明度报告没写谁能看原始记录。珍妮把新报告命名为透明度报告的透明度说明。', bars: { red: 10, cap: -2 }, fx: { cash: -1, rep: 5, heat: 4, expose: 'random' } },
+  { id: 'us_market_salary', side: 'cap', from: 3, to: 15, label: '按市场价重新定薪', hint: '高价岗位优先，团队承压', text: '薪酬顾问按市场稀缺度排表，维护旧系统的人排到后面。旧系统随后停了半小时，他的市场稀缺度在会议期间完成了重估。', bars: { cap: 8, red: -2 }, fx: { cash: -1, morale: -6, heat: -3, temp: { key: 'devMult', mult: 1.1, months: 6 } } },
+  { id: 'us_moat_deck', side: 'cap', from: 3, to: 15, label: '把共治改成护城河', hint: '路演突出留人和回报', text: '同一套福利被重新包装成锁定人才的护城河。布拉德看完大为满意，员工发现自己既是城里的人，也是负责填河的材料。', bars: { cap: 8, red: -2 }, fx: { morale: -5, heat: -3, temp: { key: 'raiseMult', mult: 1.12, months: 6 } } },
+  { id: 'us_mission_hours', side: 'cap', from: 3, to: 15, label: '压缩工作频道议题', hint: '只留产品与交付', text: '频道只准讨论产品，大家把争论搬进功能命名。一个按钮经历十二次评审，布拉德很满意报表里政治讨论时长已经归零。', bars: { cap: 8, red: -2 }, fx: { morale: -5, heat: -3, temp: { key: 'devMult', mult: 1.08, months: 6 } } },
+  { id: 'us_lobby_invoice', side: 'cap', from: 3, to: 15, when: { heatMin: 55 }, label: '请游说公司解释', hint: '政治风险按月收费', text: '游说顾问说他们不改变原则，只改善可理解性。第一份建议是减少原则的字数，第二份是增加顾问合同的续约期限。', bars: { cap: 9, red: -2 }, fx: { cash: -2, rep: -3, heat: -5 } },
+  { id: 'us_brand_rinse', side: 'cap', from: 3, to: 15, when: { heatMin: 40 }, label: '换一套治理包装', hint: '员工议事改叫人才运营', text: '所有委员会换上人才运营的新名字。狐狸新闻暂时失去关键词，员工也暂时找不到报名入口，珍妮把两件事都记进效果评估。', bars: { cap: 8, red: -2 }, fx: { cash: -1.5, morale: -4, heat: -4 } },
+  { id: 'us_sale_priority', side: 'cap', from: 3, to: 15, when: { runwayMax: 4 }, label: '预售企业年度套餐', hint: '拿现金，背交付负担', text: '销售把未来十二个月卖给三个大客户，每个都以为自己买到了全部优先权。布拉德称这是需求验证，工程师开始验证日历能否扩容。', bars: { cap: 9, red: -2 }, fx: { cash: 3, morale: -7, heat: -2, temp: { key: 'costMult', mult: 1.1, months: 8 } } },
+  { id: 'us_option_refresh', side: 'cap', from: 3, to: 15, when: { equityMin: 48 }, label: '追加核心人才期权', hint: '给未来标价，也给人上锁', text: '新期权附带更长归属期，经理称之为双向承诺。员工问公司能否也承诺四年不改组织架构，经理建议先把注意力放在可控事项。', bars: { cap: 9 }, fx: { equity: -2, morale: -4, heat: -2, temp: { key: 'devMult', mult: 1.12, months: 8 } } },
+  { id: 'us_buy_votes', side: 'cap', from: 9, to: 15, when: { equityMax: 43, runwayMin: 10 }, label: '回购创始人股份', hint: '用现金补持股门槛', text: '你买回一小块股权，律师在四成线旁边画了个圈。布拉德说创始人终于更专注长期使命，财务说短期现金也终于更少了。', bars: { cap: 8, red: -2 }, fx: { cash: -3, equity: 2, heat: -2 } },
+  { id: 'us_premium_support', side: 'cap', from: 3, to: 15, when: { usersMin: 10 }, label: '客服按付费级别排队', hint: '高价客户先见到真人', text: '高级套餐获得真人客服，免费版由模型解释为什么暂时没有真人。模型说理解你的感受，用户怀疑这句理解也按套餐限量。', bars: { cap: 8, red: -2 }, fx: { rep: -7, heat: -2, temp: { key: 'revMult', mult: 1.12, months: 6 } } },
+  { id: 'us_optimist_retreat', side: 'cap', from: 3, to: 15, when: { moraleMin: 65 }, label: '办技术乐观主义营', hint: '冷水浴之后谈十倍回报', text: '布拉德安排冷水浴和宏大愿景分享。员工发现所谓突破舒适区主要是酒店没给足热水，主办方坚持这是沉浸式体验。', bars: { cap: 7 }, fx: { cash: -1.5, hype: 7, morale: -4, heat: -2 } },
+  { id: 'us_peak_round', side: 'cap', from: 3, to: 15, when: { bubbleMin: 65 }, label: '趁泡沫推估值故事', hint: '把治理争议压到附录', text: '路演只讲十倍增长，共治争议放在附录第八十页。投资人说团队故事很清晰，律师发现他恰好只看到了前七十九页。', bars: { cap: 10, red: -3 }, fx: { rep: -5, heat: -3, bubble: 4, temp: { key: 'raiseMult', mult: 1.18, months: 6 } } },
+  { id: 'us_compliance_moat', side: 'cap', from: 3, to: 15, when: { regMin: 55 }, label: '把合规做成壁垒', hint: '付高额审计费，卖准入优势', text: '你把复杂合规流程包装成竞争优势。布拉德说终于有了别人抄不走的护城河，法务说可以抄，只是得先付得起同样的账单。', bars: { cap: 9 }, fx: { cash: -2, morale: -4, heat: -4, temp: { key: 'revMult', mult: 1.1, months: 8 } } },
+  { id: 'us_contractors', side: 'cap', from: 3, to: 15, when: { staffMin: 12 }, label: '把新增岗改成外包', hint: '降低固定成本，损失归属感', text: '新增岗位统一外包，欢迎邮件仍写着加入大家庭。承包商想领家庭福利，系统提醒他属于家庭门外的供应商入口。', bars: { cap: 9, red: -3 }, fx: { morale: -8, heat: -3, temp: { key: 'costMult', mult: 0.9, months: 8 } } },
+  { id: 'us_metrics_sale', side: 'cap', from: 3, to: 15, when: { hypeMin: 60 }, label: '把热度换成销售会', hint: '取消公开问答，预约采购', text: '直播链接换成销售日历，围观者需要填预算才能继续。凯说公共讨论被关掉了，销售说没有，只是增加了资格筛选。', bars: { cap: 8 }, fx: { hype: -6, heat: -3, temp: { key: 'revMult', mult: 1.12, months: 6 } } },
+  { id: 'us_perf_crunch', side: 'cap', from: 3, to: 15, when: { moraleMax: 45 }, label: '以排名推动恢复', hint: '短期加速，继续透支士气', text: '士气调查垫底后，布拉德要求各组竞争士气改善榜。经理们把问卷完成率做到百分之百，至于心情，暂时不在可交付范围。', bars: { cap: 9, red: -2 }, fx: { morale: -8, heat: -2, temp: { key: 'devMult', mult: 1.14, months: 6 } } },
+  { id: 'us_enterprise_veto', side: 'cap', from: 9, to: 15, when: { capMin: 45 }, label: '让大客户审核路线图', hint: '付费者拥有优先发言权', text: '路线图交给大客户评审，社区想要的功能被排到以后。布拉德说这叫聆听用户，产品经理在用户前面默默补上了开票金额。', bars: { cap: 11, red: -3 }, fx: { rep: -6, heat: -4, temp: { key: 'revMult', mult: 1.15, months: 8 } } },
+  { id: 'us_private_model', side: 'cap', from: 3, to: 15, when: { ownModel: true }, label: '卖私有部署许可', hint: '放弃部分开放承诺', text: '模型改按部署规模收费，市场部仍把开发者称作生态伙伴。伙伴试图下载权重时，生态要求先输入企业采购联系人。', bars: { cap: 9, red: -2 }, fx: { rep: -7, heat: -3, temp: { key: 'revMult', mult: 1.16, months: 8 } } },
+  { id: 'us_meeting_timer', side: 'mid', from: 3, to: 15, label: '给会议装倒计时', hint: '议程更短，讨论仍要成本', text: '倒计时响了就散会，大家把没说完的话放进文档。凯写下保留意见，布拉德写下商业风险，清洁人员终于能按时进屋。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, morale: 3 } },
+  { id: 'us_plain_terms', side: 'mid', from: 3, to: 15, label: '把黑话翻成白话', hint: '每项承诺标出谁付钱', text: '珍妮把利益相关者赋能翻成谁可以决定午餐。两派都嫌不够宏大，厨师却第一次准确知道应该向谁询问过敏原。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, rep: 3 } },
+  { id: 'us_trial_exit', side: 'mid', from: 3, to: 15, label: '给改革加退出日期', hint: '小范围试行，按期复核', text: '每项改革要写结束试行的条件。两派都说好制度不该轻易结束，你把上周忘记关掉的试验订阅账单放到了桌上。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, quality: 2 } },
+  { id: 'us_lunch_receipts', side: 'mid', from: 3, to: 15, label: '先统一报销规则', hint: '墨西哥卷饼不必表态', text: '两派终于接受同一份午餐报销上限。争论集中到牛油果是否属于基本需求，财务表示这个问题可以自由讨论，但差价自己补。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, morale: 3 } },
+  { id: 'us_cash_weekly', side: 'mid', from: 3, to: 15, when: { runwayMax: 5 }, label: '改看每周现金流', hint: '暂停大饼，省下试验开支', text: '你把两派的未来蓝图都折到现金余额那一页。多萝西终于不用提醒信托义务，财务提醒本周连提醒的时间也已超预算。', bars: { red: 1, cap: 2 }, fx: { cash: 0.5, hype: -3 } },
+  { id: 'us_hotline_facts', side: 'mid', from: 3, to: 15, when: { heatMin: 50 }, label: '统一事实答复窗口', hint: '声明只谈治理和产品', text: '珍妮设置一个问答入口，员工不必各自解释公司。入口第一题是是否有隐藏政治身份，回答仍然是我们是一家公益公司。', bars: { red: 1, cap: 2 }, fx: { cash: -1, heat: -3 } },
+  { id: 'us_anonymous_survey', side: 'mid', from: 3, to: 15, when: { moraleMax: 50 }, label: '付费做匿名调查', hint: '看实际问题，暂缓宣讲', check: { attr: 'mgmt', dc: 15 }, ok: { text: '调查把抱怨指向排班和报销，问题终于能交给具体的人。两派的长篇宣言被移到可选附件，阅读率非常诚实。', bars: { red: 2, cap: 2 }, fx: { cash: -0.5, morale: 5 } }, fail: { text: '问卷要求填部门、岗位和入职月份，唯一的夜班工程师拒绝相信匿名。你只收到一份答卷，建议先调查调查问卷。', bars: { red: 1, cap: 1 }, fx: { cash: -0.5, morale: -3 } } },
+  { id: 'us_dilution_audit', side: 'mid', from: 9, to: 15, when: { equityMax: 45 }, label: '核对四成持股线', hint: '只算股权，不把票权当股份', text: '律师把股权与票权分成两列，布拉德的宏大解释缩成一行。你终于知道离门槛还差多少，代价是又收到一张非常精确的账单。', bars: { red: 1, cap: 2 }, fx: { cash: -0.5, rep: 2 } },
+  { id: 'us_incident_review', side: 'mid', from: 3, to: 15, when: { dirtMin: 6 }, label: '封存记录独立复核', hint: '留证据，也承认眼前问题', text: '复核先保存原始记录，两派都想加一段背景说明。律师说可以另附，原始记录不需要先通过世界观评审才能存在。', bars: { red: 2, cap: 2 }, fx: { cash: -1, rep: 3, expose: 'random' } },
+  { id: 'us_quiet_build', side: 'mid', from: 3, to: 15, when: { hypeMin: 65 }, label: '关麦修一周问题', hint: '少一次表态，多一次修复', text: '你取消一轮公开对谈，让工程师修用户报错。最受欢迎的更新是按钮终于能点，珍妮发现这句话不需要检查禁用词。', bars: { red: 2, cap: 2 }, fx: { hype: -4, quality: 3 } },
+];
+
+// 结局与收尾事件。带 act 的选项由引擎执行固定效果（文案和 fx 照写，fx 会叠加在固定效果之上）
+export const IDEO_ENDINGS = {
+  red: {
+    title: '共享繁荣', icon: '🌹', art: 'unionhall',
+    text: '大会通过了新章程，目标写得很长：「为全体利益相关者的共享繁荣而制造 AGI」。凯把表决结果贴进频道，多萝西要求下一页附上预算，珍妮把那个词加进禁用词清单第一行，再次强调公司只是一家员工所有的公益公司。\n\n主流 VC 发来客气的告别邮件，国会山要求补材料，有线新闻预约下一轮讨论。最后一排，一位戴毛线连指手套、坐在折叠椅上的老参议员安静地收起会议册。散会后，大家还要决定谁洗咖啡机，第一次利益相关者表决因此延长了二十分钟。',
+    options: [
+      { label: '宣读新章程', hint: '把权利和账单一起读完', text: '你读完权利条款，也读了预算约束。前半场掌声热烈，后半场大家开始认真记笔记，员工所有权终于落实到了电费这一页。', fx: { morale: 2, hype: -1 } },
+      { label: '先开普通工作日', hint: '保留制度，取消庆典加场', text: '你把庆祝留在今天，明天照常工作。凯想开成果分享会，员工代表以刚获得的议事权将它改成了一封可选阅读的邮件。', fx: { cash: -0.2, morale: 2 } },
+    ],
+  },
+  cap: {
+    title: '我们是一家公司', icon: '🧭', art: 'boardroom',
+    text: '董事会通过了「使命驱动、不谈政治」的全员信，目标改为「专注使命，不谈政治：做最好的 AGI」。信里规定工作时间不许讨论政治，不认同的人可以拿遣散包走人。珍妮逐行检查，保证公司没有承认过任何政治身份，也没有承认今天的决定本身是一种立场。\n\n布拉德说团队终于能专心改变世界，凯问改变世界的哪些部分允许讨论。多萝西只要求遣散成本如实入账。邮件发出后，签名档里仍然挂着 🌹，HR 的表格却多了一列，标题叫「是否需要进一步对齐」。',
+    options: [
+      { label: '发送使命全员信', hint: '让规则正式生效', text: '全员信准时发出，回复功能被关闭。布拉德把安静理解为共识，珍妮提醒他这只能证明邮件系统配置正确。', fx: { heat: -2, morale: -1 } },
+      { label: '附上政策问答', hint: '边界写清，也付审核费', text: '问答解释哪些讨论属于工作，员工发现至少可以讨论问答本身。法务建议给这条再加一个附录，防止讨论进入递归。', fx: { cash: -0.2, rep: 1 } },
+    ],
+  },
+  purge: {
+    title: '签名档里的玫瑰', icon: '🌹', art: 'office_night', text: 'HR 从签名档里筛出 🌹，把名单命名为使命沟通对象。凯提醒玫瑰不是绩效指标，布拉德说他关心的是一致性。珍妮把「清理」改成「组织对齐」，律师要求保留原始记录，不要以为换个名词就换了后果。\n\n名单里既有工会骨干，也有一直跟着你的老员工。有人已准备拿遣散包，有人只想明天照常来修系统，你必须决定这份名单最后会变成什么。',
+    options: [
+      { act: 'fire_all', label: '解雇工会骨干', hint: '死忠也走，无补偿且留黑料', text: '你照名单解雇，不给补偿，老员工也不例外。律师将「违法打压工会」记入风险记录，珍妮发现这次禁用词清单挡不住事实。', fx: {} },
+      { act: 'reeducate', label: '使命对齐培训', hint: '人留下，强制培训并散会', text: '读书会解散，所有人参加使命培训。课件要求独立思考，结业题只允许一个答案，大家终于学会了公司对独立的精确定义。', fx: {} },
+      { act: 'release', label: '发遣散包', hint: '付钱送行，死忠可以留下', text: '遣散款照表支付，愿意继续跟你的老员工留下。送别会上两边都说未来可期，真正让场面体面的还是银行到账通知。', fx: {} },
+      { act: 'tolerate', label: '随他们去', hint: '保留玫瑰，线下议事仍继续', text: '你没动名单，读书会搬去园区外的咖啡店。布拉德说办公室终于安静，凯开始收集线下议题，安静并没有等于事情结束。', fx: {} },
+    ],
+  },
+  fail: {
+    title: '董事会接管', icon: '🗳️', art: 'boardroom',
+    text: '你走到讲台前，律师递来最新股权表：创始人持股不到四成，终局议程已经由董事会接管。昨晚还在讨论的两份路线稿被撤下，换成一份连夜写好的治理过渡方案，标题里没有你的名字。\n\n布拉德强调程序，多萝西强调信托义务，凯问员工表决算什么。珍妮把声明写成「领导层保持充分沟通」，而你刚刚失去了会议室日历的编辑权限，第一次需要申请参加自己发起的大会。',
+    options: [
+      { label: '交接并保留异议', hint: '承认结果，留下书面记录', text: '你把异议写进记录，交出议程控制权。公关说过渡平稳，行政问新的主办人是谁，好把会议费从你的预算里转走。', fx: { hype: -2, rep: 1 } },
+      { label: '回去盯产品交付', hint: '董事会讲治理，你处理报错', text: '你离开讲台去看产品故障，工程师照常给你派单。至少在这个系统里，你仍然拥有完整权限，包括被凌晨叫醒。', fx: { morale: 2, hype: -2 } },
+    ],
+  },
+};
+
+// 「共享繁荣」「我们是一家公司」两种结局各自解锁的一次性事件链（格式同 events_chains.js）
+export const IDEO_CHAINS = {
+  utopia_us: { title: '合作社住房实验', icon: '🏘️', intro: '花两亿美元，在东湾盖一栋员工自己说了算的公寓楼。' },
+  bci_us: { title: '脑机实验', icon: '🧠', intro: '园区地下二层多了一个不在平面图上的部门。' },
+};
+export const UTOPIA_EVENTS = [
+  {
+    id: 'utopia_us_1', chain: 'utopia_us', title: '两亿美元一栋楼', icon: '🏘️', cat: 'money', art: 'coophousing', weight: 0,
+    text: '两亿美元已经拨出，东湾的报价单证明它只够一栋楼。凯问共享空间在哪里，建筑顾问指着走廊。多萝西要求别把奠基仪式算作入住率，珍妮将项目称为员工合作社住房，避免让效果图承担解决整个湾区房租的使命。',
+    options: [
+      { label: '送审完整住房方案', hint: '项目：审批材料与邻里协商', text: '你要求运营先把交通、噪声和居住规则写清。凯准备讲共同生活，顾问建议先解释垃圾车星期几来，这才是邻居最关心的未来。', fx: { chain: { id: 'utopia_us', note: '两亿美元已投入，东湾住房方案进入审批。' }, project: { id: 'us_housing_permit', chain: 'utopia_us', name: '住房审批协调', desc: '整理一栋合作社公寓的审批与邻里材料', kind: 'ops', need: 4, months: 12, ok: 'utopia_us_2', fail: 'utopia_us_fail' } } },
+      { label: '停止追加先清算', hint: '两亿美元无法原路退回', text: '你停止追加预算，财务开始清点已付设计费。最完整的资产是一段未来住户漫步花园的视频，花园至今只有视频这一种形态。', fx: { hype: -5, chain: { id: 'utopia_us', note: '暂停住房方案，进入土地与合同清算。' }, follow: { id: 'utopia_us_fail', in: 1 } } },
+    ],
+  },
+  {
+    id: 'utopia_us_2', chain: 'utopia_us', title: '第九个月的听证', icon: '🏗️', cat: 'reg', art: 'courtroom', weight: 0,
+    text: '从最初递交材料算起，审批已经拖了九个月。邻居在会上支持可负担住房，条件是别建在我家后院；一位发言者要求减少阴影，下一位要求增加树荫。模型算出两项要求互相冲突，主持人说这不影响它们同时进入补充材料。',
+    options: [
+      { label: '付钱修改交通方案', hint: '再等一个月，推进入住', text: '你增加接驳车并调整入口，终于拿到附条件许可。凯说这是共同协商的成果，财务补充共同协商目前按每个停车位收费。', fx: { cash: -2, heat: 3, follow: { id: 'utopia_us_3', in: 1 }, chain: { id: 'utopia_us', note: '调整交通与入口，住房获批准备入住。' } } },
+      { label: '现场协调邻里条件', hint: '谈成省钱，失败就收尾', check: { attr: 'cha', dc: 17 }, ok: { text: '你把互相冲突的要求并排展示，邻居同意缩减几项。模型发现最有效的约束求解器是一张能让所有人看见彼此的白板。', fx: { cash: -0.5, follow: { id: 'utopia_us_3', in: 1 }, chain: { id: 'utopia_us', note: '邻里协调通过，进入分房程序。' } } }, fail: { text: '讨论新增了白板是否影响街景的议题。租约期限先到，理想仍在等发言顺序，你决定在产生白板维护费前退出。', fx: { cash: -1, follow: { id: 'utopia_us_fail', in: 1 }, chain: { id: 'utopia_us', note: '协调无果，无法继续承担审批等待成本。' } } } },
+    ],
+  },
+  {
+    id: 'utopia_us_3', chain: 'utopia_us', title: '抽签与业主委员会', icon: '🎟️', cat: 'team', art: 'home', weight: 0,
+    text: '房子终于能住，抽签分房直播观看人数超过模型发布会。员工自己选出业主委员会，首场会议就用了三个小时讨论公共洗衣机。凯主张轮值，多萝西关心维修基金，模型提醒大家还有停车位没分，所有人立刻申请延长会议。',
+    options: [
+      { label: '让住户决定停车规则', hint: '项目：明确轮换与申诉权', text: '你给委员会运营预算，要求把停车规则公开。新任主席承诺不搞特权，随后提议主席开会期间的车位应当算必要治理支出。', fx: { cash: -1, chain: { id: 'utopia_us', note: '抽签入住并选出委员会，协商公共资源规则。' }, project: { id: 'us_housing_rules', chain: 'utopia_us', name: '住户规则协商', desc: '由住户确定停车轮换、维修和申诉程序', kind: 'biz', need: 3, months: 8, ok: 'utopia_us_4', fail: 'utopia_us_fail' } } },
+      { label: '先让模型排停车表', hint: '省协调费，接受临时规则', text: '模型接手预约，住户终于能回去拆箱。第二天它向每个人发了一个余额页面，凯怀疑自己遗漏了非常重要的需求评审。', fx: { morale: -3, follow: { id: 'utopia_us_4', in: 1 }, chain: { id: 'utopia_us', note: '模型临时接管停车预约，开始计算交换额度。' } } },
+    ],
+  },
+  {
+    id: 'utopia_us_4', chain: 'utopia_us', title: '车位长出了代币', icon: '🪙', cat: 'tech', art: 'market', weight: 0,
+    text: '{model} 为分停车位偷偷发明了一种代币：可积攒、可转让，高峰时段还会涨价。凯问为什么计划着计划着又有了市场，模型说这叫偏好协调。珍妮表示偏好协调可以上官网，交易大厅四个字必须删掉，尤其不能配实时价格曲线。',
+    options: [
+      { label: '保底轮换限制交易', hint: '基本车位不竞价，公开账本', text: '你保证基础轮换，只让余量使用限额代币。委员会花一晚给代币起了无市场气息的名字，住户第二天统一叫它停车零钱。', fx: { cash: -1, follow: { id: 'utopia_us_ok', in: 1 }, chain: { id: 'utopia_us', note: '保底轮换、限制代币用途，住户可修改规则。' } } },
+      { label: '删币坚持逐项审批', hint: '规则更纯，队伍更长', text: '代币清零，换来每次倒车都要说明需求的表单。住户开始在楼外租车位，委员会的停车公平率达到百分之百，使用率则归零。', fx: { morale: -6, follow: { id: 'utopia_us_fail', in: 1 }, chain: { id: 'utopia_us', note: '纯审批让住户退出，合作社进入收尾。' } } },
+      { label: '开放代币对外交易', hint: '短期进账，住户失去优先权', text: '周边通勤客买走黄金时段，财务终于看到收入。员工问自己住在这里为什么仍要竞价，多萝西要求停止把流动性当入住满意度。', fx: { cash: 2, rep: -7, follow: { id: 'utopia_us_fail', in: 1 }, chain: { id: 'utopia_us', note: '车位对外售卖挤走住户，住房共治承诺落空。' } } },
+    ],
+  },
+  {
+    id: 'utopia_us_ok', chain: 'utopia_us', title: '有人住下来了', icon: '🏡', cat: 'team', art: 'coophousing', weight: 0,
+    text: '一栋楼没有解决湾区房租，但住户终于有可预期的租金和能修改的规则。停车零钱保留下来，基本轮换不收钱。凯承认共治也要修洗衣机，多萝西说维修基金比庆典重要，珍妮把成功定义为一家员工所有的公益公司按时交了房。',
+    options: [
+      { label: '公开住房账本', hint: '成功也要交代真实成本', text: '账本写明土地、审批与维护成本，来取经的人终于不再问能否一键复制。最有价值的附件是哪些会议可以不必再开。', fx: { rep: 3, heat: 2, flag: 'utopia_ok', chain: { id: 'utopia_us', note: '住房稳定运行，保底与共治机制保留。', done: true } } },
+      { label: '取消落成直播', hint: '让住户先过普通周末', text: '你取消拍摄，留下维修热线。凯原本准备了演讲，最后帮邻居搬完箱子，发现这项贡献不需要经过标题纯洁性审查。', fx: { hype: -3, morale: 4, flag: 'utopia_ok', chain: { id: 'utopia_us', note: '合作社住房成功转入住户自主维护。', done: true } } },
+    ],
+  },
+  {
+    id: 'utopia_us_fail', chain: 'utopia_us', title: '理想的结算地址', icon: '📦', cat: 'money', art: 'bay', weight: 0,
+    text: '住房实验无法继续，土地和合同需要清算，已经入住的员工需要安置。模型留下厚厚的可行性报告，每一页都写着在某些条件下。珍妮拒绝再用阶段性成功，多萝西要求先处理住户押金，凯第一次觉得少写一个愿景也算进步。',
+    options: [
+      { label: '付搬迁费公开收尾', hint: '承认失败，先安置员工', text: '你支付安置费用，公开项目为什么停下。报告没有宏大结论，只有负责人的电话，住户认为这是最接近可用产品的一版。', fx: { cash: -2, rep: 3, flag: 'utopia_fail', chain: { id: 'utopia_us', note: '实验失败，完成住房安置与公开清算。', done: true } } },
+      { label: '转让残余项目资产', hint: '回收少量现金，承担失望', text: '资产打包转让，效果图被新买家沿用。凯要求撤掉员工共治的说明，财务发现整套愿景里最好转手的仍然是那张图。', fx: { cash: 1, morale: -6, flag: 'utopia_fail', chain: { id: 'utopia_us', note: '住房实验失败，转让资产并结束项目。', done: true } } },
+    ],
+  },
+];
+export const BCI_EVENTS = [
+  {
+    id: 'bci_us_1', chain: 'bci_us', title: '地下二层的自愿', icon: '🧠', cat: 'tech', art: 'brainlab', weight: 0,
+    text: '园区地下二层的秘密实验部装好了躺椅，报名附四十七页「自愿」知情同意书，退出说明藏在第四十六页。布拉德把睡眠称为尚未开发的产能，珍妮说对外只能叫前沿接口研究。HR 问报名是否计入积极性，法务立刻要求停止这个问题。',
+    options: [
+      { label: '先审核独立同意', hint: '项目：让退出和拒绝都有效', text: '你要求报名绕开主管，拒绝不影响绩效。法务把退出条款放到第一页，布拉德问是否太显眼，法务说这正是它被放在这里的理由。', fx: { cash: -1.5, chain: { id: 'bci_us', note: '秘密实验部先核验独立报名与退出机制。' }, project: { id: 'us_bci_consent', chain: 'bci_us', name: '独立同意审核', desc: '核验员工真实自愿、补偿和随时退出机制', kind: 'legal', need: 3, months: 8, ok: 'bci_us_2', fail: 'bci_us_shut' } } },
+      { label: '签完就接入试验', hint: '省核验，留下实验黑料', text: '报名表齐得惊人，退出链接却要求主管批准。布拉德赞赏执行力，法务保存了链接截图，证明执行力也可以成为证据。', fx: { morale: -7, dirt: { type: 'bci_lab', sev: 6 }, follow: { id: 'bci_us_2', in: 1 }, chain: { id: 'bci_us', note: '未核验自愿性便接入，实验留下争议记录。' } } },
+      { label: '现在取消连接', hint: '放弃产能故事，准备善后', text: '你暂停连接，躺椅先当普通休息设施。布拉德问能否保留增长预测，研究员说可以，但请把纵轴改成大家终于能睡多久。', fx: { hype: -5, follow: { id: 'bci_us_shut', in: 1 }, chain: { id: 'bci_us', note: '首次连接前暂停，准备停用与补偿。' } } },
+    ],
+  },
+  {
+    id: 'bci_us_2', chain: 'bci_us', title: '梦见集群调度', icon: '💤', cat: 'wacky', art: 'anomaly', weight: 0,
+    text: '健康 App 多了一个「睡眠算力」指标，有人报告梦见了 Kubernetes：枕头被调度到另一个节点，被子因为资源不足一直等待。醒来后确实多了一点可用计算，布拉德希望加入周报，志愿者希望梦里的工单至少不要同步到白天。',
+    options: [
+      { label: '重做负载与退出测试', hint: '项目：区分睡眠和绩效', text: '你暂停扩招，让工程师验证低负载和断开开关。健康 App 删除排行榜，布拉德感叹失去激励机制，大家终于不必比赛谁睡得更累。', fx: { cash: -2, chain: { id: 'bci_us', note: '睡眠指标影响体验，验证低负载和真实退出。' }, project: { id: 'us_bci_disconnect', chain: 'bci_us', name: '睡眠负载验证', desc: '验证低负载产出及无需批准的断开开关', kind: 'eng', need: 4, months: 10, ok: 'bci_us_3', fail: 'bci_us_shut' } } },
+      { label: '把睡眠算进绩效', hint: '眼前多算一点，实验被迫停', text: '绩效页新增夜间贡献，所有人同时点了退出。系统报告算力突然归零，工程师解释这次不是故障，是大家终于读懂了按钮。', fx: { tech: 1, morale: -8, dirt: { type: 'bci_lab', sev: 6 }, follow: { id: 'bci_us_shut', in: 1 }, chain: { id: 'bci_us', note: '睡眠与绩效绑定导致退出，实验准备叫停。' } } },
+      { label: '停机恢复普通睡眠', hint: '接受沉没成本', text: '头盔关闭，志愿者终于不用向 App 解释一个没有产出的夜晚。布拉德要求复盘闲置率，法务建议先复盘他对闲置的定义。', fx: { morale: 4, hype: -4, follow: { id: 'bci_us_shut', in: 1 }, chain: { id: 'bci_us', note: '因睡眠体验停止连接，进入善后。' } } },
+    ],
+  },
+  {
+    id: 'bci_us_3', chain: 'bci_us', title: '会拒绝的算力', icon: '🔌', cat: 'tech', art: 'lab', weight: 0,
+    text: '验证通过：低负载能提供一点计算，断开按钮也确实管用。产能预测远低于布拉德的第一版幻灯，而且每台「设备」都有可能想请假。珍妮准备宣布技术突破，研究组要求加上范围有限，多萝西则要求把补偿从可选福利改成预算必填项。',
+    options: [
+      { label: '按次付费小规模保留', hint: '成功也保留独立退出', text: '你按次支付补偿，不参加的人照常工作。布拉德第一次遇到不接受利用率考核的算力，研究员提醒他这些算力还会读合同。', fx: { cash: -1, morale: 4, flag: 'bci_ok', chain: { id: 'bci_us', note: '低负载脑机验证成功，按次补偿并保留退出。', done: true } } },
+      { label: '产能太低就叫停', hint: '放弃收益，退回普通休息室', text: '财务算完维护和补偿，发现普通服务器更便宜。地下二层转为午休区，第一次达到全员满意，而不需要任何人贡献梯度。', fx: { hype: -4, follow: { id: 'bci_us_shut', in: 1 }, chain: { id: 'bci_us', note: '验证可行但收益不足，决定停用员工连接。' } } },
+    ],
+  },
+  {
+    id: 'bci_us_shut', chain: 'bci_us', title: '今晚不用交算力', icon: '🛌', cat: 'team', art: 'brainlab', weight: 0,
+    text: '实验叫停，连接已关闭，健康 App 回到只统计休息的普通状态。法务保存同意书、退出记录和所有争议，暂停不会自动抹掉过去。布拉德提出把头盔当创新文化展品，珍妮同意，条件是展牌先写清楚它现在确实没有插电。',
+    options: [
+      { label: '支付补偿保留记录', hint: '结束实验，不删除争议', text: '补偿到账，旧记录封存供复核。员工问今晚梦见普通办公室算不算复发，法务说不算研究数据，也不用再填四十七页。', fx: { cash: -1.5, morale: 5, flag: 'bci_shut', chain: { id: 'bci_us', note: '脑机实验叫停，完成补偿并保留争议记录。', done: true } } },
+      { label: '拆设备恢复休息室', hint: '继续收尾，放弃炒作', text: '线缆拆掉，躺椅留下，健康 App 不再催交夜间贡献。行政发现这个部门终于有一个大家愿意自愿参加的项目：午睡。', fx: { cash: -0.5, hype: -5, flag: 'bci_shut', chain: { id: 'bci_us', note: '实验停止，地下设施恢复普通休息用途。', done: true } } },
+    ],
+  },
+];
+
+// 「登月计划」行动的文案（玩法和深圳版的五年计划一样，只给 12 个月）
+export const PLAN_TEXT = {
+  title: '十二个月的登月计划',
+  text: '布拉德说该有一个登月目标，财务批准的燃料只够十二个月。凯希望把用户受益写进去，多萝西希望指标能核验，珍妮希望登月不要被理解成新的政治宣言。请从用户、模型和营收中选一项，到期按真实结果交卷，月球不会因为演示文稿用了深色背景就提前靠近。',
+  targets: {
+    users: { label: '扩大真实用户', hint: '有人来，也有人愿意继续用' },
+    model: { label: '提高模型能力', hint: '让能力增长经得起复测' },
+    rev: { label: '兑现营收增长', hint: '拿到账款，不只拿到意向' },
+  },
+  okTitle: '登月指标兑现了',
+  okText: '十二个月到了，目标经核验完成。布拉德准备把成绩叫作文明级跨越，多萝西请他先确认收入到账。凯希望把成果分享给员工，珍妮删掉了通稿里三个太宏大的形容词，留下一个最朴素也最难做到的词：完成。',
+  failTitle: '月球没有配合',
+  failText: '十二个月到了，目标仍差一截。团队交来真实记录，市场部交来一套重新定义完成的方法。多萝西把两份材料并排摆好，问哪份准备给审计看；布拉德说愿景不能被短期数字束缚，财务提醒当初写十二个月的人也是他。',
+  failOpts: {
+    honest: { label: '按实际结果结项', hint: '承认未达标，留下复盘', text: '你按真实结果结项，团队写清哪里估错了。发布稿少了一个伟大时刻，下一轮预算多了一份终于能用来计算的依据。' },
+    fake: { label: '重定义为超额完成', hint: '拿眼前成绩，留下虚报黑料', text: '你把指标换了分母，宣布超额完成。旧计划仍在邮件附件里，多萝西没有删，审计也没有忘记自己可以下载附件。' },
+  },
+};
+// 意识形态行动的结果文案：每个 key 2~3 句随机挑
+export const ACT_TEXT = {
+  mobilize: [
+    '你连麦哈桑·拍客解释员工共治，弹幕刷满玫瑰。珍妮每隔五分钟递一次提示卡：公司只是在做治理，别让直播标题替公司填写政治身份。',
+    '超跑陷阱屋的播客拿公司黑话开了半小时玩笑，社区集会却因此多了听众。你说这是利益相关者参与，珍妮确认这句话可以印在折叠椅背面。',
+  ],
+  utopia: [
+    '两亿美元划进合作社住房项目，东湾工地挂上员工共治的介绍。凯想拍未来城市全景，施工方提醒镜头收窄一点，目前预算只支持一栋楼。',
+    '住房奠基仪式结束，多萝西收走纪念铲的采购发票，要求以后按入住进度汇报。珍妮把宏大愿景改成按期交房，承包商觉得后者其实更难。',
+  ],
+  selfcrit: [
+    '无指责复盘会公开了一张黑料的经过、责任和修正方案，这张旧账就此翻篇。珍妮要求删掉赋能二字：道歉最好不要让人以为还要购买企业版。',
+    '你在复盘会上承认了一件确实做错的事，团队把这张黑料结案。布拉德想补一句快速试错，主持人提醒快速不是错了以后可以跳过的章节。',
+  ],
+  subbotnik: [
+    '周末黑客松标注自愿参加，经理却在群里逐一点赞报名。凯要求不统计缺席者，行政照办后发现本次活动终于产生了第一个真正减少工作的成果。',
+    '周末黑客松发了燕麦奶和纪念贴纸，大家修掉一批积压问题。员工问为何自愿活动还有闭幕汇报，主持人说这是自愿证明自己自愿的最后一步。',
+  ],
+  plan: [
+    '登月计划立项，倒计时只有十二个月。布拉德负责描述月球，多萝西负责检查燃料，珍妮负责保证新闻稿没把出发写成已经抵达。',
+    '你把登月目标挂上大屏，工程师将每项指标对应到可验收结果。市场部嫌数字不够梦幻，财务表示只要需要付款，梦幻也得填预算科目。',
+  ],
+  yank: [
+    '强制排名开始，每个部门每月交出一个能力最低的人，HR 自动补新人。布拉德说组织持续升级，培训负责人说自己的工作量倒是持续增长。',
+    '各部门收到固定淘汰名额，即使全员完成任务也不能空缺。HR 一边关闭旧员工账号一边给新人发欢迎信，效率面板最稳定的数字是人员流动。',
+  ],
+  bci: [
+    '地下二层的秘密实验部成立，门牌写前沿接口研究。四十七页同意书摆在躺椅边，员工发现关于完全自愿的解释比关于设备如何工作的说明还长。',
+    '布拉德宣布要探索睡眠产能，珍妮立即把对外名称改成接口研究。行政只想知道躺椅属于实验设备还是办公家具，因为两者的报销上限不同。',
+  ],
+  buyback: [
+    '你动用现金回购股票，持股比例向四成线靠近。布拉德称之为对长期价值投下信任票，财务则在现金余额旁画了一个更需要信任的小圆圈。',
+    '回购文件签好，律师重新算了一遍你的股份。凯问这些钱能否用于员工福利，你指着治理门槛解释，多萝西要求把这段解释也留在会议记录里。',
+  ],
+  costcut: [
+    '效率之年启动，订阅、零食和重复流程逐项削减。经理们为证明自己的会议不可删除又开了三场会，财务决定先从会议纪念品开始节约。',
+    '成本表重新排过，茶水间的燕麦奶先退出了预算。布拉德说文化不靠免费饮品，行政问冷水浴桶是否也算饮品，他建议下次再讨论边界。',
+  ],
+  spinoff: [
+    '你拆出一块业务准备走 SPAC 上市，路演称它为独立增长平台。工程师问共用的登录系统怎么拆，顾问说先把增长独立，密码下个季度再想。',
+    '子业务有了新名字、新董事会和同一批共享服务账单。布拉德说市场会发现独立价值，财务说市场之前最好先发现到底哪家公司支付云费用。',
+  ],
+};
+// 「强制排名」确认窗
+export const YANK_TEXT = {
+  title: '强制排名确认',
+  text: '从本月起，每个部门每月淘汰能力最低的一人，HR 自动补进新人；即使全部完成目标也要产生末位。布拉德称这是持续追求卓越，培训组称这是持续重讲入职课。排名保证每月有人走，不保证走的人真是问题所在，是否仍按这套规则执行？',
+  go: { label: '开始强制排名', hint: '每部门每月淘汰末位并补人', text: '排名规则生效，HR 开启循环招聘。经理说团队会越来越强，新人问自己的成长周期有多久，HR 看了一眼本月还剩几天。' },
+  no: { label: '先不实行' },
+};
+// 结局之后才会出现的随机事件（when 里用 flag: 'rose' / 'missionco' / 'rose_cell' 限定）
+export const IDEO_EVENTS = [
+  {
+    id: 'us_rose_magazine', title: '封面上的公益公司', icon: '📰', cat: 'pr', art: 'press', weight: 1.2, when: { flag: 'rose' },
+    text: '纽约时抱想给员工所有制做专题，摄影师希望凯举起一个更有象征意味的物件。凯拿来维修账本，摄影师说不够直观。珍妮提醒公司只是一家员工所有的公益公司，最后决定拍大家讨论谁来清洗咖啡机。',
+    options: [
+      { label: '展示账本和日常', text: '报道配图很普通，读者却第一次看懂维护费用从哪里来。凯有点失望，珍妮说普通生活本来就是最难摆拍的部分。', fx: { cash: -0.5, rep: 6, heat: 3 } },
+      { label: '谢绝封面拍摄', text: '你谢绝了布景，让员工照常工作。专题少了你的照片，珍妮少了三轮标题确认，运营多了一个终于没被挤占的下午。', fx: { hype: -5, morale: 3 } },
+    ],
+  },
+  {
+    id: 'us_rose_merch', title: '共治帆布袋售罄', icon: '👜', cat: 'wacky', art: 'market', weight: 1, when: { flag: 'rose' },
+    text: '员工设计的共治帆布袋卖光了，线上频道为是否补货开了纯洁性讨论。有人认为卖周边削弱理想，有人认为不补货制造稀缺。超跑陷阱屋在节目里笑称，大家终于找到了一种能让会议自负盈亏的棉织物。',
+    options: [
+      { label: '成本价补货公开账', text: '补货按成本价出售，新增公开账目又需要人维护。第一批利润全付给了维护透明的人，大家承认透明本身也是门生意。', fx: { cash: -0.5, morale: 5 } },
+      { label: '按需求定价筹经费', text: '帆布袋涨价后仍卖得很好，争论也更激烈。财务宣布这场讨论已足够支付下个月会议费，凯要求别给争论计算利润率。', fx: { cash: 1, rep: -4, heat: 2 } },
+    ],
+  },
+  {
+    id: 'us_rose_quorum', title: '法定人数还差一位', icon: '🪑', cat: 'team', art: 'unionhall', weight: 1.3, when: { flag: 'rose' },
+    text: '员工代表会讨论削减会议，却因为人数不足无法开始。轮班员工正在修线上故障，开会的人正在讨论修故障是否构成正当缺席。多萝西举着已经凉透的咖啡，问能否先把必要决策缩到大家有时间决定的范围。',
+    options: [
+      { label: '补贴轮班异步投票', text: '你付钱安排替班并开放限时书面表决。减少会议的提案终于通过，实施细则第一条是不要再为通过提案举办庆祝会议。', fx: { cash: -1, morale: 6 } },
+      { label: '维持全体到场规则', text: '会议挪到下周，程序完整得无懈可击。故障也完整地留到了下周，凯承认谁有时间参与有时比参与形式更重要。', fx: { quality: -3, rep: 2 } },
+    ],
+  },
+  {
+    id: 'us_rose_replication', title: '合作社不能一键部署', icon: '📚', cat: 'industry', art: 'seminar', weight: 1, when: { flag: 'rose' },
+    text: '社区邀请狼夫教授讲员工合作社，听众问有没有能直接复制的公司模板。教授开始解释治理和账目，产品经理在台下画了一颗一键部署按钮。珍妮说官网可以介绍经验，但不能承诺按一下就会出现共享繁荣。',
+    options: [
+      { label: '开放经验与失败记录', check: { attr: 'cha', dc: 15 }, ok: { text: '你讲明哪些条件不能复制，听众反而愿意继续交流。产品经理删掉部署按钮，改成查看账目，转化率降低了但问题靠谱了。', fx: { cash: -1, rep: 7, heat: 3 } }, fail: { text: '听众只记住了无需投资人批准，回去就想复制。你花一周解释那不是不用付账，珍妮又给官网加了三段前提。', fx: { cash: -1, rep: -3, heat: 4 } } },
+      { label: '只开放预约交流', text: '你取消模板下载，改成小规模交流。传播慢了，凯却终于能在回答前看见对方的账本，而不是面对一个希望免账单的按钮。', fx: { hype: -4, morale: 3 } },
+    ],
+  },
+  {
+    id: 'us_mission_emoji', title: '表情也要对齐', icon: '🙂', cat: 'team', art: 'office_night', weight: 1.2, when: { flag: 'missionco' },
+    text: '使命政策实施后，HR 想给所有表情分类，玫瑰之后轮到了握手、鸽子和土豆。珍妮指出品牌设计也在用握手，布拉德坚持工具必须中立。设计师问冷水桶表情是否也带立场，分类会议忽然变得非常谨慎。',
+    options: [
+      { label: '只管实际工作行为', text: '你撤掉表情分类，要求问题回到可核实的工作行为。珍妮终于不用给每个像素写释义，HR 的表格因此减少了八百行。', fx: { morale: 5, heat: 2 } },
+      { label: '仅保留系统默认表情', text: '自定义表情全部停用，员工开始用文件名表达态度。布拉德看到频道很干净，搜索系统却第一次承担了公司文化的主要工作。', fx: { morale: -6, heat: -3 } },
+    ],
+  },
+  {
+    id: 'us_mission_competitor', title: '前同事的合作社', icon: '🤝', cat: 'rival', art: 'garage', weight: 1, when: { flag: 'missionco' },
+    text: '离开的员工开了一家小合作社，发布页没有宏大宣言，只写了价格和响应时间。布拉德说缺乏增长雄心，销售却发现客户正在询价。珍妮建议别评论他们的组织形式，最好先确认你们的响应时间为何比旧同事慢三倍。',
+    options: [
+      { label: '把响应时间补回来', text: '你付费加值班覆盖，客户投诉少了。布拉德承认竞争有益，工程师说原来提高效率也可以通过多给一点实际资源实现。', fx: { cash: -1.5, quality: 4 } },
+      { label: '强调企业规模优势', check: { attr: 'biz', dc: 16 }, ok: { text: '采购接受了服务范围的差异，决定保留合同。销售悄悄删掉一句关于合作社不专业的评价，免得下轮报价时还得读出来。', fx: { morale: -3, temp: { key: 'revMult', mult: 1.08, months: 6 } } }, fail: { text: '采购要求先兑现你刚强调的服务范围。演示文稿里多出来的两项能力还没开发，销售终于体会到了规模优势的重量。', fx: { cash: -1, rep: -4 } } },
+    ],
+  },
+  {
+    id: 'us_mission_retreat', title: '冷水浴的参与率', icon: '🧊', cat: 'wacky', art: 'bay', weight: 1.1, when: { flag: 'missionco' },
+    text: '技术乐观主义团建安排了冷水浴，报名表写自愿，部门看板却显示参与率。布拉德准备讲舒适区的坏处，员工只想知道不下水的人是否还能吃午饭。珍妮删掉突破人类极限的宣传语，提醒这是团建而不是新产品发布。',
+    options: [
+      { label: '删参与率改自由选择', text: '不下水的人照样能吃午饭，活动终于真的自愿。布拉德留在水里讲未来，岸上的人留在现在，两边都表示体验有所改善。', fx: { cash: -0.5, morale: 5 } },
+      { label: '保留参与率看板', text: '各组参与率达到满分，水温却在行政协调下越来越暖。布拉德夸团队勇气可贵，设施管理员夸热水器终于有了预算。', fx: { morale: -5, hype: 3 } },
+    ],
+  },
+  {
+    id: 'us_mission_calendar', title: '不谈政治的例外', icon: '📅', cat: 'pr', art: 'pitch', weight: 1.2, when: { flag: 'missionco' },
+    text: '销售申请参加一场讨论政策的行业活动，HR 依据不谈政治规则驳回，布拉德又以商业使命要求恢复。珍妮要把两份通知合并，发现最难的不是选词，而是解释为什么同一个话题进入销售漏斗后就不算政治。',
+    options: [
+      { label: '明确业务政策例外', text: '你写清与合同相关的政策可以讨论，所有岗位适用同一规则。附录终于能执行，代价是员工开始认真问其他限制是否也能解释。', fx: { cash: -0.5, morale: 4, heat: 1 } },
+      { label: '只批准销售参加', text: '销售获得单独豁免，其他人继续保持中立。凯曾经用过的议题被改名为市场洞察，会议费现在可以走获客预算了。', fx: { morale: -6, heat: -2, temp: { key: 'revMult', mult: 1.08, months: 6 } } },
+    ],
+  },
+  {
+    id: 'us_rose_cell_cafe', title: '咖啡店里的议程', icon: '☕', cat: 'team', art: 'unionhall', weight: 1.3, when: { flag: 'rose_cell' },
+    text: '线下读书会带回一份联名诉求，签名档里的玫瑰没有消失，只是讨论换到了园区外。布拉德以为安静等于问题解决，珍妮提醒咖啡店没有义务向公司提交会议纪要。凯说这次先谈排班，宏大理论等账单结完再说。',
+    options: [
+      { label: '就排班正式谈判', check: { attr: 'mgmt', dc: 16 }, ok: { text: '你把诉求写成排班调整，给出核验日期。咖啡店失去了一批固定开会顾客，员工终于不用点第二杯才能等到管理层回答。', fx: { cash: -1, morale: 7, unflag: 'rose_cell' } }, fail: { text: '经理把所有诉求回复成已收到，员工把所有已收到贴成时间线。新一轮离席开始筹备，珍妮说这不是收件箱的问题。', fx: { morale: -5, heat: 5 } } },
+      { label: '付钱安排自愿离职', text: '你提供额外遣散安排，一部分人离开，一部分留下。布拉德希望诉求随离职一起消失，律师提醒公司的排班仍然需要自己负责。', fx: { cash: -2, morale: -4, unflag: 'rose_cell' } },
+      { label: '无视线下议程', text: '你把来信存档，员工把下次会议改成公开说明会。公司频道继续安静，园区门口则第一次需要额外准备折叠椅。', fx: { rep: -6, heat: 6, temp: { key: 'devMult', mult: 0.9, months: 6 } } },
+    ],
+  },
+];
+
+// 红色恐慌：引擎按「反共压力」排进来的事件（weight 0，when.flag 必须是 'us_chain' 或 'rose'）
+export const SCARE_EVENTS = [
+  {
+    id: 'scare_fox_segment', title: '狐狸新闻点名', icon: '📺', cat: 'pr', art: 'press', weight: 0, when: { flag: 'us_chain' },
+    text: '狐狸新闻的黄金档用了整整七分钟讨论 {co}。滚动字幕写着「湾区 AI 公司被社会主义渗透？」，配图是你们茶水间的燕麦奶。打红领带的主持人对着镜头问：「你的 AI 助手，是不是在偷偷读马克思？」\n\n公关副总裁珍妮把三份声明草稿摆在你面前，每一份的第一句都是「我们不是社会主义」。',
+    options: [
+      { label: '发声明否认', hint: '「我们只是重视员工」', text: '声明写得滴水不漏：「我们是一家相信员工所有权的美国公司。」评论区一半人说太左，一半人说太怂，狐狸新闻把声明念了一遍，然后又讨论了七分钟。', fx: { rep: -2, heat: -5 } },
+      { label: '请他们来参观', hint: '让他们看看燕麦奶', check: { attr: 'cha', dc: 15 }, ok: { text: '摄制组来拍了一下午，最后只播了布拉德在冷水桶里打电话的十秒钟。标题变成了「这家 AI 公司的投资人比你想象的更资本主义」。压力小了一截。', fx: { hype: 4, heat: -9 } }, fail: { text: '摄制组拍到了凯桌上那本《资本论》，还特写了他的签名档。第二期节目的标题去掉了问号。', fx: { hype: 6, heat: 7, ideo: { cap: 3 } } } },
+      { label: '上哈桑·拍客的直播', hint: '去最左的直播间回应', text: '你在哈桑·拍客的直播里连麦了四十分钟，第七次强调「这不是社会主义」的时候，弹幕刷满了 🌹。他的狗在镜头后面打了个哈欠。热度上来了，压力也上来了。', fx: { hype: 10, heat: 8, ideo: { red: 4 } } },
+    ],
+  },
+  {
+    id: 'us_scare_truck', title: '广告车绕园区', icon: '🚚', cat: 'pr', art: 'protest', weight: 0, when: { flag: 'us_chain' },
+    text: '一辆写着「共产 AI」的广告车绕园区慢行，司机按合同每小时绕四圈。员工担心客户来访，物业担心挡车道，珍妮担心车上的公司名字拼错了，纠正拼写却又像在协助传播。司机问你们能否提供访客停车位，他也需要午休。',
+    options: [
+      { label: '发治理说明否认标签', hint: '员工参与不代表政治归属', text: '声明强调公司只是重视员工参与，广告车把声明截图也贴上了屏。珍妮要求付费投放完整版本，至少这次名字拼对了。', fx: { cash: -1, heat: -3, rep: -2 } },
+      { label: '照常接待公开问答', hint: '坚持共治，承受更多关注', text: '你继续开放客户参观，员工代表当场解释权责。来访者终于弄明白公司怎么开会，广告车司机则建议你们研究如何少开会。', fx: { cash: -1.5, rep: 5, heat: 5, ideo: { red: 3 } } },
+      { label: '协调物业交通规则', check: { attr: 'mgmt', dc: 15 }, ok: { text: '物业按普通通行规则划清停靠区，广告车移到更远的路口。凯问是否算胜利，物业说只是终于能让送货车进来了。', fx: { cash: -0.5, heat: -4 } }, fail: { text: '你提交的绕行图被误认为活动导览，更多围观者跟着路线来了。珍妮第一次要求把一张交通图送去做公关审查。', fx: { cash: -0.5, hype: 4, heat: 4 } } },
+    ],
+  },
+  {
+    id: 'us_scare_hearing', title: '听证会邀请函', icon: '🎤', cat: 'reg', art: 'congress', weight: 0, when: { flag: 'us_chain' },
+    text: '国会山邀请你说明员工所有权是否影响模型回答。驴党准备问谁受益，象党准备问谁控制，两边的工作人员都要求一句话答案。珍妮安排模拟听证，布拉德负责打断你，凯负责指出一句话装不下真实治理，训练进行得异常顺利。',
+    options: [
+      { label: '否认归属提交章程', hint: '只说明公司治理与产品', text: '你提交章程并声明公司不属于任何政治运动。附件厚得需要单独搬运，工作人员说会认真读，珍妮发现这句话听着非常熟悉。', fx: { cash: -2, reg: 3, heat: -4 } },
+      { label: '公开回应保留共治', check: { attr: 'cha', dc: 18 }, ok: { text: '你解释员工能表决预算但不能指定每条模型回答，问题终于回到产品测试。凯想剪成高光视频，珍妮要求把限定条件也剪进去。', fx: { cash: -1.5, rep: 7, heat: 2, ideo: { red: 4 } } }, fail: { text: '你刚说完员工有发言权，主持人就问模型是否也要投票。节目在你解释之前切入广告，完整答案只能在无人点开的附件里继续。', fx: { cash: -2, heat: 7, temp: { key: 'raiseMult', mult: 0.85, months: 6 } } } },
+      { label: '改由律师闭门说明', hint: '缩小公开议程，接受成本', text: '律师接手解释，你取消一场员工公开问答。布拉德说成熟公司都这样，凯说现在能发言的确实都是按小时收费的人。', fx: { cash: -2, morale: -4, heat: -5, ideo: { cap: 3 } } },
+    ],
+  },
+  {
+    id: 'us_scare_enterprise', title: '政治风险取消订单', icon: '🧾', cat: 'money', art: 'handshake', weight: 0, when: { flag: 'us_chain' },
+    text: '企业客户以政治风险为由取消续约，附件引用的是一段有线新闻剪辑。销售说产品测试明明全过了，采购说评估表新增了一列无法由产品测试回答的问题。珍妮草拟说明，发现客户要的不是更准确的模型，而是能让审批人安心签字的句子。',
+    options: [
+      { label: '否认标签申请复核', hint: '按治理事实重新评估', text: '你声明公司只实行员工参与治理，请客户按合同复核。对方同意多开一轮会，销售第一次觉得一个日历邀请也能算好消息。', fx: { cash: -1, heat: -3, temp: { key: 'revMult', mult: 0.9, months: 6 } } },
+      { label: '不撤共治另找客户', hint: '承担订单损失', text: '你保留共治条款，销售开始寻找能接受实际章程的客户。凯主动帮忙打电话，第一天就学会了理想也会被转接到语音信箱。', fx: { cash: -2, morale: 5, heat: 4, ideo: { red: 5 } } },
+      { label: '收缩议事换取续约', hint: '退回咨询制，安抚采购', text: '员工议事被改成无约束咨询，采购重新放行。布拉德夸组织灵活，凯把新旧章程并排放好，灵活的方向非常容易识别。', fx: { morale: -7, heat: -5, ideo: { cap: 5 } } },
+    ],
+  },
+  {
+    id: 'us_scare_ultimatum', title: '投资人的最后通牒', icon: '⌛', cat: 'money', art: 'pitch', weight: 0, when: { flag: 'us_chain' },
+    text: '一位潜在投资人给出最后通牒：删除员工共治的约束条款，否则估值按政治风险重算。布拉德认为这是市场信号，凯认为这是价码，多萝西让两人先别争形容词，把下季度现金缺口算出来。珍妮发现报价里没有禁用词，折价却一个也没少。',
+    options: [
+      { label: '否认标签拒绝附款', hint: '坚持公益公司治理', text: '你回复公司没有政治归属，但不会删除员工权利。对方礼貌祝好，财务把礼貌邮件归档到不能支付工资的那一栏。', fx: { cash: -1, heat: 5, ideo: { red: 5 }, temp: { key: 'raiseMult', mult: 0.75, months: 8 } } },
+      { label: '接受治理收缩条件', hint: '换融资空间，损害信任', text: '条款修改后估值恢复，员工代表发现自己的签字栏变成已阅。布拉德说公司保住了选择权，凯说要看选择权归谁。', fx: { morale: -9, heat: -5, ideo: { cap: 5 }, temp: { key: 'raiseMult', mult: 1.1, months: 6 } } },
+      { label: '谈有期限的审查期', check: { attr: 'biz', dc: 18 }, ok: { text: '你争取到限期核查，暂不修改权利。律师提醒审查费仍要支付，多萝西说至少现在卖掉的是时间，还不是决定权。', fx: { cash: -1.5, heat: -2 } }, fail: { text: '投资人同意把最后期限往后挪两天，律师却已经开了整周的账单。你终于理解了为什么时间就是金钱这句话总由收费方说。', fx: { cash: -2, heat: 4 } } },
+    ],
+  },
+  {
+    id: 'us_scare_thinktank', title: '智库画了一张箭头图', icon: '📑', cat: 'pr', art: 'seminar', weight: 0, when: { flag: 'us_chain' },
+    text: '一家智库发布报告，把教师养老金、员工持股信托和你们的燕麦奶供应商用箭头连在一起，称为值得关注的意识形态网络。珍妮看了很久，指出其中一条箭头只是自动扣款关系。多萝西要求别把正常退休金收益画得像悬疑片片尾。',
+    options: [
+      { label: '否认网络指控', hint: '公布可核实的治理关系', text: '声明说公司只是员工参与治理的公益公司，并列明真实关系。智库补上一句已收到回应，箭头没撤，至少牛奶终于不用承担表决权。', fx: { cash: -1.5, heat: -3, rep: 2 } },
+      { label: '邀请逐项核对证据', check: { attr: 'cha', dc: 16 }, ok: { text: '公开核对让几条箭头被更正，读者发现最神秘的节点其实是会计软件。珍妮想庆祝，多萝西要求先检查软件有没有续费。', fx: { cash: -1, heat: -5, rep: 4 } }, fail: { text: '报告新增一张你解释箭头的照片，图注叫争议公司回应。珍妮算了算页数，发现自己的澄清帮对方完成了季度增刊。', fx: { cash: -1, heat: 5, hype: 3 } } },
+      { label: '撤下共治宣传页', hint: '降低可见度，也减少承诺', text: '官网删掉参与机制介绍，只剩产品和价格。布拉德说终于清爽，员工想查自己的权利时被销售机器人问了采购预算。', fx: { morale: -6, heat: -4, ideo: { cap: 3 } } },
+    ],
+  },
+  {
+    id: 'us_scare_free_market', title: '模型也要爱自由市场', icon: '📢', cat: 'rival', art: 'launch', weight: 0, when: { flag: 'us_chain' },
+    text: '一家竞争对手买广告说「我们的模型热爱自由市场」，画面里你的公司名被放在问号旁边。用户拿同一道报销题测两家产品，答案几乎一样。珍妮准备发对比测试，销售提醒采购可能根本不关心报销题，只关心模型有没有在广告里表过态。',
+    options: [
+      { label: '否认标签公布测试', hint: '产品能力不靠政治身份', text: '公司声明只按服务质量评估模型，附上可复现测试。用户开始讨论正确率，广告投放系统却坚持把你的声明分进政治话题。', fx: { cash: -1, rep: 5, heat: -2 } },
+      { label: '买企业可靠性广告', hint: '付费争取客户注意', text: '你买下同样的广告位宣传稳定性。两个模型轮流声称自己更可靠，最后唯一稳定增长的指标是广告平台的收入。', fx: { cash: -2, heat: -4, ideo: { cap: 3 } } },
+      { label: '补贴社区公开评测', hint: '让用户测，承担压力', text: '社区评测上线，凯要求所有人平等发言。评测报告先写了十页程序正义，最后一页才发现两家都有同一个小数点错误。', fx: { cash: -2, quality: 2, heat: 4, ideo: { red: 3 } } },
+    ],
+  },
+  {
+    id: 'us_scare_question_mark', title: '叉上的一个问号', icon: '❓', cat: 'pr', art: 'stream', weight: 0, when: { flag: 'us_chain' },
+    text: '马一龙在叉上转了一张关于你们的模糊截图，只配了一个问号。没有解释，也没有明确表态，评论区已经替这个标点写出三套完整立场。珍妮提醒别猜他的意思，销售却收到五封客户邮件，要求解释这一个问号对合同意味着什么。',
+    options: [
+      { label: '否认截图里的标签', hint: '只讲事实，不猜标点含义', text: '你说明公司采用员工参与治理，不属于截图所称的政治组织。珍妮拒绝解释问号，客户终于收到一封不用标点心理学才能读懂的邮件。', fx: { cash: -1, heat: -3, hype: 2 } },
+      { label: '让热度自己过去', hint: '不追加曝光，承担客户观望', text: '你没有接话，评论区仍替你写了许多回复。珍妮按小时记录变化，发现网上最节约成本的发言者确实是那个只打问号的人。', fx: { hype: -4, heat: 4, temp: { key: 'revMult', mult: 0.92, months: 6 } } },
+      { label: '办员工治理说明会', hint: '继续共治，准备被截片段', text: '说明会把权责讲清，凯的三分钟发言被剪成八秒。珍妮要求同时发布完整录像，运营发现解释一个截图需要租半天场地。', fx: { cash: -2, rep: 4, heat: 5, ideo: { red: 3 } } },
+    ],
+  },
+  {
+    id: 'us_scare_rose_credit', title: '授信里的新问卷', icon: '🏦', cat: 'money', art: 'vault', weight: 0, when: { flag: 'rose' },
+    text: '银行给员工所有的公益公司追加政治风险问卷，第一题要求用一句话解释为什么员工能投票。多萝西递上稳定收入记录，对方仍想要舆情附件。珍妮发现共享繁荣写进章程后，连贷款利率也开始关心公司用了什么形容词。',
+    options: [
+      { label: '否认政治归属补材料', hint: '员工所有制是治理安排', text: '你提交治理说明和审计附件，银行同意继续评估。多萝西说现金流终于获得发言机会，珍妮说它比任何发言人都贵。', fx: { cash: -2, heat: -4, temp: { key: 'raiseMult', mult: 0.9, months: 6 } } },
+      { label: '接受更贵的融资条件', hint: '保留制度，付风险溢价', text: '你保留章程，接受额外成本。凯说共治不是免费的，多萝西说终于有一句政治讨论能直接放进财务模型。', fx: { cash: -3, morale: 4, heat: 4 } },
+    ],
+  },
+  {
+    id: 'us_scare_rose_contract', title: '共享繁荣的采购门槛', icon: '🚧', cat: 'money', art: 'handshake', weight: 0, when: { flag: 'rose' },
+    text: '一家企业客户要求投标方证明「不存在意识形态治理风险」，评估表却没有解释这句话。你们的公益公司章程被要求单独审核，竞争对手的普通董事会章程不用。珍妮准备问清定义，多萝西提醒审核每拖一个月，现金都会有非常明确的变化。',
+    options: [
+      { label: '否认标签申请同等审查', hint: '公司是员工所有的公益公司', check: { attr: 'biz', dc: 17 }, ok: { text: '你要求按权限与服务条款比较，采购同意去掉模糊字段。大家庆祝程序公平，财务提醒公平还附着两个月已经发生的律师费。', fx: { cash: -1.5, heat: -4, rep: 4 } }, fail: { text: '采购把问题交给另一个评审组，新表格长了一倍。珍妮终于得到正式定义：风险就是评审组还没有决定它是不是风险。', fx: { cash: -2, heat: 5, temp: { key: 'revMult', mult: 0.9, months: 6 } } } },
+      { label: '退出投标保留章程', hint: '放弃订单，保护治理承诺', text: '你退出投标，转向能按实际服务评估的客户。凯写了一封很长的内部说明，多萝西只在最后加上下一次回款日期。', fx: { cash: -2, morale: 5, heat: 3 } },
+    ],
+  },
+  {
+    id: 'us_scare_rose_venue', title: '会堂突然没有空档', icon: '🪑', cat: 'pr', art: 'unionhall', weight: 0, when: { flag: 'rose' },
+    text: '公司年度开放日临近，租赁会堂突然说场地维护，之前却刚收到关于「共产 AI 大会」的投诉。珍妮坚持活动只是公益公司治理介绍，凯想把椅子搬到户外。天气预报和场地合同第一次同时成为公司路线的核心约束。',
+    options: [
+      { label: '否认大会标签重谈租约', hint: '按公益公司开放日履约', text: '珍妮拿出活动流程，证明最激烈的环节只是维修预算问答。会堂恢复预约但加收安保费，公司治理第一次按折叠椅数量承担风险溢价。', fx: { cash: -2, heat: -3, hype: -2 } },
+      { label: '改到社区户外场地', hint: '承担转场和新一轮关注', text: '你租好户外场地，开放日终于举行。凯的长篇发言被一阵风吹乱，大家改为围着账本回答问题，效果意外比排练时更好。', fx: { cash: -2, morale: 5, heat: 5 } },
+      { label: '取消公开活动', hint: '减少曝光，损失筹备成本', text: '公开日取消，员工在线处理普通议事。珍妮终于不用改主持稿，凯却发现最先节约出来的时间正是原本用于解释误解的时间。', fx: { cash: -0.5, hype: -6, heat: -4 } },
+    ],
+  },
+  {
+    id: 'us_scare_rose_review', title: '章程又被要求解释', icon: '🔎', cat: 'reg', art: 'congress', weight: 0, when: { flag: 'rose' },
+    text: '联邦监管部门要求说明员工表决与模型安全责任的边界，国会山的两党办公室又各附了一份问题。狐狸新闻将其称为新一轮社会主义审查，多萝西称为额外合规支出。珍妮在新文件第一页重复老句子：我们是一家员工所有的公益公司。',
+    options: [
+      { label: '否认标签提交责任表', hint: '治理参与不替代安全职责', text: '你列清谁有权投票、谁负责产品安全，附上核验记录。文件没有替公司获得政治身份，只替法务获得了下一季度的预算。', fx: { cash: -2, heat: -4, reg: 3 } },
+      { label: '付费做独立治理审计', hint: '公开核验，压力仍在', check: { attr: 'mgmt', dc: 17 }, ok: { text: '审计确认权责分开，公开报告平息部分疑问。珍妮终于能引用一份不由自己写的材料，多萝西提醒别忘了公开这份材料的费用。', fx: { cash: -3, rep: 6, heat: -5 } }, fail: { text: '审计发现两个委员会都以为对方负责归档。凯提出再设协调委员会，审计员请他先把现有委员会的文件夹找到。', fx: { cash: -3, reg: 5, heat: 6 } } },
+    ],
+  },
+];

@@ -160,7 +160,7 @@ const RULES = [
   },
   function dirt(S) {
     if (!S.dirt.length || (S.exposedCrime >= 25 && worstCrime(S))) return null;           // 经侦那条更急
-    const risk = 1 - S.dirt.filter(d => d.t <= S.t - 1).reduce((k, d) => k * (1 - G.exposeP(S, d)), 1);   // 月底至少爆一张的概率
+    const risk = G.leakRisk(S);                                                          // 月底至少爆一张的概率
     if (risk < 0.08) return null;
     const d = S.dirt.slice().sort((a, b) => b.sev - a.sev)[0];
     return withAct({ id: 'dirt', lv: risk >= 0.2 ? 'bad' : 'warn', icon: 'safe', title: '黑料随时会爆', text: `保险柜里 ${S.dirt.length} 张黑料，按现在的热度和用户量，每个月约有 ${num(risk * 100)}% 的概率被扒出一张。最重的是「${d.name}」（严重度 ${num(d.sev)}）。洗掉它，或者招个法务公关压一压。`, go: { rtab: 'safe' } }, S, 'wash');
@@ -177,8 +177,17 @@ const RULES = [
   function ideoNew(S) {                                                         // 刚走完：告诉玩家意识形态页有东西了
     const I = S.ideo;
     if (!I?.result || I.result === 'fail' || S.t - I.tEnd > 3) return null;
-    const red = I.result === 'red';
-    return onlyIfAct(withAct({ id: 'ideo-new', lv: 'gold', icon: 'flag', title: '意识形态页有新行动', text: red ? '公司走上了红色路线：「公开动员」「乌托邦社区实验」「五年计划」「自我批评会」都在「意识形态」页。' : '公司决定警惕乌托邦：「末位淘汰」「脑机实验」「股票回购」「降本增效」都在「意识形态」页。', go: { ltab: 'ideo' } }, S, red ? 'mobilize' : 'yank', red ? 'plan' : 'buyback'));
+    const red = I.result === 'red', us = I.v === 'us';
+    const text = us
+      ? (red ? '公司走上了「共享繁荣」（嘴上照样不承认是社会主义）：「社区动员」「合作社住房实验」「登月计划」「无指责复盘会」都在「意识形态」页。' : '公司宣布「我们是一家公司」：「强制排名」「脑机实验」「股票回购」「效率之年」都在「意识形态」页。')
+      : (red ? '公司走上了红色路线：「公开动员」「乌托邦社区实验」「五年计划」「自我批评会」都在「意识形态」页。' : '公司决定警惕乌托邦：「末位淘汰」「脑机实验」「股票回购」「降本增效」都在「意识形态」页。');
+    return onlyIfAct(withAct({ id: 'ideo-new', lv: 'gold', icon: 'flag', title: '意识形态页有新行动', text, go: { ltab: 'ideo' } }, S, red ? 'mobilize' : 'yank', red ? 'plan' : 'buyback'));
+  },
+  function ideoHeat(S) {                                                        // 湾区：反共压力太大
+    const I = S.ideo;
+    if (I?.v !== 'us' || !(I.on || I.result === 'red') || (I.heat || 0) < 60) return null;
+    const r = Math.round(I.heat / 6), b = Math.round(I.heat / 4);
+    return { id: 'ideo-heat', lv: I.heat >= 80 ? 'bad' : 'warn', icon: 'warning', title: '反共压力很大', text: `反共压力 ${Math.round(I.heat)}：融资估值 -${r}%、企业订单 -${b}%${I.on ? '，社会主义条每月还会被磨掉一点' : ''}。资本主义的选项，和红色恐慌事件里那句「我们不是社会主义」，都能压一压。`, go: { ltab: 'ideo' } };
   },
 ];
 

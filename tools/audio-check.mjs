@@ -68,7 +68,7 @@ class FakeAudioContext {
     }
   }
 }
-const names = 'click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify lift ding error type rain_start'.split(' ');
+const names = 'click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify lift ding error type rain_start burn freeze bloom'.split(' ');
 const moods = ['off', 'title', 'calm', 'focus', 'tense', 'crisis', 'triumph', 'defeat'];
 const saved = new Map(['AudioContext', 'webkitAudioContext', 'document', 'setInterval', 'clearInterval'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
 const originalWarn = console.warn;
@@ -138,6 +138,7 @@ try {
   // 120 秒每 100 毫秒刷新场景，覆盖全部音乐状态、城市、季节、密度和静音。
   for (let step = 0; step < 1200; step++) {
     if (step % 150 === 0) audio.setMusic(moods[Math.floor(step / 150)]);
+    if (step % 75 === 0) audio.setFlavor(['', 'soviet', 'rose', 'cold'][Math.floor(step / 75) % 4]);   // 每种配乐都配一遍意识形态的音色
     audio.setScene({ mode: step < 80 ? 'title' : step > 1100 ? 'end' : 'play', region: step % 200 < 100 ? 'bay' : 'sz',
       night: (step % 100) / 99, staff: step % 61, heat: (step % 70) / 69, racks: step % 13,
       rain: (step % 90) / 89, alert: step % 160 > 100, month: Math.floor(step / 100) });

@@ -267,6 +267,8 @@ export const INVESTORS = ['红衫资本', 'A16Y', '高灵资本', '真哥基金'
 // 走上红色路线以后，美元基金不再和你谈；只剩人民币基金和国家队
 export const INVESTORS_EAST = ['高灵资本', '真哥基金', '五源六源', '金沙河创投', '人民算力基金', '红星产业引导基金'];
 export const EAST_RIVALS = ['deepsleep', 'bytejump'];
+// 湾区走了「共享繁荣」以后，主流 VC 不再接电话；只剩影响力基金、工会养老金和众筹
+export const INVESTORS_PROGRESSIVE = ['公地资本', '教师养老金联盟', '好人影响力基金', '社区众筹平台'];
 
 // 各轮「达标线」：估值基数（万）、用户（万）、月收入（万）。显卡配额不再跟轮次绑定（见引擎里的 quota）
 export const STAGES = [
@@ -354,6 +356,9 @@ export const GOALS = {
   app: { name: '做出一亿人每天在用的 AI 产品', desc: '' },
   red: { name: '为了共产主义乌托邦而制造 AGI', desc: '士气每月 +1、口碑每月 +0.3、监管压力增长 -40%、工资 -8%；融资估值 -15%，再也拿不到西方融资', mods: { moraleAdd: 1, repAdd: 0.3, regMult: 0.6, salaryMult: 0.92, raiseMult: 0.85 } },
   cap: { name: '稳健经营，警惕泡沫，先活下来再谈 AGI', desc: '总成本 -5%、黑料曝光率 -15%、监管压力增长 -10%；炒作效果 -10%', mods: { costMult: 0.95, exposeMult: 0.85, regMult: 0.9, hypeGainMult: 0.9 } },
+  // 湾区版：公司嘴上从不承认自己是社会主义
+  rose: { name: '为全体利益相关者的共享繁荣而制造 AGI', desc: '士气每月 +1、用户增长 +5%、招到的人更强；监管压力增长 +25%、融资估值 -10%、工资 -5%；主流 VC 不再投钱，反共压力挥之不去', mods: { moraleAdd: 1, growthMult: 1.05, hireSkill: 0.5, regMult: 1.25, raiseMult: 0.9, salaryMult: 0.95 } },
+  missionco: { name: '专注使命，不谈政治：做最好的 AGI', desc: '总成本 -5%、黑料曝光率 -15%、监管压力增长 -10%；炒作效果 -10%', mods: { costMult: 0.95, exposeMult: 0.85, regMult: 0.9, hypeGainMult: 0.9 } },
 };
 // 两条一次性事件链成功以后的长期效果（按 flag 生效）
 export const IDEO_FLAG_MODS = {

@@ -835,7 +835,7 @@ export const EVENTS_PACK = [
     ],
   },
   {
-    id: 'fifteen_minutes', title: '十五分钟疯狂', icon: '⏱️', cat: 'money', when: { stageMin: 2, hypeMin: 50, notFlag: 'red' },
+    id: 'fifteen_minutes', title: '十五分钟疯狂', icon: '⏱️', cat: 'money', when: { stageMin: 2, hypeMin: 50, notFlag: ['red', 'rose'] },
     text: '硬银孙正意见你十五分钟，开场就让你「想得再疯狂一百倍」。你准备的财务模型还没打开，他已在餐巾纸上画出全球智能帝国，含月球分部。',
     options: [
       C('比他更疯狂', 'cha', 18, '你把愿景放大到月球和百年，他沉默十秒后拍桌投资。理性离场，巨款和董事会卡一起进场。', { cash: 8, equity: -7, hype: 15, bubble: 10, perk: 'draft' }, '你说要服务全人类，他问为什么不是全银河。十五分钟结束，你因想象力不够失去一笔想象中的钱。', { hype: -8, morale: -4 }),

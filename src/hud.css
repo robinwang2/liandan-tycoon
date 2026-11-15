@@ -689,3 +689,88 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
 #ui .emblem svg { width: 38px; height: 38px; fill: #f5c542; }
 #ui .emblem svg .h { fill: none; stroke: #f5c542; stroke-width: 7; stroke-linecap: round; }
 #ui .emblem span { padding: 2px 14px; border: 1px solid rgba(245, 197, 66, .6); border-radius: 3px; background: linear-gradient(180deg, #c8102e, #8f0b1f); box-shadow: 0 4px 12px rgba(0, 0, 0, .35); color: #ffe08a; font-size: 12px; font-weight: 700; letter-spacing: .12em; white-space: nowrap; }
+
+/* ───────── 湾区版：反共压力条、玫瑰徽章、「社区合作社」风界面 ───────── */
+#ui .ibars.us .ib { grid-template-columns: 76px 1fr 28px; }
+#ui .ib.heat .bar i { background: linear-gradient(90deg, #4f74b8, #e3343c); box-shadow: 0 0 8px rgba(227, 52, 60, .35); }
+#ui .ib.heat b { color: #9ec5ff; }
+#ui .goal.red.us { border-color: rgba(240, 115, 138, .6); background: linear-gradient(135deg, rgba(224, 67, 94, .26), rgba(63, 143, 90, .16)); }
+#ui .goal.red.us b { color: #ffd1da; }
+#ui .iresult.red.us { border-color: rgba(240, 115, 138, .6); background: rgba(224, 67, 94, .16); }
+#ui.rose {
+  --gold: #f0738a; --gold-light: #ffc2cd; --gold-deep: #c94562;
+  --ink-1: #f4efe3; --ink-2: #c3cdbf; --ink-3: #87998a;
+  --base: #0a1712; --surface: #17332b; --tooltip: #0f211b;
+  --line: rgba(240, 115, 138, .16); --line-bright: rgba(240, 115, 138, .32);
+  --highlight: rgba(255, 220, 228, .07); --recess: rgba(0, 12, 8, .32);
+  --glass: linear-gradient(180deg, rgba(20, 52, 41, .93), rgba(10, 31, 24, .89));
+  --glass-soft: linear-gradient(180deg, rgba(20, 52, 41, .85), rgba(10, 31, 24, .79));
+  --gold-wash: rgba(240, 115, 138, .12); --gold-line: rgba(240, 115, 138, .5); --gold-glow: rgba(240, 115, 138, .22);
+  --shadow: inset 0 1px 0 var(--highlight), 0 18px 50px rgba(0, 12, 6, .5);
+  --gold-fill: linear-gradient(135deg, #ffc2cd, #f0738a 55%, #c94562);
+}
+#ui.rose :is(.panel, .w, .pdx) { border-color: var(--gold-line); }
+#ui.rose h4 { color: var(--gold); letter-spacing: .1em; }
+#ui.rose .stage { border-color: var(--gold-line); background: #2f7a52; color: #f4efe3; }
+#ui.rose :is(.pdx-art h2, .pdx-title) { color: #ffd1da; }
+#ui.rose .alerts { top: 186px; }   /* 横幅下面还有一行「本公司不是社会主义组织」，提示条再往下让一点 */
+#ui .emblem.rose .medal { border-color: #e0435e; background: radial-gradient(circle at 35% 30%, #fffaf0, #f1e4c9 72%); box-shadow: 0 0 0 3px rgba(47, 122, 82, .6), 0 6px 18px rgba(0, 0, 0, .45), 0 0 22px rgba(224, 67, 94, .25); }
+#ui .emblem.rose svg .st { fill: none; stroke: #3f8f5a; stroke-width: 4.5; stroke-linecap: round; }
+#ui .emblem.rose svg .lf { fill: #3f8f5a; }
+#ui .emblem.rose svg .p1 { fill: #d6334f; }
+#ui .emblem.rose svg .p2 { fill: none; stroke: #7d1a2e; stroke-width: 2.6; stroke-linecap: round; }
+#ui .emblem.rose span { border-color: rgba(240, 115, 138, .6); background: linear-gradient(180deg, #2f7a52, #1f5a3b); color: #fff1f4; }
+#ui .emblem small { padding: 1px 9px; border-radius: 3px; background: rgba(10, 23, 18, .78); color: #f4efe3; font-size: 10.5px; font-style: italic; }
+
+/* ───────── 资本结局：冷色科技风（深圳「警惕乌托邦」、湾区「我们是一家公司」）───────── */
+#ui.cold {
+  --gold: #5ad1ff; --gold-light: #bdeeff; --gold-deep: #2a8fc0;
+  --ink-1: #e6f2ff; --ink-2: #9db3c8; --ink-3: #66798d;
+  --base: #060b12; --surface: #0f1b28; --tooltip: #0a1520;
+  --line: rgba(90, 209, 255, .14); --line-bright: rgba(90, 209, 255, .3);
+  --highlight: rgba(200, 236, 255, .06); --recess: rgba(0, 6, 12, .42);
+  --glass: linear-gradient(180deg, rgba(11, 21, 33, .94), rgba(5, 11, 19, .9));
+  --glass-soft: linear-gradient(180deg, rgba(11, 21, 33, .86), rgba(5, 11, 19, .8));
+  --gold-wash: rgba(90, 209, 255, .1); --gold-line: rgba(90, 209, 255, .45); --gold-glow: rgba(90, 209, 255, .2);
+  --gold-fill: linear-gradient(135deg, #bdeeff, #5ad1ff 55%, #2a8fc0);
+  --good: #6ff0c8; --bad: #ff6b81;
+}
+#ui.cold :is(.panel, .w, .pdx) { border-color: var(--gold-line); border-radius: 4px; }
+#ui.cold :is(.left, .right) { background: linear-gradient(rgba(90, 209, 255, .035) 1px, transparent 1px) 0 0 / 18px 18px, linear-gradient(90deg, rgba(90, 209, 255, .035) 1px, transparent 1px) 0 0 / 18px 18px, var(--glass); }
+#ui.cold h4 { color: var(--gold); letter-spacing: .18em; }
+#ui.cold :is(.chips b, .ib b, .gauges b) { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+#ui.cold .brand b::before { content: '◆ '; color: var(--gold); }
+#ui.cold .stage { border-color: var(--gold-line); background: rgba(90, 209, 255, .12); color: #bdeeff; }
+#ui.cold :is(.pdx-art h2, .pdx-title) { color: #d6f4ff; letter-spacing: .14em; }
+#ui.cold :is(.btn, .act, .opt, .tab, .alert) { border-radius: 4px; }
+
+/* ───────── 危机时刻：屏幕边缘的光 ─────────
+   1 级紧张：慢慢地呼吸；2 级危急：急促闪烁、多一道边框。颜色跟着意识形态主题换：
+   苏联风本来就是一片红，警报换成琥珀色；冷色科技风加一层扫描线 */
+.crisis-edge { --c: 255, 46, 46; position: fixed; inset: 0; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .8s; }
+.crisis-edge.lv1, .crisis-edge.lv2 { opacity: 1; }
+.crisis-edge::before, .crisis-edge::after { content: ''; position: absolute; inset: 0; }
+.crisis-edge::before { background: radial-gradient(ellipse 72% 68% at 50% 50%, transparent 55%, rgba(var(--c), .3) 80%, rgba(var(--c), .65) 100%); box-shadow: inset 0 0 110px 22px rgba(var(--c), .62); opacity: .6; }
+.crisis-edge.lv2::after { border: 3px solid rgba(var(--c), .85); box-shadow: inset 0 0 22px rgba(var(--c), .7); opacity: .85; }
+.crisis-edge.soviet { --c: 255, 196, 64; }
+.crisis-edge.rose { --c: 255, 40, 64; }
+.crisis-edge.cold { --c: 255, 64, 88; }
+.crisis-edge.cold.lv2::after { background: repeating-linear-gradient(0deg, rgba(var(--c), .07) 0 2px, transparent 2px 5px); }
+@media (max-width: 720px) {   /* 手机屏小，光晕收窄，别把半个屏幕染红 */
+  .crisis-edge::before { box-shadow: inset 0 0 56px 10px rgba(var(--c), .55); }
+  .crisis-edge.lv2::after { border-width: 2px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .crisis-edge.lv1::before { animation: crisis-breathe 2.6s ease-in-out infinite; }
+  .crisis-edge.lv2::before { animation: crisis-pulse 1s ease-in-out infinite; }
+  .crisis-edge.lv2::after { animation: crisis-pulse 1s ease-in-out infinite; }
+  .crisis-edge.soviet.lv2::after { animation: crisis-siren 1s steps(2, jump-none) infinite; }
+  @keyframes crisis-breathe { 0%, 100% { opacity: .2; } 50% { opacity: .7; } }
+  @keyframes crisis-pulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+  @keyframes crisis-siren { 0%, 100% { border-color: rgba(255, 196, 64, .85); } 50% { border-color: rgba(255, 70, 40, .85); } }
+}
+
+/* ───────── 换主题的过场：旧界面的复制品盖在最上面，特效画布再往上 ───────── */
+.fx-old { z-index: 40; }
+.fx-old, .fx-old * { pointer-events: none !important; }
+.fx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 45; pointer-events: none; }
