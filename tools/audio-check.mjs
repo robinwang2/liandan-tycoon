@@ -68,7 +68,7 @@ class FakeAudioContext {
     }
   }
 }
-const names = 'click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast error type rain_start'.split(' ');
+const names = 'click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify error type rain_start'.split(' ');
 const moods = ['off', 'title', 'calm', 'focus', 'tense', 'crisis', 'triumph', 'defeat'];
 const saved = new Map(['AudioContext', 'webkitAudioContext', 'document', 'setInterval', 'clearInterval'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]));
 const originalWarn = console.warn;

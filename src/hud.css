@@ -526,6 +526,12 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
   @keyframes hud-fade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes hud-dialog { from { opacity: 0; transform: translateY(8px) scale(.975); } to { opacity: 1; transform: translateY(0) scale(1); } }
   @keyframes hud-guide { 50% { box-shadow: 0 0 22px var(--gold-glow); outline-color: var(--gold-light); } }
+  #ui .alert.new { animation: alert-new 2.2s ease-out both; }
+  @keyframes alert-new {                                  /* 不从透明开始：动画万一没跑（后台标签页等），提示也看得见 */
+    0% { transform: translateY(-6px) scale(.92); }
+    18%, 62%, 100% { transform: none; box-shadow: 0 6px 18px var(--shade); }
+    40%, 82% { box-shadow: 0 0 0 3px var(--cw), 0 0 20px var(--cl); }
+  }
 }
 
 /* 标题页：左侧压一层暗角，让标题和按钮从明亮的城市画面里跳出来 */
@@ -538,3 +544,29 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
 /* 核显提示：标题页一小块琥珀色玻璃；设置面板里的警告文字 */
 .title .gpu-tip { max-width: 400px; margin: 18px 0 0; padding: 9px 12px; font-size: 12px; line-height: 1.6; color: #ffe2a6; background: rgba(60, 40, 8, .62); border: 1px solid rgba(242, 196, 109, .35); border-radius: 10px; backdrop-filter: blur(10px); }
 .settings .note.warn { color: #ffd38a; background: rgba(242, 196, 109, .08); border: 1px solid rgba(242, 196, 109, .25); border-radius: 8px; padding: 7px 10px; line-height: 1.6; }
+
+/* 行动提示：顶部居中的一排待办。红 = 要紧，金 = 机会或闲置，蓝 = 留意。
+   只有药丸本身吃鼠标，药丸之间的空白处照样能拖动沙盘 */
+#ui .alerts { position: absolute; top: 84px; left: 328px; right: 346px; z-index: 4; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: none !important; }
+#ui .alert { --c: var(--gold); --cw: var(--gold-wash); --cl: var(--gold-line); position: relative; display: flex; align-items: stretch; pointer-events: auto; border: 1px solid var(--cl); border-radius: 999px; background: var(--glass); box-shadow: 0 6px 18px var(--shade); backdrop-filter: blur(12px); }
+#ui .alert.bad { --c: var(--bad); --cw: var(--bad-wash); --cl: rgba(255, 122, 114, .5); }
+#ui .alert.warn { --c: var(--info); --cw: rgba(108, 182, 255, .10); --cl: rgba(108, 182, 255, .42); }
+#ui .alert:hover, #ui .alert:focus-within { background: var(--surface); border-color: var(--c); }
+#ui .alert.later { opacity: .72; border-style: dashed; }
+#ui .alert .al { display: flex; align-items: center; gap: 6px; padding: 6px 2px 6px 11px; border: 0; border-radius: 999px 0 0 999px; background: none; color: var(--ink-1); font: 600 12px/1.2 var(--font); white-space: nowrap; cursor: pointer; }
+#ui .alert .al .ic { flex-shrink: 0; color: var(--c); }
+#ui .alert .ax { display: grid; place-items: center; padding: 0 10px 0 5px; border: 0; border-radius: 0 999px 999px 0; background: none; color: var(--ink-2); opacity: .45; cursor: pointer; }
+#ui .alert .ax:hover { opacity: 1; color: var(--ink-1); }
+#ui .alert.more { padding: 6px 12px; border-color: var(--line); color: var(--ink-2); font: 500 11.5px/1.2 var(--font); cursor: pointer; }
+#ui .alert .atip { display: none; position: absolute; top: calc(100% + 8px); left: 50%; translate: -50% 0; z-index: 2; width: 290px; padding: 10px 12px; border: 1px solid var(--cl); border-radius: 10px; background: var(--tooltip); box-shadow: 0 14px 40px var(--shade-deep); text-align: left; white-space: normal; pointer-events: none; }
+#ui .alert:hover .atip, #ui .alert:focus-within .atip { display: block; }
+#ui .atip b { display: block; margin-bottom: 3px; color: var(--c); font-size: 13px; }
+#ui .atip p { margin: 0; color: var(--ink-1); font-size: 12px; line-height: 1.65; }
+#ui .atip small { display: block; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 11px; line-height: 1.6; }
+
+/* 行动卡上的「建议」小标签、页签上的小金点、底部能直接点的小部件 */
+#ui .act.rec { border-color: var(--gold-line); }
+#ui .act .rtag { margin-left: 6px; padding: 0 6px; border: 1px solid var(--gold-line); border-radius: 999px; background: var(--gold-wash); color: var(--gold); font: 500 10px/16px var(--font); font-style: normal; vertical-align: 1px; }
+#ui .tab .tdot { position: absolute; top: 6px; right: calc(50% - 17px); width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 6px var(--gold-glow); }
+#ui .w.ready { border-color: var(--gold-line); cursor: pointer; }
+#ui .w.ready small:first-of-type { color: var(--gold); }

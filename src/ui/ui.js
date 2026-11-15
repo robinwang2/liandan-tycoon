@@ -1,6 +1,7 @@
 // 《炼丹大亨》界面层：DOM 浮层，负责渲染、接收点击、调度引擎和 3D 场景。
 import * as G from '../game/engine.js';
 import * as A from '../game/actions.js';
+import { advise, muteHint, muteMonths } from '../game/advice.js';
 import { ATTRS, REGIONS, ROUTES, TRACKS, TRAITS, TRAIT, OUTFITS, officeName, ROLES, STAFF_QUIRKS, POLICIES, PERK, FEAT, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, META_SHOP, CAT, MONTHS, MOD_NAME, KIND_NAME } from '../data/defs.js';
 import { CHAINS } from '../data/events_chains.js';
 import { LOGOS, BRAND_COLORS, logoSVG, logoDataURL } from './logos.js';
@@ -15,8 +16,8 @@ const nl = s => esc(s).replace(/\n/g, '<br>');
 const pct = (a, b) => (b > 0 ? Math.min(100, a / b * 100) : 0);
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 
-let S = null, meta = G.loadMeta(), office = null, ui = null, toastTimer = 0, lastEl = null;
-const V = { screen: 'title', ltab: 'rd', rtab: 'board', dlg: null, res: null, toast: null, W: null, summary: null, wait: false };
+let S = null, meta = G.loadMeta(), office = null, ui = null, toastTimer = 0, flashTimer = 0, lastEl = null;
+const V = { screen: 'title', ltab: 'rd', rtab: 'board', dlg: null, res: null, toast: null, W: null, summary: null, wait: false, hints: [], recActs: new Set(), hintSeen: {} };
 
 // 音频：WebAudio 现场合成的音效 + 环境声 + 生成式配乐（src/audio/audio.js），不依赖任何音频文件
 const audio = createAudio();
@@ -123,8 +124,8 @@ function topbar() {
   <div class="turn"><div class="ap" title="行动点">${'<i class="on"></i>'.repeat(Math.max(0, S.ap))}${'<i></i>'.repeat(Math.max(0, apm - S.ap))}</div><button class="btn icon" data-a="settings" title="画质与声音">${icon('settings', 18)}</button><button class="btn big next" data-a="next">下个月 ${icon('next', 18)}</button></div></header>`;
 }
 function actCard(a) {
-  const st = A.actionState(S, a);
-  return `<button class="act ${st.why ? 'off' : ''} ${a.shady ? 'shady' : ''}" data-a="act:${a.id}" ${st.why ? 'disabled' : ''}><span class="ic">${ACT_IC[a.id] ? icon(ACT_IC[a.id], 22) : a.icon}</span><span class="bd"><b>${a.shady ? '☠ ' : ''}${a.name}</b><small>${esc(a.desc(S))}</small>${st.why ? `<em>${esc(st.why)}</em>` : ''}</span><span class="cost"><i>${'●'.repeat(a.ap)}</i>${st.cost > 0 ? `<u>${G.money(S, st.cost)}</u>` : ''}</span></button>`;
+  const st = A.actionState(S, a), rec = !st.why && V.recActs.has(a.id);                     // rec：顶部提示里建议现在做的
+  return `<button class="act ${st.why ? 'off' : ''} ${a.shady ? 'shady' : ''} ${rec ? 'rec' : ''}" data-a="act:${a.id}" ${st.why ? 'disabled' : ''}><span class="ic">${ACT_IC[a.id] ? icon(ACT_IC[a.id], 22) : a.icon}</span><span class="bd"><b>${a.shady ? '☠ ' : ''}${a.name}${rec ? '<i class="rtag">建议</i>' : ''}</b><small>${esc(a.desc(S))}</small>${st.why ? `<em>${esc(st.why)}</em>` : ''}</span><span class="cost"><i>${'●'.repeat(a.ap)}</i>${st.cost > 0 ? `<u>${G.money(S, st.cost)}</u>` : ''}</span></button>`;
 }
 function person(e, btn) {
   return `<div class="cand ${V.pop?.uid === e.uid ? 'on' : ''}" data-a="who:${e.uid}" title="点一下，看看这个人能带来什么">${avatarSVG(e.uid, e.role, 36)}<span class="bd"><b>${esc(e.name)}</b> <small>${ROLES[e.role].name}${e.quirk ? ` · <i class="q">${STAFF_QUIRKS[e.quirk].name}</i>` : ''}</small><br>${skillDots(e.skill)} <small>月薪 ${G.money(S, e.salary * G.mod(S, 'salaryMult'))}</small></span>${btn}</div>`;
@@ -152,7 +153,8 @@ function opsPanel() {
 function leftPanel() {
   if (!ltabOpen(S, V.ltab)) V.ltab = 'rd';                                  // 教学期间：没开放的页签不显示
   const acts = A.ACTIONS.filter(a => a.tab === V.ltab && (!a.show || a.show(S)) && actOpen(S, a.id)).map(actCard).join('') || '<p class="empty">这里暂时没有可做的事。</p>';
-  return `<aside class="left panel"><nav class="tabs">${A.TABS.filter(t => ltabOpen(S, t.id)).map(t => `<button class="tab ${V.ltab === t.id ? 'on' : ''}" data-a="ltab:${t.id}">${TAB_IC[t.id] ? icon(TAB_IC[t.id], 18) : t.icon}<span>${t.name}</span></button>`).join('')}</nav>
+  const recTabs = new Set([...V.recActs].map(id => A.ACT[id].tab));                          // 别的页签里有建议做的事：标个小金点
+  return `<aside class="left panel"><nav class="tabs">${A.TABS.filter(t => ltabOpen(S, t.id)).map(t => `<button class="tab ${V.ltab === t.id ? 'on' : ''}" data-a="ltab:${t.id}">${TAB_IC[t.id] ? icon(TAB_IC[t.id], 18) : t.icon}<span>${t.name}</span>${recTabs.has(t.id) && V.ltab !== t.id ? '<i class="tdot"></i>' : ''}</button>`).join('')}</nav>
   <div class="scroll" data-sc="l-${V.ltab}">${V.ltab === 'ops' ? opsPanel() + acts : acts + (V.ltab === 'team' ? candList() : '')}</div></aside>`;
 }
 const RTABS = [['board', 'board', '榜单'], ['chain', 'pin', '项目'], ['team', 'team', '团队'], ['safe', 'safe', '黑料'], ['perks', 'cards', '卡牌'], ['fin', 'ledger', '账本'], ['log', 'news', '日志']].map(([id, ic, n]) => [id, icon(ic, 18), n]);
@@ -207,9 +209,16 @@ function bottom() {
   const items = [];
   if (S.ownModel && isOpen(S, 'model')) {
     const free = Math.max(0, S.gpu - G.inferNeed(S)), gain = S.furnace?.on ? free * G.researchEff(S) * DATA_SOURCES[S.furnace.data].mult : 0, cur = G.myCap(S), nxt = G.capOf(G.baseE(S.t) + S.E + gain);
-    items.push(`<div class="w furnace ${gain > 0 ? 'on' : ''}"><span class="big">${gain > 0 ? '🔥' : '🪨'}</span><div><b>丹炉火候 ${cur.toFixed(1)}</b> <small>${gain > 0 ? `本月预计 +${(nxt - cur).toFixed(2)}` : '没有空闲显卡，炉子是凉的'}</small><br><small>现役 ${S.model ? S.model.cap.toFixed(1) : '—'} · 榜首 ${Math.max(...S.rivals.map(r => r.bench)).toFixed(1)} · 烧${DATA_SOURCES[S.furnace?.data || 'open'].name}</small></div></div>`);
+    // 火候够了就能直接点出炉；炉子凉了点一下去租卡
+    const rel = actOpen(S, 'release') && !A.actionState(S, A.ACT.release).why, cold = gain <= 0 && ltabOpen(S, 'ops');
+    const link = rel ? ' data-a="act:release" title="点一下：出炉发布"' : cold ? ' data-a="ltab:ops" title="点一下：去「经营」租显卡"' : '';
+    items.push(`<div class="w furnace ${gain > 0 ? 'on' : ''}${rel ? ' ready' : ''}"${link}><span class="big">${gain > 0 ? '🔥' : '🪨'}</span><div><b>丹炉火候 ${cur.toFixed(1)}</b> <small>${rel ? '火候够了，点这里出炉发布' : gain > 0 ? `本月预计 +${(nxt - cur).toFixed(2)}` : '没有空闲显卡，炉子是凉的'}</small><br><small>现役 ${S.model ? S.model.cap.toFixed(1) : '—'} · 榜首 ${Math.max(...S.rivals.map(r => r.bench)).toFixed(1)} · 烧${DATA_SOURCES[S.furnace?.data || 'open'].name}</small></div></div>`);
   }
-  if (isOpen(S, 'product')) items.push(`<div class="w"><span class="big">${TRACKS[S.co.track].icon}</span><div><b>${TRACKS[S.co.track].name} · 体验 ${S.quality.toFixed(0)}</b><br><small>${S.sprint ? `开发中：${FEAT[S.sprint.id].name} ${Math.round(S.sprint.done / S.sprint.need * 100)}%` : '没有在开发的功能'}</small></div></div>`);
+  if (isOpen(S, 'product')) {                                                // 研发空着：点一下直接开下一个功能冲刺
+    const idle = !S.sprint && actOpen(S, 'sprint') && !A.ACT.sprint.block(S), now = idle && S.ap >= A.ACT.sprint.ap;
+    const link = idle ? ` data-a="${now ? 'act:sprint' : 'ltab:rd'}" title="${now ? '点一下：开始功能冲刺' : '这个月行动点用完了'}"` : '';
+    items.push(`<div class="w${idle ? ' ready' : ''}"${link}><span class="big">${TRACKS[S.co.track].icon}</span><div><b>${TRACKS[S.co.track].name} · 体验 ${S.quality.toFixed(0)}</b><br><small>${S.sprint ? `开发中：${FEAT[S.sprint.id].name} ${Math.round(S.sprint.done / S.sprint.need * 100)}%` : idle ? (now ? '研发空闲，点这里开下一个功能' : '研发空闲，下个月记得开功能冲刺') : '功能都做完了'}</small></div></div>`);
+  }
   if (S.projects.length) { const p = S.projects[0]; items.push(`<div class="w" data-a="rtab:chain" style="cursor:pointer"><span class="big">📌</span><div><b>特殊项目 ×${S.projects.length}</b><br><small>${esc(p.name)} ${Math.round(pct(p.done, p.need))}%</small></div></div>`); }
   return `<footer class="bottom"><div class="widgets">${items.join('')}</div><div class="ticker panel">${S.log.slice(0, 3).map(l => `<span>${esc(l.msg)}</span>`).join('')}</div></footer>`;
 }
@@ -264,12 +273,13 @@ function settingsHTML() {
   return `<div class="veil"><section class="settings panel"><h2>${icon('settings', 20)} 设置</h2>${gfx}
   <h4>声音</h4>${row('master', '总音量')}${row('music', '音乐')}${row('sfx', '音效')}${row('amb', '环境声')}
   <label class="chk"><input type="checkbox" data-s="mute" ${muted ? 'checked' : ''}> 静音</label>
-  <h4>显示</h4><label class="chk"><input type="checkbox" data-s="fps" ${V.fps ? 'checked' : ''}> 显示帧率</label>
+  <h4>显示</h4><label class="chk"><input type="checkbox" data-s="hints" ${V.hintsOff ? '' : 'checked'}> 行动提示（顶部那排待办提醒）</label><label class="chk"><input type="checkbox" data-s="fps" ${V.fps ? 'checked' : ''}> 显示帧率</label>
   <div class="row"><button class="btn go" data-a="settings:close">完成</button></div></section></div>`;
 }
 function setting(s, el) {
   if (s === 'auto') { const q = office?.quality?.(); if (q) office.setQuality(q.q, el.checked); }
   else if (s === 'mute') setMuted(el.checked);
+  else if (s === 'hints') { V.hintsOff = !el.checked; try { localStorage.setItem('ldt_hints', V.hintsOff ? '0' : '1'); } catch { /* 存不了就算了 */ } render(); }
   else if (s === 'fps') { V.fps = el.checked; try { localStorage.setItem('ldt_fps', V.fps ? '1' : '0'); } catch { /* 存不了就算了 */ } render(); }
   else if (s.startsWith('vol:')) {
     audio.setVolume({ [s.slice(4)]: +el.value / 100 }); if (el.nextElementSibling) el.nextElementSibling.textContent = el.value;
@@ -303,6 +313,45 @@ function tutorHTML() {
   const tip = S && !S.over && !V.dlg && !V.wait ? currentTip(S) : null;
   return tip ? `<div class="tutor panel"><span class="tface">🧓</span><div><b>学长老周 · ${tip.title}</b><p>${esc(tip.text)}</p></div><button class="btn sm" data-a="tip">知道了</button></div>` : '';
 }
+// 行动提示：顶部居中的一排待办（P 社式提醒栏）。红 = 要紧，金 = 机会或闲置，蓝 = 留意；点一下直接去做
+// 老周在讲话的时候先不出来；教学还没开放的行动不推荐（提示本身留着），要去的页签还没开放就整条不提
+function hintsNow() {
+  if (!S || S.over || V.hintsOff || currentTip(S)) return [];
+  const tabOK = h => (!h.go?.ltab || ltabOpen(S, h.go.ltab)) && (!h.go?.rtab || (rightOpen(S) && rtabOpen(S, h.go.rtab)));
+  return advise(S).map(h => (h.act && !actOpen(S, h.act) ? { ...h, act: null, later: false } : h)).filter(h => (h.act || h.go) && tabOK(h));
+}
+const HINT_MAX = 4;
+function hintCTA(h) {
+  if (h.later) return `这个月行动点用完了，下个月记得${h.act ? `「${A.ACT[h.act].name}」` : '处理'}`;
+  if (h.act) return `点一下：${A.ACT[h.act].name}`;
+  const tab = h.go?.ltab ? A.TABS.find(t => t.id === h.go.ltab)?.name : h.go?.rtab ? RTABS.find(r => r[0] === h.go.rtab)?.[2] : null;
+  return tab ? `点一下：去「${tab}」看看` : '';
+}
+function alertsHTML() {
+  const hs = V.hints;
+  if (!hs.length || V.dlg || V.wait) return '';
+  const now = performance.now(), list = V.hintsAll ? hs : hs.slice(0, HINT_MAX);
+  const fresh = h => { const age = now - (V.hintSeen[h.id] ?? -1e9); return age < 2200 ? ` new" style="animation-delay:-${Math.round(age)}ms` : ''; };   // 重绘时接着闪，不从头再来
+  return `<div class="alerts">${list.map(h => `<div class="alert ${h.lv}${h.later ? ' later' : ''}${fresh(h)}">
+    <button class="al" data-a="hint:${h.id}">${icon(h.icon, 15)}<span>${esc(h.title)}</span></button><button class="ax" data-a="hintx:${h.id}" aria-label="先别提醒">${icon('x', 11)}</button>
+    <div class="atip"><b>${esc(h.title)}</b><p>${esc(h.text)}</p><small>${esc(hintCTA(h))}<br>点 × ${muteMonths(h) === 1 ? '这个月' : '3 个月内'}不再提醒这一条</small></div></div>`).join('')}${hs.length > HINT_MAX ? `<button class="alert more" data-a="hintall">${V.hintsAll ? '收起' : `还有 ${hs.length - HINT_MAX} 条`}</button>` : ''}</div>`;
+}
+// 记下每条提示第一次露面的时间：新冒出来的闪一下，并轻轻响一声（刚进游戏那一批不响）
+function trackHints() {
+  const now = performance.now(), seen = V.hintSeen, ids = new Set(V.hints.map(h => h.id));
+  let fresh = false;
+  for (const id of ids) if (!(id in seen)) { seen[id] = now; fresh = true; }
+  for (const id in seen) if (!ids.has(id)) delete seen[id];
+  if (fresh && V.hintsReady) sfx('notify');
+  V.hintsReady = true;
+}
+// 切到对应页签，把要点的那个按钮闪几下
+function flash(sel) {
+  V.flash = sel ? { sel, until: performance.now() + 2600, scroll: true } : null;
+  render();
+  clearTimeout(flashTimer);
+  if (sel) flashTimer = setTimeout(() => { V.flash = null; ui.querySelector(`[data-a="${sel}"]`)?.classList.remove('hl'); }, 2600);
+}
 // 点员工或候选人时冒出来的气泡：头像 + 他能带来什么
 function popHTML() {
   const p = V.pop, e = p && (S.staff.find(x => x.uid === p.uid) || S.cands.find(x => x.uid === p.uid));
@@ -320,8 +369,11 @@ function render() {
     const tip = currentTip(S);
     if (tip && tip.key !== V.tipKey) { V.tipKey = tip.key; if (tip.go?.ltab) V.ltab = tip.go.ltab; if (tip.go?.rtab) V.rtab = tip.go.rtab; }
   }
+  V.hints = V.screen === 'play' ? hintsNow() : [];
+  V.recActs = new Set(V.hints.filter(h => h.act && !h.later).map(h => h.act));
+  if (V.screen === 'play' && !V.dlg && !V.wait) trackHints();
   ui.innerHTML = V.screen === 'title' ? title() : V.screen === 'wizard' ? wizard() : V.screen === 'meta' ? metaScreen()
-    : V.screen === 'play' ? topbar() + leftPanel() + rightPanel() + bottom() + tutorHTML() + toastHTML() + popHTML() + modal()
+    : V.screen === 'play' ? topbar() + leftPanel() + rightPanel() + bottom() + alertsHTML() + tutorHTML() + toastHTML() + popHTML() + modal()
       : topbar() + '<div class="dim"></div>' + endScreen();
   if (V.settings) ui.insertAdjacentHTML('beforeend', settingsHTML());
   if (V.fps && V.screen === 'play') ui.insertAdjacentHTML('beforeend', `<div class="fps">${fpsText()}</div>`);
@@ -329,6 +381,10 @@ function render() {
   for (const [k, v] of keep) { const e = ui.querySelector(`[data-sc="${k}"]`); if (e) e.scrollTop = v; }
   const hl = V.screen === 'play' && S && !V.dlg ? currentTip(S)?.hl : null;
   if (hl) ui.querySelector(`[data-a="${hl}"]`)?.classList.add('hl');
+  if (V.flash && V.screen === 'play' && performance.now() < V.flash.until) {     // 行动提示点过来的：闪几下，必要时滚到看得见
+    const el = ui.querySelector(`[data-a="${V.flash.sel}"]`);
+    if (el) { el.classList.add('hl'); if (V.flash.scroll) { V.flash.scroll = false; el.scrollIntoView({ block: 'nearest' }); } }
+  }
   syncScene();
 }
 function syncScene() {
@@ -386,14 +442,16 @@ function localDialog(title, text, icon, options) { V.res = null; V.dlg = { kind:
 function nextMonth() {
   sfx('turn');
   G.endMonth(S);
-  if (!S.over) toast({ text: `${G.dateStr(S.t - 1)}结算：收入 ${G.money(S, S.last.rev)}，支出 ${G.money(S, S.last.cost)}，净 ${G.money(S, S.last.net, true)}` });
+  const feat = S.featDone?.t === S.t - 1 ? FEAT[S.featDone.id] : null;
+  if (!S.over) toast({ text: `${G.dateStr(S.t - 1)}结算：收入 ${G.money(S, S.last.rev)}，支出 ${G.money(S, S.last.cost)}，净 ${G.money(S, S.last.net, true)}${feat ? `\n${feat.icon} 新功能「${feat.name}」上线了，研发组空出来了。` : ''}` });
   pump();
 }
-function startGame(setup) { S = G.newGame(setup, meta); V.screen = 'play'; V.summary = null; V.ltab = 'rd'; V.rtab = 'board'; V.toast = null; V.pop = null; V.tipKey = null; pump(); }
+const resetView = () => { V.summary = null; V.toast = null; V.pop = null; V.tipKey = null; V.hintSeen = {}; V.hintsReady = false; V.hintsAll = false; V.flash = null; };
+function startGame(setup) { S = G.newGame(setup, meta); V.screen = 'play'; V.ltab = 'rd'; V.rtab = 'board'; resetView(); pump(); }
 
 const CMD = {
   new() { V.W = newWizard(); V.screen = 'wizard'; V.dlg = null; render(); },
-  continue() { const s = G.loadGame(); if (!s) return render(); S = s; V.screen = 'play'; V.summary = null; pump(); },
+  continue() { const s = G.loadGame(); if (!s) return render(); S = s; V.screen = 'play'; resetView(); pump(); },
   meta() { V.screen = 'meta'; render(); },
   back() { V.screen = 'title'; V.dlg = null; render(); },
   buy(id) { G.buyMeta(meta, id); render(); },
@@ -426,6 +484,19 @@ const CMD = {
     render();
   },
   tip() { dismissTip(S); render(); },
+  // 顶部的行动提示：能直接做的就直接做，做不了的切过去把按钮闪给你看
+  hint(id) {
+    if (V.dlg || V.wait) return;
+    const h = V.hints.find(x => x.id === id);
+    if (!h) return;
+    if (h.act && !h.later && !A.actionState(S, A.ACT[h.act]).why) return CMD.act(h.act);
+    if (h.go?.ltab) V.ltab = h.go.ltab;
+    if (h.go?.rtab) V.rtab = h.go.rtab;
+    if (h.act) { V.ltab = A.ACT[h.act].tab; return flash(`act:${h.act}`); }
+    flash(h.hl);
+  },
+  hintx(id) { const h = V.hints.find(x => x.id === id); if (!h) return; muteHint(S, h); G.saveGame(S); render(); },
+  hintall() { V.hintsAll = !V.hintsAll; render(); },
   ltab(t) { V.ltab = t; render(); },
   rtab(t) { V.rtab = t; render(); },
   toast() { V.toast = null; ui.querySelector('.toast')?.remove(); },
@@ -460,7 +531,13 @@ const CMD = {
   pol(k, v) { A.setPolicy(S, k, v); render(); },
   next() {
     if (V.dlg || V.wait || S.over) return;
-    if (S.ap > 0 && S.t > 1) return localDialog('还有行动点没用', `这个月还剩 ${S.ap} 个行动点，不用就浪费了。`, '⏭️', [{ label: '就这样，进入下个月', fn: nextMonth }, { label: '我再想想', fn() { render(); } }]);
+    if (S.ap > 0 && S.t > 1) {                                               // 还有行动点：把参谋建议的事情直接摆成选项
+      const sug = hintsNow().filter(h => h.act && !h.later && !A.actionState(S, A.ACT[h.act]).why).slice(0, 2);
+      return localDialog('还有行动点没用', `这个月还剩 ${S.ap} 个行动点，不用就浪费了。${sug.length ? '下面是参谋觉得现在最值得做的事。' : ''}`, '⏭️', [
+        ...sug.map(h => ({ label: `先去「${A.ACT[h.act].name}」`, hint: h.title, fn() { CMD.act(h.act); } })),
+        { label: '就这样，进入下个月', fn: nextMonth }, { label: '我再想想', fn() { render(); } },
+      ]);
+    }
     nextMonth();
   },
   dlg(i) {
@@ -510,7 +587,7 @@ export function boot(root, scene) {
   addEventListener('pointerdown', unlock, true); addEventListener('keydown', unlock, true);
   let hoverEl = null;
   ui.addEventListener('pointerover', e => { const el = e.target.closest?.('.opt, .act, .tab, .pcard'); if (el !== hoverEl) { hoverEl = el; if (el && !el.disabled) sfx('hover'); } });
-  try { V.fps = localStorage.getItem('ldt_fps') === '1'; } catch { /* 读不到就不显示 */ }
+  try { V.fps = localStorage.getItem('ldt_fps') === '1'; V.hintsOff = localStorage.getItem('ldt_hints') === '0'; } catch { /* 读不到就用默认 */ }
   setInterval(() => {
     audio.setScene(sceneAudio());
     const f = ui.querySelector('.fps'); if (f) f.textContent = fpsText();

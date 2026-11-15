@@ -76,6 +76,11 @@ export const inferNeed = S => (usesOwn(S) ? Math.ceil(S.users * TRACKS[S.co.trac
 export const teamCap = S => OFFICES[S.co.office].cap + Math.max(0, S.founder.attrs.mgmt - 5) + mod(S, 'teamCapAdd');
 export const apMax = S => 3 + (S.founder.attrs.mgmt >= 9 ? 1 : 0) + mod(S, 'apAdd');
 export const dirtTotal = S => S.dirt.reduce((a, d) => a + d.sev, 0);
+// 一张黑料这个月被扒出来的概率：越重、热度越高、用户越多越容易爆；法务公关能压一压，大嘴巴员工会帮倒忙
+export function exposeP(S, d) {
+  const L = power(S, 'legal'), big = S.staff.filter(e => e.quirk === 'dazui').length;
+  return 0.011 * (d.sev / 10) * (1 + S.hype / 120) * (1 + Math.min(1.5, S.users / 3000)) * mod(S, 'exposeMult') * (1 + 0.25 * big) / (1 + L / 12);
+}
 // 整个赛道当下的用户盘子：AI 普及率逐年上升；一家公司最多吃下六成
 export const market = S => TRACKS[S.co.track].cap * Math.min(1, 0.02 * 1.057 ** S.t);
 // 你最多能吃下多大份额：看产品体验、模型竞争力和热度
@@ -528,7 +533,7 @@ export function endMonth(S) {
   S.quality = clamp(S.quality + E * 0.08 * dm * Math.max(0, 1 - S.quality / qCeil(S)) - 0.6, 5, 100);
   if (S.sprint) {
     S.sprint.done += E * dm;
-    if (S.sprint.done >= S.sprint.need) { const f = FEAT[S.sprint.id]; S.feats.push(f.id); applyFx(S, f.fx); news(S, `🧩 新功能「${f.name}」上线。`); S.fxq.push(['say', { text: `「${f.name}」上线啦！` }]); S.sprint = null; }
+    if (S.sprint.done >= S.sprint.need) { const f = FEAT[S.sprint.id]; S.feats.push(f.id); S.featDone = { id: f.id, t: S.t }; applyFx(S, f.fx); news(S, `🧩 新功能「${f.name}」上线。`); S.fxq.push(['say', { text: `「${f.name}」上线啦！` }]); S.sprint = null; }
   }
   // 2.5 特殊项目（事件链）：按对应的人手 / 显卡推进，完成或超期都会触发后续事件
   const projEvents = [];
@@ -595,10 +600,8 @@ export function endMonth(S) {
     else S.q.push({ type: 'event', id: 'broke' });
   }
   // 黑料曝光（每月最多一张）
-  const L = power(S, 'legal'), big = S.staff.filter(e => e.quirk === 'dazui').length;
   for (const d of S.dirt) {
-    const p = 0.011 * (d.sev / 10) * (1 + S.hype / 120) * (1 + Math.min(1.5, S.users / 3000)) * mod(S, 'exposeMult') * (1 + 0.25 * big) / (1 + L / 12);
-    if (S.t - d.t >= 2 && rnd(S) < p) { S.q.push({ type: 'scandal', uid: d.uid }); break; }
+    if (S.t - d.t >= 2 && rnd(S) < exposeP(S, d)) { S.q.push({ type: 'scandal', uid: d.uid }); break; }
   }
   // 定时与连锁事件
   for (const s of S.sched.filter(s => s.at <= S.t)) { S.seen[s.id] = S.t; S.q.push({ type: 'event', id: s.id, ctx: s.ctx }); }

@@ -1,6 +1,7 @@
 // 无界面自动试玩：抓运行时错误 + 看数值平衡。用法：node tools/sim.mjs [局数] [--smoke]
 import * as G from '../src/game/engine.js';
 import * as A from '../src/game/actions.js';
+import { advise } from '../src/game/advice.js';
 import { ENDINGS, STAGES } from '../src/data/defs.js';
 
 const N = +(process.argv[2] || 150);
@@ -31,8 +32,33 @@ function drain(S, first, shady) {
 }
 const act = (S, id, shady) => { const a = A.ACT[id]; if ((a.show && !a.show(S)) || A.actionState(S, a).why) return false; const r = A.perform(S, id); if (r?.dialog) drain(S, r.dialog, shady); else drain(S, null, shady); return true; };
 
+// 行动提示自检：格式、文本、指向的行动都得对；顺便统计每条提示出现得多频繁
+const HINT_N = {};
+let HINT_M = 0;
+function checkHints(S) {
+  const hs = advise(S), ids = new Set();
+  HINT_M++;
+  for (const h of hs) {
+    if (!h.id || !h.title || !h.text || !['bad', 'gold', 'warn'].includes(h.lv)) throw new Error('提示格式不对: ' + JSON.stringify(h));
+    if (ids.has(h.id)) throw new Error('提示 id 重复: ' + h.id);
+    if (/undefined|NaN|null|\[object/.test(h.title + h.text)) throw new Error(`提示文本可疑 [${h.id}] ${h.title}：${h.text}`);
+    if (h.act && !A.ACT[h.act]) throw new Error('提示指向不存在的行动: ' + h.act);
+    ids.add(h.id);
+    const k = h.id.startsWith('proj-') ? 'proj' : h.id;
+    HINT_N[k] = (HINT_N[k] || 0) + 1;
+  }
+  return hs;
+}
+
 function playMonth(S, style) {
-  const shady = style === 'shady';
+  const shady = style === 'shady', hs = checkHints(S);
+  // 「听参谋的」机器人：先按提示做事，剩下的行动点再走通用逻辑
+  if (style === 'advice') for (const h of hs) {
+    if (S.ap <= 0 || S.over) break;
+    if (h.act && !h.later) act(S, h.act, false);
+    else if (h.id === 'hire') A.hire(S, h.hl.slice(4));
+    else if (h.id.startsWith('proj-')) G.pushProject(S, h.hl.slice(5));
+  }
   // 算力：推理够用 + 拿预算的一部分炼丹
   if (S.ownModel) { const budget = Math.max(0, S.cash) / (14 * G.gpuPrice(S)); A.setGpu(S, Math.max(G.inferNeed(S) * 1.1, Math.min(G.quota(S), budget))); }
   for (const p of S.projects) if (p.kind === 'ap' && S.ap > 0 && rand() < 0.7) G.pushProject(S, p.uid);
@@ -83,16 +109,18 @@ function smoke() {
 }
 
 function run() {
-  const stat = {};
-  for (const style of ['clean', 'shady']) {
+  const stat = {}, byStyle = {};
+  for (const style of ['clean', 'shady', 'advice']) {
     for (const s of setups) {
       const key = `${s.region}/${s.route}`, row = (stat[key] ??= { n: 0, ends: {}, t: 0, stage: 0, val: [], users: [], ev: 0, perks: 0 });
+      const sr = (byStyle[style] ??= { n: 0, ends: {}, val: [] });
       for (let i = 0; i < Math.ceil(N / setups.length / 2); i++) {
         const S = G.newGame(mkSetup(s, style), {});
         try { drain(S, null, style === 'shady'); let g = 0; while (!S.over && g++ < 80) playMonth(S, style); }
         catch (e) { console.log(`✗ ${key}/${s.track} t=${S.t}: ${e.stack.split('\n').slice(0, 3).join(' | ')}`); process.exitCode = 1; continue; }
         if (!S.over) { console.log('✗ 没有结局', key, S.t); continue; }
         row.n++; row.ends[S.over.id] = (row.ends[S.over.id] || 0) + 1; row.t += S.over.t; row.stage += S.stage; row.val.push(S.over.val); row.users.push(S.stats.maxUsers); row.ev += S.stats.events; row.perks += S.perks.length; (S.stats.rounds || []).forEach((t, i) => { (row.rt ??= [])[i] = (row.rt[i] || 0) + t; (row.rn ??= [])[i] = (row.rn[i] || 0) + 1; });
+        sr.n++; sr.ends[S.over.id] = (sr.ends[S.over.id] || 0) + 1; sr.val.push(S.over.val);
       }
     }
   }
@@ -101,6 +129,8 @@ function run() {
     const ends = Object.entries(r.ends).sort((a, b) => b[1] - a[1]).map(([id, c]) => `${ENDINGS[id].name}${Math.round(c / r.n * 100)}%`).join(' ');
     console.log(`${k.padEnd(10)} n=${r.n} 平均存活${(r.t / r.n).toFixed(0)}月 平均轮次${(r.stage / r.n).toFixed(1)} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 用户峰值中位${med(r.users).toFixed(0)}万 事件${(r.ev / r.n).toFixed(0)} 卡${(r.perks / r.n).toFixed(1)} 各轮月份[${(r.rt || []).map((t, i) => (t / r.rn[i]).toFixed(0) + '(' + Math.round(r.rn[i] / r.n * 100) + '%)').join(' ')}] | ${ends}`);
   }
+  for (const [st, r] of Object.entries(byStyle)) console.log(`${('[' + st + ']').padEnd(10)} n=${r.n} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 | ${Object.entries(r.ends).sort((a, b) => b[1] - a[1]).map(([id, c]) => `${ENDINGS[id].name}${Math.round(c / r.n * 100)}%`).join(' ')}`);
+  console.log('提示出现频率（占所有月份）：' + Object.entries(HINT_N).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${Math.round(c / HINT_M * 100)}%`).join(' · '));
 }
 
 function trace(region, route, track, style = 'clean') {
