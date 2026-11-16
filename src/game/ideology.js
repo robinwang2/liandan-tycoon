@@ -7,7 +7,7 @@
 // - 揣摩玩家意图：最近的选择权重大，再参考平时的经营作风；从第 3 级起，玩家想走哪边就多给哪边的选项
 // - 终局：左边的条满或更多 → 左翼结局；资本条满或更多 → 保守结局 + 处置左倾员工；股权不到四成 → 没走成
 // 这里不 import 引擎（避免循环依赖）：用到的引擎函数由调用方以参数 G 传进来——事件里就是引擎的 API，行动里是引擎模块本身。
-import { ROLES, STAFF_QUIRKS, GOALS, TRAIT } from '../data/defs.js';
+import { ROLES, STAFF_QUIRKS, GOALS, TRAIT, officeName } from '../data/defs.js';
 import * as CN from '../data/ideology.js';
 import * as US from '../data/ideology_us.js';
 
@@ -20,7 +20,7 @@ const VER = {
   cn: {
     D: CN, start: { red: 12, cap: 28 }, side: { red: '共产', cap: '资本', mid: '务实' }, tag: { red: '☭ 共产', cap: '$ 资本', mid: '⚖ 务实' },
     goal: { red: 'red', cap: 'cap' }, flag: { red: 'red', cap: 'capb', cell: 'red_cell', on: 'stateCap' },
-    chain: { utopia: 'utopia_1', bci: 'bci_1' }, brand: '#d42a2a', home: '出租屋',
+    chain: { utopia: 'utopia_1', bci: 'bci_1' }, brand: '#d42a2a',
     end: { red: '红色路线', cap: '警惕不现实的乌托邦主义' },
     t: {
       start: R => [`国资董事${R}进场，路线之争开始。`, `🏛️ 深创头派驻董事${R}进场，{co} 内部的路线之争开始了。`],
@@ -41,7 +41,7 @@ const VER = {
   us: {
     D: US, start: { red: 8, cap: 32, heat: 10 }, side: { red: '社会主义', cap: '资本主义', mid: '务实' }, tag: { red: '🌹 社会', cap: '$ 资本', mid: '⚖ 务实' },
     goal: { red: 'rose', cap: 'missionco' }, flag: { red: 'rose', cap: 'missionco', cell: 'rose_cell', on: 'commonsCap' },
-    chain: { utopia: 'utopia_us_1', bci: 'bci_us_1' }, brand: '#e0435e', home: '车库',
+    chain: { utopia: 'utopia_us_1', bci: 'bci_us_1' }, brand: '#e0435e',
     end: { red: '共享繁荣', cap: '我们是一家公司' },
     t: {
       start: R => [`公地资本的董事观察员${R}进场，路线之争开始。`, `🌹 公地资本的董事观察员${R}进场，{co} 内部的路线之争开始了。`],
@@ -290,7 +290,7 @@ function purge(S, act, G) {
     for (const e of reds) G.removeStaff(S, e.uid);
     if (reds.length) G.addDirt(S, { type: 'unfair_fire', sev: Math.min(18, 5 + reds.length * 1.2), name: T.fireDirt });
     G.applyFx(S, { morale: -(3 + reds.length * 0.6), rep: -4 });
-    return `${reds.length} 人当天收到了邮件${loyal.length ? `，其中 ${loyal.length} 位是跟你从${V(S).home}一路走过来的死忠` : ''}。`;
+    return `${reds.length} 人当天收到了邮件${loyal.length ? `，其中 ${loyal.length} 位是跟你从${officeName(S, 1)}一路走过来的死忠` : ''}。`;
   }
   if (act === 'reeducate') {
     for (const e of reds) { delete e.red; S.cash -= sal(e); }          // 培训费：每人一个月工资

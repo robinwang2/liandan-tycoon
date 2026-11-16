@@ -520,6 +520,7 @@ function syncScene() {
       racks: S.ownModel ? G.clamp(Math.ceil(Math.log2(S.gpu / 8 + 1)), 0, 12) : 0,
       furnace: S.ownModel && S.furnace?.on && free > 0 ? { heat: G.clamp(0.25 + free / Math.max(1, G.quota(S)) * 0.75, 0, 1) } : null,
       night: String(S.policies.work) === '996', alert: crisisNow() >= 2, floor: floorNow(), bci: !!S.flags.bci_ok,
+      district: S.founder.traits.find(id => id.startsWith('d_')), own: !!S.ownModel, track: S.co.track,   // 开局的差异：落脚点决定起步的房子和街区，套壳派没有丹炉，产品赛道有各自的摆设
     });
     const L = rect('.left'), R = rect('.right'), T = rect('.top'), B = rect('.bottom');
     office.setInsets(V.screen === 'play' && L ? { left: L.right + 8, right: R ? innerWidth - R.left + 8 : 16, top: T.bottom + 8, bottom: B ? innerHeight - B.top + 8 : 16 } : { left: 0, right: 0, top: 0, bottom: 0 });
@@ -528,7 +529,8 @@ function syncScene() {
     office.sync({
       mode: 'title', wizard: V.screen === 'wizard', region: W?.region || 'bay', level: W ? 1 : 3, sign: W?.coName || '炼丹大亨',
       logo: W ? logoDataURL(W.logo, W.brand) : undefined, brand: W?.brand, founder: { outfit: W?.outfit || 'turtleneck' },
-      staff: W ? [] : TITLE_STAFF, racks: W ? 1 : 4, furnace: { heat: 0.7 }, night: false, alert: false,
+      staff: W ? [] : TITLE_STAFF, racks: W ? (W.route === 'model' ? 1 : 0) : 4, furnace: { heat: 0.7 }, night: false, alert: false,
+      district: W?.district, own: !W || W.route === 'model', track: W?.track,                                  // 建角时选什么，背景里的房子就跟着换
     });
     office.setInsets({ left: box ? box.right + 8 : 0, right: 0, top: 0, bottom: 0 });
   }

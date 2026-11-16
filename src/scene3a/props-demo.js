@@ -44,7 +44,7 @@ function populate(){
       const source=spec.build(kit,{brand:palette[brandIndex][1],seed});source.userData.tick?.(0,0);
       const stat=metrics(source),tick=source.userData.tick,wheels=source.userData.wheels||[],own=source.userData.own||[];
       const holder=new THREE.Group();holder.position.set(px,.08,pz);world.add(holder);
-      const mount=name==='pendant_lamp'?1.7:name==='shop_awning'?1.1:name==='scroll'?.6:0;
+      const mount=name==='pendant_lamp'?1.7:name==='string_lights'?1.6:name==='shop_awning'?1.1:name==='scroll'?.6:0;
       const model=bake(source);model.position.y=mount;holder.add(model);
       const stage=kit.box(cellW-.25,.08,cellD-.25,kit.mat('#e6e7db',{rough:.88,metal:0,tex:'concrete'}),holder,0,-.04,0,{r:.018});
       const tag=label(name);tag.position.set(0,.07,cellD/2-.3);holder.add(tag);

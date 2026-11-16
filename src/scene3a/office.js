@@ -25,11 +25,23 @@ export const LEVELS = [null,
   { W: 21, D: 13.5, H: 4.0, cols: 6, rows: 2, px: 1.9, pz: 2.05, rz: 5.4, rackRow: 4 },
 ];
 const MAXLV = LEVELS.length - 1;
+// 起步的房子（1 档）按落脚点分六种。没给落脚点（标题页）或者对不上地区，就取这个地区的默认：湾区车库、深圳握手楼
+const START_KIND = { d_paloalto: 'garage', d_soma: 'loft', d_berkeley: 'house', d_village: 'village', d_nanshan: 'park', d_hqb: 'stall' };
+const START_BAY = { garage: 1, loft: 1, house: 1 };
+export const startKind = (region, district) => { const kd = START_KIND[district], bay = region === 'bay'; return kd && !!START_BAY[kd] === bay ? kd : bay ? 'garage' : 'village'; };
+// 起步房子的装修。除了下面「装修」那几项，还有：H 层高 | wtex/wpat 墙面质感 | win 窗台和窗顶高度 | backWin/leftWin 后墙、左墙的窗（墙的本地坐标）
+// | grid 工厂式的细格窗 | shutter 后墙是卷帘门 | lawn 屋外有没有草坪
+const START_THEME = {
+  garage: { floor: ['#b4b7bb', { rough: 0.7, tex: 'concrete', pat: ['tile', 2.5, 0.35, 0.05] }], wall: '#d8d0c0', frame: '#f4f1ea', shutter: '#aab2bd', lawn: true },
+  loft: { H: 3.7, floor: ['#8a6a4c', { rough: 0.55, tex: 'wood', pat: ['plank', 0.18, 1.5, 0.45, 0.2] }], wall: '#a35a43', wtex: 'brick', wpat: ['brick', 0.5, 0.16, 0.36, 0.2], frame: '#23272e', grid: true, win: [0.8, 3.1], backWin: [[-2.1, -0.3], [0.0, 1.6]], leftWin: [] },
+  house: { floor: ['#b98a5a', { rough: 0.5, tex: 'wood', pat: ['plank', 0.14, 1.3, 0.4, 0.16] }], wall: '#eadfbf', frame: '#fffaf0', dado: '#86a37e', lawn: true, leftWin: [] },
+  village: { H: 2.9, floor: ['#e6d8bd', { rough: 0.35, tex: 'plaster', pat: ['tile', 0.6, 0.35, 0.06] }], wall: '#f3efe6', frame: '#f4f1ea', dado: '#7fb39a', bars: true, leftWin: [[1.95, 3.45]] },
+  park: { H: 3.2, floor: ['#d5dade', { rough: 0.25, tex: 'concrete', pat: ['tile', 1.2, 0.2, 0.03] }], wall: '#eef1f4', frame: '#2f353d', win: [0.3, 2.8], backWin: [[-3.9, -2.4], [-2.15, -0.65], [-0.4, 1.1]], leftWin: [[1.95, 3.65]], lawn: true },
+  stall: { floor: ['#dcd7cb', { rough: 0.3, tex: 'stone', pat: ['tile', 0.8, 0.3, 0.06] }], wall: '#f4f2ea', wtex: 'paint', wpat: ['grid', 0.3, 0.3, 0.22, 0.04], frame: '#aab2bd', dado: '#3f78b8', shutter: '#c9ced6' },
+};
 // 装修：floor 地面 [颜色, 材质参数] | wall 墙色 | frame 窗框色 | carpet 工位区地毯 | 其它是开关
-function themeOf(region, level) {
-  if (level === 1) return region === 'bay'
-    ? { floor: ['#b4b7bb', { rough: 0.7, tex: 'concrete', pat: ['tile', 2.5, 0.35, 0.05] }], wall: '#d8d0c0', frame: '#f4f1ea', garage: true }
-    : { floor: ['#e6d8bd', { rough: 0.35, tex: 'plaster', pat: ['tile', 0.6, 0.35, 0.06] }], wall: '#f3efe6', frame: '#f4f1ea', dado: '#7fb39a', bars: true };
+function themeOf(region, level, district) {
+  if (level === 1) { const kind = startKind(region, district); return { ...START_THEME[kind], kind }; }
   if (level === 2) return { floor: ['#c79f70', { rough: 0.5, tex: 'wood', pat: ['plank', 0.16, 1.3, 0.4, 0.16] }], wall: '#f4f0e8', frame: '#f4f1ea', dado: 'brand' };
   if (level === 3) return { floor: ['#c9cfd6', { rough: 0.3, tex: 'concrete', pat: ['tile', 3.2, 0.2, 0.03] }], wall: '#eff1f3', frame: '#3a4048', carpet: '#7c90a8' };
   if (level === 4 || level === 5) return { floor: ['#d9c4a0', { rough: 0.45, tex: 'wood', pat: ['plank', 0.14, 1.6, 0.35, 0.12] }], wall: '#f3f5f6', frame: '#2f353d', carpet: '#6a819d', glassRoom: true };
@@ -104,7 +116,7 @@ export function createRoom(stage, k, PROPS, art) {
 
   // ── 一面带窗洞的墙：沿本地 x 轴，内表面朝本地 +z。顶上露出一圈「剖面」 ──
   function wall(parent, len, H, T, ops, o = {}) {
-    const g = k.group(parent), th = 0.3, f = n => +n.toFixed(3), wm = k.mat(T.wall, { rough: 0.9, tex: 'plaster' }), fm = k.mat(T.frame, { rough: 0.5, metal: T.frame[1] < '9' ? 0.5 : 0, tex: 'paint' }), glass = k.mat('#c4e3ef', { alpha: 0.26, rough: 0.05, metal: 0.25, env: 1.5 });
+    const g = k.group(parent), th = 0.3, f = n => +n.toFixed(3), wm = k.mat(T.wall, { rough: 0.9, tex: T.wtex || 'plaster', pat: T.wpat }), fm = k.mat(T.frame, { rough: 0.5, metal: T.frame[1] < '9' ? 0.5 : 0, tex: 'paint' }), glass = k.mat('#c4e3ef', { alpha: 0.26, rough: 0.05, metal: 0.25, env: 1.5 });
     let cur = -len / 2;
     const seg = (a, b, y0, y1) => { if (b - a > 0.02 && y1 - y0 > 0.02) k.box(f(b - a), f(y1 - y0), th, wm, g, (a + b) / 2, (y0 + y1) / 2, 0); };
     for (const p of ops.slice().sort((a, b) => a.a - b.a)) {
@@ -114,6 +126,11 @@ export function createRoom(stage, k, PROPS, art) {
         k.box(w, h, 0.03, glass, g, cx, cy, 0, { cast: false });
         k.box(w + 0.1, 0.07, th + 0.06, fm, g, cx, p.y0, 0); k.box(w + 0.1, 0.07, th + 0.06, fm, g, cx, p.y1, 0); k.box(0.07, h, th + 0.06, fm, g, p.a, cy, 0); k.box(0.07, h, th + 0.06, fm, g, p.b, cy, 0); k.box(0.05, h, 0.08, fm, g, cx, cy, 0);
         if (h > 1.8) k.box(w, 0.05, 0.08, fm, g, cx, p.y0 + h * 0.62, 0);
+        if (o.grid) {                                                                                                                  // 老厂房的细格钢窗
+          const nx = Math.max(2, Math.round(w / 0.48)), ny = Math.max(2, Math.round(h / 0.56));
+          for (let i = 1; i < nx; i++) k.box(0.03, h, 0.06, fm, g, p.a + i * w / nx, cy, 0, { cast: false });
+          for (let j = 1; j < ny; j++) k.box(w, 0.03, 0.06, fm, g, cx, p.y0 + j * h / ny, 0, { cast: false });
+        }
         if (o.bars) for (let x = p.a + 0.16; x < p.b; x += 0.2) k.cyl(0.016, 0.016, h, '#8d959e', g, x, cy, -0.2, { seg: 6, metal: 0.6, rough: 0.5 });
       }
       cur = p.b;
@@ -135,31 +152,34 @@ export function createRoom(stage, k, PROPS, art) {
     for (const b of bakes) b.userData.dispose?.(); for (const x of owned) x.dispose?.();
     const dead = new Set(owned); for (let i = k.nightMats.length - 1; i >= 0; i--) if (dead.has(k.nightMats[i][0])) k.nightMats.splice(i, 1);
     for (const s of tw.labels) s.material.map?.dispose();
-    owned = []; bakes = []; ticks = []; seats = []; stands = []; roomG.clear(); floorsG.clear(); tw.on = false; tw.F = []; tw.ride = null; tw.labels = []; tw.queue = []; tw.pending = [];
+    owned = []; bakes = []; ticks = []; seats = []; stands = []; drops = []; dropsNew = []; roomG.clear(); floorsG.clear(); tw.on = false; tw.F = []; tw.ride = null; tw.labels = []; tw.queue = []; tw.pending = [];
     furnaceG.position.y = rackG.position.y = 0; furnaceG.visible = rackG.visible = true;
-    const v = st.view, L = (st.L = LEVELS[v.level] || LEVELS[1]), T = themeOf(v.region, v.level), brand = v.brand || '#ff6b4a', { W, D, H } = L, bay = v.region === 'bay', lv = v.level, g = k.group();
+    const v = st.view, T = themeOf(v.region, v.level, v.district), L0 = LEVELS[v.level] || LEVELS[1], L = (st.L = T.H ? { ...L0, H: T.H } : L0), brand = v.brand || '#ff6b4a', { W, D, H } = L, bay = v.region === 'bay', lv = v.level, g = k.group();
+    st.kind = T.kind || '';
     if (FLOOR_PLANS[lv]) return buildTower();
-    // 地块：铺地、草坪
+    // 地块：铺地、草坪（起步的房子有的没草坪：阁楼临街、握手楼和档口门口是水泥地）
     k.box(W + 6.8, 0.5, D + 6.8, '#c4c7cc', g, 0, -0.25, 0, { r: 0.06, rough: 0.85, tex: 'concrete', pat: ['tile', 0.9, 0.24, 0.07] });
     const lawn = k.mat(bay ? '#7fb56a' : '#6fb564', { rough: 0.95, tex: 'grass' });
-    k.box(W + 5.6, 0.1, 1.5, lawn, g, 0.3, 0.02, D / 2 + 2.15, { r: 0.04, cast: false }); k.box(1.5, 0.1, D + 4.1, lawn, g, W / 2 + 2.15, 0.02, -0.45, { r: 0.04, cast: false });
+    if (lv > 1 || T.lawn) { k.box(W + 5.6, 0.1, 1.5, lawn, g, 0.3, 0.02, D / 2 + 2.15, { r: 0.04, cast: false }); k.box(1.5, 0.1, D + 4.1, lawn, g, W / 2 + 2.15, 0.02, -0.45, { r: 0.04, cast: false }); }
     k.box(W + 0.4, 0.06, D + 0.4, '#9a958a', g, -0.05, 0.0, -0.05, { rough: 0.9, tex: 'concrete' });                                // 楼板边
     k.box(W, 0.05, D, T.floor[0], g, 0, 0.03, 0, { ...T.floor[1], cast: false });
     const dx0 = -W / 2 + 2.6, dz0 = -D / 2 + 2.4, deskW = (L.cols - 1) * L.px, deskD = (L.rows - 1) * L.pz;
     if (T.carpet) k.box(deskW + 2.7, 0.03, deskD + 2.9, T.carpet, g, dx0 + deskW / 2, 0.065, dz0 + deskD / 2 - 0.1, { r: 0.012, rough: 0.98, tex: 'carpet', cast: false });
     // 后墙（z=-D/2）与左墙（x=-W/2）
-    const dado = T.dado === 'brand' ? brand : T.dado, winY0 = T.curtain ? 0.3 : 0.95, winY1 = T.curtain ? H - 0.4 : Math.min(2.5, H - 0.5), back = [], left = [], backEnd = W / 2 - L.rz - 0.3;
-    if (T.garage) back.push({ a: -1.9, b: 1.9, y0: 0, y1: 2.5 });
+    const dado = T.dado === 'brand' ? brand : T.dado, [winY0, winY1] = T.win || [T.curtain ? 0.3 : 0.95, T.curtain ? H - 0.4 : Math.min(2.5, H - 0.5)], back = [], left = [], backEnd = W / 2 - L.rz - 0.3;
+    if (T.shutter) back.push({ a: -1.9, b: 1.9, y0: 0, y1: 2.5 });
+    else if (T.backWin) for (const [a, b] of T.backWin) back.push({ a, b, y0: winY0, y1: winY1, glass: true });
     else for (let x = -W / 2 + 1.1; x + 1.5 < backEnd; x += T.curtain ? 1.75 : 2.3) back.push({ a: x, b: x + 1.5, y0: winY0, y1: winY1, glass: true });
-    const bw = wall(g, W + 0.3, H, T, back, { dado, bars: T.bars }); bw.position.set(-0.15, 0, -D / 2 - 0.15);
-    if (T.garage) {                                                           // 半开的卷帘门，门外停着车
-      for (let i = 0; i < 7; i++) k.box(3.8, 0.17, 0.06, '#aab2bd', bw, 0, 2.42 - i * 0.18, 0.02, { metal: 0.6, rough: 0.45, tex: 'metal' });
+    const wo = { dado, bars: T.bars, grid: T.grid }, bw = wall(g, W + 0.3, H, T, back, wo); bw.position.set(-0.15, 0, -D / 2 - 0.15);
+    if (T.shutter) {                                                          // 半开的卷帘门：车库门外停着车，档口门外是市场的过道
+      for (let i = 0; i < 7; i++) k.box(3.8, 0.17, 0.06, T.shutter, bw, 0, 2.42 - i * 0.18, 0.02, { metal: 0.6, rough: 0.45, tex: 'metal' });
       k.box(4.1, 0.26, 0.5, '#868f9b', bw, 0, 2.63, 0.05, { metal: 0.5, rough: 0.5 });
-      put(g, PROPS.car_hatch ? 'car_hatch' : 'car', 0.2, -D / 2 - 3.0, 0.35, { brand });
+      if (T.kind === 'garage') put(g, PROPS.car_hatch ? 'car_hatch' : 'car', 0.2, -D / 2 - 3.0, 0.35, { brand });
     }
     left.push({ a: -D / 2 + 1.1, b: -D / 2 + 2.5, y0: 0, y1: 2.25 });              // 门（墙的本地 a = -世界 z）
-    if (!T.garage) for (let a = D / 2 - 3.2; a > -D / 2 + 4.6; a -= lv >= 4 ? 2.3 : 99) left.push({ a, b: a + 1.7, y0: winY0, y1: winY1, glass: true });
-    const lw = wall(g, D + 0.3, H, T, left, { dado, bars: T.bars }); lw.rotation.y = Math.PI / 2; lw.position.set(-W / 2 - 0.15, 0, 0.15);
+    if (T.leftWin) for (const [a, b] of T.leftWin) left.push({ a, b, y0: winY0, y1: winY1, glass: true });
+    else if (!T.shutter) for (let a = D / 2 - 3.2; a > -D / 2 + 4.6; a -= lv >= 4 ? 2.3 : 99) left.push({ a, b: a + 1.7, y0: winY0, y1: winY1, glass: true });
+    const lw = wall(g, D + 0.3, H, T, left, wo); lw.rotation.y = Math.PI / 2; lw.position.set(-W / 2 - 0.15, 0, 0.15);
     k.box(0.34, H + 0.06, 0.34, T.wall, g, -W / 2 - 0.15, H / 2, -D / 2 - 0.15, { rough: 0.9, tex: 'plaster' });        // 墙角柱
     door.set(-W / 2, 0, D / 2 - 1.8);
     k.box(0.06, 2.2, 1.3, '#8a623f', g, -W / 2 - 0.5, 1.1, D / 2 - 1.05, { ry: 0.5, rough: 0.6, tex: 'wood', r: 0.01 });             // 敞开的门扇
@@ -184,23 +204,206 @@ export function createRoom(stage, k, PROPS, art) {
     lampA.position.set(dx0 + deskW * 0.25, H + 0.6, dz0 + deskD / 2); lampB.position.set(dx0 + deskW * 0.8, H + 0.6, dz0 + deskD / 2);
     beaconMat = own(new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0xff3030, emissiveIntensity: 0.25, roughness: 0.4 }));
     k.cyl(0.13, 0.15, 0.2, beaconMat, g, -W / 2 + 0.2, H + 0.16, -D / 2 + 0.2);
-    decorate(g, L, bay, brand, T);
+    if (lv === 1) { startShell(g, L, T, brand); startDecor(g, L, T, brand); } else decorate(g, L, bay, brand, T);
     buildSign(g);
     const b = k.bake(g); bakes.push(b); roomG.add(b);
-    buildFurnace(); buildRacks();
+    for (const d of dropsNew) { const db = k.bake(d.g); bakes.push(db); roomG.add(db); drops.push({ o: db, axis: d.axis, min: d.min, s: 1 }); }
+    dropsNew = [];
+    buildCore(); buildRacks();
+  }
+  // ───────── 起步的房子：六个落脚点各有各的结构和摆设 ─────────
+  // 一块写着字的招牌（画布贴图，夜里发光）。vert：竖排；legs：底下加两根支脚（立在墙头上用）
+  function textSign(parent, text, w, h, x, y, z, ry, bg, fg, o = {}) {
+    const c = document.createElement('canvas'), u = 128 / Math.min(w, h), cw = (c.width = Math.round(w * u)), ch = (c.height = Math.round(h * u)), x2 = c.getContext('2d'), chars = [...text];
+    const font = s => `900 ${s}px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif`;
+    x2.fillStyle = bg; x2.fillRect(0, 0, cw, ch); x2.strokeStyle = fg; x2.globalAlpha = 0.5; x2.lineWidth = 5; x2.strokeRect(7, 7, cw - 14, ch - 14); x2.globalAlpha = 1;
+    x2.fillStyle = fg; x2.textAlign = 'center'; x2.textBaseline = 'middle';
+    if (o.vert) { const step = (ch - 26) / chars.length, s = Math.min(cw * 0.7, step * 0.9); x2.font = font(s); chars.forEach((chr, i) => x2.fillText(chr, cw / 2, 13 + (i + 0.5) * step + s * 0.04)); }
+    else { let s = ch * 0.62; x2.font = font(s); while (x2.measureText(text).width > cw - 36 && s > 16) { s -= 3; x2.font = font(s); } x2.fillText(text, cw / 2, ch / 2 + s * 0.05); }
+    const t = own(new THREE.CanvasTexture(c)); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    const m = own(new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.22, roughness: 0.55 })); k.nightMats.push([m, 0.22, 1.05]);
+    const sg = k.group(parent, x, y, z, ry);
+    k.box(w + 0.14, h + 0.14, 0.12, '#2a2f36', sg, 0, 0, -0.04, { metal: 0.5, rough: 0.5 });
+    k.put(k.geo(`tsign|${w}|${h}`, () => new THREE.PlaneGeometry(w, h)), m, sg, 0, 0, 0.025, { cast: false });
+    if (o.legs) for (const sx of [-1, 1]) k.box(0.08, o.legs, 0.08, '#4a5160', sg, sx * (w / 2 - 0.3), -h / 2 - o.legs / 2, -0.04, { metal: 0.6, rough: 0.5 });
+    return sg;
+  }
+  // 墙外高出一大截的东西（邻楼、幕墙、水塔）：镜头转到它背后时会把屋里挡住，所以各自成组，到时候缩下去（和城里的楼被「剖开」一个道理）。
+  // axis：它在哪面墙外（'z' 后墙，'x' 左墙）；min：最矮缩到几成；y0：这一组从多高起算
+  let drops = [], dropsNew = [];
+  const dropG = (axis, min = 0, y0 = 0) => { const dg = k.group(null, 0, y0, 0); dropsNew.push({ g: dg, axis, min }); return dg; };
+  // 墙外和墙头上的结构：山墙、夹层、邻楼、幕墙、招牌墙……六种房子的轮廓一眼就不一样
+  function startShell(g, L, T, brand) {
+    const { W, D, H } = L, kind = T.kind, PI = Math.PI, bzc = -D / 2 - 0.15, lxc = -W / 2 - 0.15, ww = W + 0.3;       // 后墙、左墙的中线；后墙的长度
+    if (kind === 'garage' || kind === 'house') {
+      // 人字山墙立在后墙顶上，前面带一截屋面的剖口；车库是浅色木板墙，合租屋是深色木瓦
+      const sh = kind === 'house', rise = sh ? 2.7 : 2.6, roofC = sh ? '#4c5a52' : '#5f5651', sl = Math.hypot(ww / 2, rise), ang = Math.atan2(rise, ww / 2), ca = Math.cos(ang), sa = Math.sin(ang);
+      const gg = k.group(g, -0.15, H + 0.05, bzc - 0.15);
+      k.extrude([[-ww / 2, 0], [ww / 2, 0], [0, rise]], 0.2, sh ? '#6f4f3a' : '#e4dccb', gg, 0, 0, 0, { rough: 0.9, tex: sh ? 'wood' : 'paint', pat: sh ? ['grid', 0.28, 0.17, 0.42, 0.22] : ['grid', 99, 0.19, 0.28, 0.05] });
+      for (const sx of [-1, 1]) {
+        const cx = sx * (ww / 4 + 0.2 * ca + 0.09 * sa), cy = rise / 2 - 0.2 * sa + 0.09 * ca;
+        k.box(sl + 0.7, 0.18, 1.0, roofC, gg, cx, cy, 0.35, { rz: -sx * ang, rough: 0.9, tex: 'asphalt', pat: ['grid', 0.4, 0.3, 0.3, 0.1] });
+        k.box(sl + 0.7, 0.12, 0.06, '#f4f1ea', gg, cx + sx * 0.1 * sa, cy - 0.1 * ca, 0.86, { rz: -sx * ang, rough: 0.6, tex: 'paint' });        // 封檐板
+      }
+      k.box(0.34, 0.16, 1.02, roofC, gg, 0, rise + 0.13, 0.35, { rough: 0.9, tex: 'asphalt' });                                             // 屋脊
+      k.cyl(0.27, 0.27, 0.06, '#fffaf0', gg, 0, rise - 0.72, 0.22, { rx: PI / 2, rough: 0.6, tex: 'paint' }); k.cyl(0.2, 0.2, 0.07, '#5d7890', gg, 0, rise - 0.72, 0.225, { rx: PI / 2, rough: 0.15, metal: 0.4 });   // 山墙尖上的小圆窗
+      if (sh) {                                                                                                                            // 合租屋：左墙外一根砖烟囱
+        const brick = k.mat('#9a5a43', { rough: 0.9, tex: 'brick', pat: ['brick', 0.4, 0.12, 0.36, 0.2] }), ch = H + 3.1;
+        k.box(0.8, ch, 0.8, brick, g, lxc - 0.5, ch / 2, -1.4); k.box(0.98, 0.12, 0.98, '#8d877c', g, lxc - 0.5, ch + 0.06, -1.4, { rough: 0.95, tex: 'concrete' });
+        for (const dz of [-0.19, 0.19]) k.cyl(0.11, 0.13, 0.32, '#b5583c', g, lxc - 0.5, ch + 0.28, -1.4 + dz, { rough: 0.8, tex: 'stone' });
+      }
+    } else if (kind === 'loft') {
+      const steel = k.mat('#2a2f36', { rough: 0.5, metal: 0.6, tex: 'metal' }), wood = k.mat('#9a7350', { rough: 0.6, tex: 'wood', pat: ['plank', 0.2, 1.4, 0.4, 0.18] });
+      // 睡觉的夹层：钢架托着木板，靠着后墙和左墙；一架梯子、两面栏杆、床垫铺盖
+      const x0 = -W / 2, x1 = -W / 2 + 2.15, z0 = -D / 2, z1 = -D / 2 + 1.75, py = 2.15, mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, lx0 = x1 - 0.3;
+      k.box(x1 - x0, 0.1, z1 - z0, wood, g, mx, py, mz, { r: 0.01 });
+      k.box(x1 - x0, 0.14, 0.08, steel, g, mx, py - 0.12, z1 - 0.04); k.box(0.08, 0.14, z1 - z0, steel, g, x1 - 0.04, py - 0.12, mz); k.box(0.09, py - 0.05, 0.09, steel, g, x1 - 0.05, (py - 0.05) / 2, z1 - 0.05);
+      for (const yy of [0.45, 0.9]) { k.box(x1 - x0 - 0.62, 0.04, 0.04, steel, g, mx - 0.31, py + yy, z1 - 0.04); k.box(0.04, 0.04, z1 - z0, steel, g, x1 - 0.04, py + yy, mz); }
+      for (let x = x0 + 0.12; x < x1 - 0.62; x += 0.47) k.box(0.03, 0.9, 0.03, steel, g, x, py + 0.45, z1 - 0.04);
+      for (let z = z0 + 0.22; z < z1; z += 0.5) k.box(0.03, 0.9, 0.03, steel, g, x1 - 0.04, py + 0.45, z);
+      for (const dx of [-0.2, 0.2]) k.box(0.05, py + 0.35, 0.05, steel, g, lx0 + dx, (py + 0.35) / 2 - 0.02, z1 + 0.32, { rx: -0.26 });
+      for (let i = 0; i < 6; i++) k.box(0.4, 0.035, 0.05, steel, g, lx0, 0.3 + i * 0.34, z1 + 0.57 - i * 0.09);
+      k.box(1.85, 0.2, 1.0, '#f1ede4', g, x0 + 1.0, py + 0.15, z0 + 0.62, { r: 0.06, rough: 0.95, tex: 'fabric' }); k.box(0.5, 0.12, 0.7, '#ffffff', g, x0 + 0.35, py + 0.3, z0 + 0.62, { r: 0.05, rough: 0.95, tex: 'fabric' });
+      k.box(1.15, 0.1, 1.02, brand, g, x0 + 1.32, py + 0.28, z0 + 0.62, { r: 0.04, rough: 0.95, tex: 'fabric' });
+      // 外露的通风管，沿着后墙上沿
+      const duct = k.mat('#c9ced6', { rough: 0.35, metal: 0.8, tex: 'metal' });
+      k.cyl(0.17, 0.17, 4.6, duct, g, -0.2, H - 0.3, -D / 2 + 0.34, { rz: PI / 2 });
+      for (const x of [-2.4, -1.3, -0.2, 0.9, 2.0]) k.torus(0.176, 0.018, duct, g, x, H - 0.3, -D / 2 + 0.34, { ry: PI / 2 });
+      for (const x of [-1.7, 1.1]) k.box(0.34, 0.1, 0.24, '#8d959e', g, x, H - 0.52, -D / 2 + 0.34, { metal: 0.6, rough: 0.5 });
+      // 后墙外一截邻楼，楼顶立着木箍水塔，侧面挂着防火梯
+      const sh2 = H + 0.9, dg = dropG('z', (H - 0.4) / (sh2 + 3.6));
+      k.box(2.6, sh2, 2.4, T.wall, dg, 2.9, sh2 / 2, bzc - 1.45, { rough: 0.9, tex: 'brick', pat: T.wpat }); k.box(2.8, 0.14, 2.6, '#8d877c', dg, 2.9, sh2 + 0.07, bzc - 1.45, { rough: 0.95, tex: 'concrete' });
+      put(dg, 'water_tower_wood', 2.9, bzc - 1.45, 0.3, { seed: 3 }, sh2 + 0.14);
+      if (PROPS.fire_escape) put(dg, 'fire_escape', 4.2, bzc - 1.45, PI / 2, {}, sh2 - 2.85);
+    } else if (kind === 'village') {
+      // 握手楼：后面和左边紧贴着两栋邻楼，贴着瓷砖，窗外是防盗网、空调外机和晾出来的衣服
+      const walls = [k.mat('#e9e1cf', { rough: 0.8, tex: 'plaster', pat: ['grid', 0.3, 0.15, 0.2, 0.05] }), k.mat('#dfe7d6', { rough: 0.8, tex: 'plaster', pat: ['grid', 0.3, 0.15, 0.2, 0.05] })];
+      const dark = k.mat('#48586a', { rough: 0.2, metal: 0.4 }), lit = k.mat('#ffd9a0', { glow: '#ffcf8a', glowK: 0.04, night: 1.5, rough: 0.5 }), cage = k.mat('#8d959e', { rough: 0.5, metal: 0.6 }), ac = k.mat('#eef0f1', { rough: 0.6, tex: 'plastic' }), cloth = ['#e5484d', '#3f7fd6', '#f4f4f2', '#f2c14e', '#2f8f6b'];
+      const facade = (x, z, ry, len, top, n) => {
+        const fg = k.group(dropG(ry ? 'x' : 'z', (H - 0.5) / top), x, 0, z, ry), nb = Math.max(2, Math.round(len / 2.3)), bw2 = len / nb;
+        k.box(len, top, 2.2, walls[n % 2], fg, 0, top / 2, -1.1); k.box(len + 0.2, 0.3, 2.4, '#8d877c', fg, 0, top + 0.15, -1.1, { rough: 0.95, tex: 'concrete' });
+        for (let fl = 1; 0.9 + fl * 2.75 + 1.5 < top; fl++) for (let b = 0; b < nb; b++) {
+          const wx = -len / 2 + (b + 0.5) * bw2, wy = 1.55 + fl * 2.75, r = (b * 7 + fl * 5 + n * 3) % 6;
+          k.box(1.2, 1.3, 0.06, r < 2 ? lit : dark, fg, wx, wy, 0.02, { cast: false });
+          k.box(1.36, 0.06, 0.34, cage, fg, wx, wy - 0.68, 0.17); k.box(1.36, 0.03, 0.03, cage, fg, wx, wy + 0.66, 0.33);
+          for (let i = -2; i <= 2; i++) k.box(0.025, 1.34, 0.025, cage, fg, wx + i * 0.33, wy, 0.33);                                     // 防盗网
+          if (r % 3 === 0) k.box(0.78, 0.5, 0.3, ac, fg, wx + (b % 2 ? -0.25 : 0.25), wy - 1.15, 0.16);
+          if (r % 2 === 1) { k.cyl(0.014, 0.014, 1.5, cage, fg, wx, wy - 0.42, 0.62, { rz: PI / 2, seg: 6 }); for (let i = 0; i < 3; i++) k.box(0.34, 0.42, 0.03, cloth[(b + fl + i + n) % 5], fg, wx - 0.5 + i * 0.5, wy - 0.66, 0.62, { rough: 0.95, tex: 'fabric' }); }
+        }
+        return fg;
+      };
+      const fb = facade(-0.15, bzc - 0.95, 0, W + 1.2, 9.3, 0), fl = facade(lxc - 0.95, -1.75, PI / 2, 5.3, 8.1, 1);
+      put(fb, 'water_tank', 1.75, -1.15, 0, { seed: 1 }, 9.6); put(fl, 'laundry_line', 0.2, -1.1, 0, { seed: 2 }, 8.4);                     // 楼顶的水塔和晾衣杆跟着邻楼一起收放
+      // 头顶的「蜘蛛网」：电线杆之间、楼和楼之间拉着的线
+      const wire = k.mat('#20242b', { rough: 0.7, tex: 'rubber' }), a = [-W / 2 - 1.9, 6.5, D / 2 + 1.9], b = [W / 2 + 2.3, 6.4, bzc - 1.9];
+      const span = (p, q, sag, off = 0) => k.tube([[p[0], p[1] + off, p[2]], [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2 - sag + off, (p[2] + q[2]) / 2], [q[0], q[1] + off, q[2]]], 0.02, wire, g, 0, 0, 0, { cast: false });
+      span(a, b, 0.9); span(a, b, 1.25, -0.35); span(a, [-3.6, 7.2, bzc - 0.7], 0.7); span(a, [lxc - 0.75, 6.2, -0.4], 0.5); span(b, [3.2, 7.6, bzc - 0.7], 0.4); span([lxc - 0.75, 5.4, 0.4], [-2.2, 5.9, bzc - 0.7], 0.5, 0);
+    } else if (kind === 'park') {
+      // 我们只是研发楼底层的一间：后墙往上是两层玻璃幕墙，楼顶有设备
+      const glassM = k.mat('#6f93b3', { rough: 0.07, metal: 0.85, env: 1.3, glow: '#cfe6ff', glowK: 0, night: 0.3 }), mull = k.mat('#2a3038', { rough: 0.45, metal: 0.6, tex: 'metal' }), band = k.mat('#e9ecef', { rough: 0.55, metal: 0.2, tex: 'metal' });
+      const fh = 3.3, nfl = 2, top = nfl * fh, cy = top / 2, dg = dropG('z', 0, H + 0.08);                                                // 这一组从后墙顶上起算
+      k.box(ww, top, 0.14, glassM, dg, -0.15, cy, bzc - 0.06, { cast: false });
+      for (let i = 0; i <= 8; i++) k.box(0.07, top, 0.2, mull, dg, -0.15 - ww / 2 + i * ww / 8, cy, bzc - 0.02);
+      for (let f = 0; f <= nfl; f++) k.box(ww + 0.1, 0.46, 0.36, band, dg, -0.15, f * fh + (f === 0 ? 0.23 : f === nfl ? -0.23 : 0), bzc);
+      k.box(0.34, top, 0.5, brand, dg, W / 2 - 0.17, cy, bzc + 0.05, { rough: 0.5, tex: 'paint' });                                        // 一根品牌色的竖向装饰条
+      k.box(ww, 0.3, 3.4, band, dg, -0.15, top + 0.15, bzc - 1.55); put(dg, 'roof_hvac', 2.2, bzc - 1.7, 0, { seed: 1 }, top + 0.3); put(dg, 'solar_array', -2.4, bzc - 1.7, 0, { seed: 2 }, top + 0.3);
+      // 门头的钢雨棚：从左墙顶上往外挑
+      k.box(1.5, 0.1, 2.3, mull, g, lxc - 0.6, H - 0.35, D / 2 - 1.8); for (const dz of [-1.0, 1.0]) k.box(0.05, 0.05, 1.3, mull, g, lxc - 0.4, H - 0.05, D / 2 - 1.8 + dz, { rz: 0.5 });
+    } else if (kind === 'stall') {
+      // 招牌墙：公司招牌旁边、左墙头上全是别家的招牌，一块比一块大
+      textSign(g, '显卡回收', 2.5, 0.8, 3.5, H + 0.72, bzc + 0.2, 0, '#c8402f', '#fff6e0', { legs: 0.26 });
+      textSign(g, '手机配件批发', 2.5, 0.72, 3.5, H + 1.62, bzc + 0.2, 0, '#f2c14e', '#3a2a10');
+      textSign(g, '芯片 · 元器件 · 一件代发', 4.6, 0.78, lxc + 0.2, H + 0.7, -1.35, PI / 2, '#1f6f8b', '#eaf6ff', { legs: 0.26 });
+      textSign(g, '柜台出租', 0.72, 2.5, lxc + 0.2, H + 1.56, 2.75, PI / 2, '#1e2233', '#ffd66b', { vert: true, legs: 0.26 });
+      put(g, 'neon_sign', W / 2 + 0.02, bzc + 0.15, 0, { brand: '#ff4f8b', seed: 5 }, 0.7);                                                // 墙角挑出去的竖排霓虹
+      const blue = k.mat('#3f78b8', { rough: 0.6, tex: 'paint' });
+      k.box(ww, 0.16, 0.36, blue, g, -0.15, H + 0.13, bzc); k.box(0.36, 0.16, D + 0.3, blue, g, lxc, H + 0.13, 0.15);                       // 墙头一圈蓝色的檐口
+    }
+  }
+  // 起步房子里外的摆设。墙上的位置（世界 z）：左墙前角 3.1~4、门 1.65~3.05、门和大屏之间 0.55~1.6、大屏 -1.7~0.5、后角 -4~-1.75
+  const TRACK_PROP = { chat: 'chat_sign', code: 'rubber_duck', companion: 'plush_bear', video: 'film_set' };       // 四条产品赛道各有一样标志摆设
+  function startDecor(g, L, T, brand) {
+    const { W, D, H } = L, kind = T.kind, PI = Math.PI, lx = -W / 2, bz = -D / 2, fz = D / 2 - 1.15, F = 0.06, ox = W / 2 + 2.15, oz = D / 2 + 2.15;
+    const alt = (a, b) => (PROPS[a] ? a : b);
+    const pp = (name, x, z, ry = 0, o, y = F) => (PROPS[name] ? put(g, name, x, z, ry, { brand, seed: (x * 7 + z * 13) | 0, ...o }, y) : null);       // 屋里的（踩在地板上）
+    const out = (name, x, z, ry = 0, o, y = 0) => (PROPS[name] ? put(g, name, x, z, ry, { brand, seed: (x * 5 + z * 11) | 0, ...o }, y) : null);     // 屋外的
+    // 每种房子都有的：挂钟、灭火器、路灯、产品赛道的标志摆设
+    put(g, 'wall_clock', lx + 0.02, D / 2 - 4.1, PI / 2, {}, H - 0.75); pp('fire_extinguisher', lx + 0.2, 3.5, PI / 2);
+    out('street_lamp', W / 2 - 1, oz + 0.4, PI);
+    pp(TRACK_PROP[st.view.track], 0.6, fz + 0.15, 0.45, { seed: 1 });
+    if (kind === 'garage') {
+      pp('boxes', -1.6, fz, PI); pp(alt('workbench', 'garage_shelf'), -3.5, bz + 0.42); pp('garage_shelf', lx + 0.35, -2.95, PI / 2); pp('bicycle', lx + 0.5, -0.75, PI / 2); pp('skateboard', -3.4, 3.5, 0.5);
+      // 车道、草坪上的石板小路、白栅栏、柠檬树、篮球架、信箱
+      k.box(4.7, 0.05, 3.0, '#cfcbc0', g, 0, 0.025, bz - 1.85, { rough: 0.85, tex: 'concrete', pat: ['tile', 1.5, 0.2, 0.04], cast: false });
+      for (let i = 0; i < 3; i++) k.box(0.8, 0.05, 0.42, '#c9c5ba', g, 0.9 + (i % 2) * 0.14, 0.09, D / 2 + 1.62 + i * 0.52, { r: 0.02, rough: 0.9, tex: 'stone', cast: false });
+      for (const x of [6.95, 4.95, 2.95, -1.05, -3.05, -5.05, -7.05]) out('picket_fence', x, oz + 0.82);
+      for (const z of [5.95, 3.95, 1.95, -0.05, -2.05, -4.05, -6.05]) out('picket_fence', ox + 0.82, z, PI / 2);
+      out(alt('lemon_tree', 'tree_round'), lx + 1.5, oz, 0, { seed: 1 }, 0.05); out('tree_palm', ox, bz + 1.5, 1, { seed: 2 }, 0.05); out('tree_palm', ox, D / 2 - 3, 2, { seed: 3 }, 0.05);
+      out('bush', ox, 1.5, 0, {}, 0.05); out('bush', -1, oz + 0.1, 1, {}, 0.05); out('flower_bed', 4.2, oz, 0, { seed: 1 }, 0.05);
+      out('basketball_hoop', W / 2 + 1.25, bz - 1.9, -PI / 2); out('mailbox', 2.5, oz + 1.05); out('fire_hydrant', ox - 1.1, D / 2 + 0.8); out('street_lamp', lx - 2.3, 0, PI / 2);
+    } else if (kind === 'loft') {
+      pp('sofa', -1.6, fz, PI); pp('bean_bag', lx + 0.95, -3.0, 0.6); pp('plant_tall', lx + 0.5, bz + 0.5); pp('bicycle', lx + 0.5, -0.75, PI / 2); pp('kombucha', lx + 0.5, 1.05, PI / 2); pp('plant_tall', -3.9, 3.6);
+      put(g, 'neon_slogan', lx + 0.02, 2.35, PI / 2, { brand }, H - 1.05); put(g, 'poster_frame', -3.9, bz + 0.02, 0, { art: art?.mat(1), seed: 1 }, 0.8);
+      // 临街：没有草坪，行道树、咪表、报刊箱、共享滑板车
+      out('tree_street', lx + 1.5, oz, 0, { seed: 1 }); out('tree_street', ox, D / 2 - 3, 0, { seed: 3 });
+      for (const x of [-4.6, -0.2, 4.2]) out('parking_meter', x, oz + 1.0); for (const z of [-3.4, 2.2]) out('parking_meter', ox + 1.0, z, PI / 2);
+      [0, 1, 3].forEach((s, i) => out('news_rack', 5.3 + i * 0.6, oz + 0.2, 0, { seed: s }));
+      out('kick_scooter', -2.4, oz - 0.1, 0.5, { seed: 0 }); out('kick_scooter', -1.8, oz + 0.1, 0.2, { seed: 1 }); out('bike_rack', 2.4, oz + 0.05, 0, { seed: 3 });
+      out('fire_hydrant', ox - 1.1, D / 2 + 0.8); out('trash_public', lx - 1.2, D / 2 - 2.6); out('street_lamp', lx - 2.3, 0, PI / 2);
+      // 楼下天天有状况：围起来的检修井在冒汽
+      out(alt('manhole_steam', 'manhole'), ox + 0.1, -0.5); out('road_barrier', ox + 0.1, -1.8); out('road_barrier', ox + 0.1, 0.8); out('road_barrier', ox - 1.15, -0.5, PI / 2);
+      for (const [x, z] of [[ox + 0.95, -1.4], [ox + 1.0, 0.3], [ox - 0.8, 0.75], [ox - 0.9, -1.7]]) out('traffic_cone', x, z);
+    } else if (kind === 'house') {
+      pp('sofa', -1.6, fz, PI); pp('rug', -1.6, 1.75); pp('coffee_table', -1.6, 1.75); pp('pizza_stack', -1.5, 1.75, 0.4, {}, F + 0.42);
+      pp('bunk_bed', lx + 0.7, bz + 1.3, PI / 2); pp('bicycle', lx + 0.5, -0.75, PI / 2); pp('fridge', lx + 0.5, 1.05, PI / 2); pp('guitar_stand', -3.6, 3.55, 0.5); pp('bookshelf', 0.85, bz + 0.25);
+      if (PROPS.string_lights) { put(g, 'string_lights', -2.6, bz + 0.02, 0, { brand, seed: 1 }, H - 0.12); put(g, 'string_lights', 0.45, bz + 0.02, 0, { brand, seed: 2 }, H - 0.12); put(g, 'string_lights', lx + 0.02, -2.4, PI / 2, { brand, seed: 3 }, H - 0.12); }
+      // 门廊：木平台上扔着一张旧沙发，台阶下去是草坪；院子里晾着衣服、停着自行车
+      const deck = k.mat('#a9825c', { rough: 0.7, tex: 'wood', pat: ['plank', 0.16, 1.4, 0.4, 0.16] });
+      k.box(5.6, 0.12, 1.15, deck, g, -2.3, 0.06, D / 2 + 0.8, { r: 0.01 }); k.box(1.5, 0.08, 0.34, deck, g, -2.3, 0.04, D / 2 + 1.52, { r: 0.01 });
+      out('sofa', -3.5, D / 2 + 0.78, 0, { seed: 5 }, 0.12); out('plant_small', -0.1, D / 2 + 0.9, 0, {}, 0.12);
+      out('tree_round', lx + 1.5, oz, 0, { seed: 1 }, 0.05); out('tree_cypress', ox, bz + 1.5, 0, { seed: 2 }, 0.05); out('laundry_line', ox, D / 2 - 3.2, PI / 2, {}, 0.05);
+      for (const [x, z] of [[ox, 1.4], [-1, oz + 0.1], [ox - 0.2, -0.5], [3.0, oz - 0.1]]) out('bush', x, z, x, {}, 0.05);
+      out('flower_bed', 5.0, oz, 0, { seed: 4 }, 0.05); out('flower_bed', -5.6, oz + 0.05, 0, { seed: 2 }, 0.05);
+      out(alt('bulletin_board', 'mailbox'), 6.0, 4.9, PI / 4); out('bike_rack', 2.2, oz - 1.0, 0, { seed: 2 }); out('mailbox', lx - 1.2, D / 2 - 2.6); out('street_lamp', lx - 2.3, 0, PI / 2);
+    } else if (kind === 'village') {
+      pp('camp_bed', -1.6, fz, PI); pp('bunk_bed', lx + 0.7, bz + 1.3, PI / 2); pp('rice_cooker', lx + 0.5, 1.2, PI / 2); pp('clothes_rack', 0.9, bz + 0.5); pp('water_dispenser', -0.5, bz + 0.4); pp('shoe_rack', lx + 0.75, 3.55, PI / 2); pp('parcels', lx + 0.6, -0.6, PI / 2);
+      // 楼下：电线杆、小吃摊、塑料凳、电动车，没有一寸草坪
+      out('utility_pole', lx - 1.9, D / 2 + 1.9, 0.3); out('utility_pole', W / 2 + 2.3, bz - 2.05, 1.2);
+      out('food_cart', ox - 0.3, 2.3, PI / 2, { seed: 2 }); out(alt('plastic_stools', 'bench'), 3.3, oz - 0.1, 0.3);
+      out('e_bike', -3.3, oz - 0.3, 1.2); out('e_bike', -2.4, oz - 0.2, 1.45); out('shared_bike', ox - 1.1, D / 2 + 0.8, PI / 2); out('parcels', lx - 1.2, D / 2 - 2.6); out('parcels', 0.3, oz + 0.3, 0.4);
+      out('laundry_line', lx - 1.9, 3.5, PI / 2); out('tree_round', ox, bz + 1.5, 1, { seed: 2 }); for (const x of [-0.9, 1.5, 5.4]) out('plant_small', x, D / 2 + 0.75); out('traffic_cone', W / 2 + 0.9, -2);
+    } else if (kind === 'park') {
+      pp('sofa', -1.6, fz, PI); pp('plant_tall', lx + 0.55, bz + 0.6); pp('plant_tall', 1.35, bz + 0.55); pp('water_cooler', lx + 0.45, 1.05, PI / 2); pp('whiteboard', lx + 0.65, -2.85, PI / 2); pp('plant_small', lx + 0.45, -0.3);
+      pp('standing_banner', -3.9, 3.5, 0.6, { art: art?.mat(4) });
+      // 园区：修剪整齐的绿篱、导视牌、旗杆、一排共享单车、隔离桩
+      out('tree_round', lx + 1.5, oz, 0, { seed: 1 }, 0.05); out('tree_round', ox, D / 2 - 3, 2, { seed: 3 }, 0.05); out(alt('flag_row', 'tree_round'), ox, bz + 1.6, PI / 2, { seed: 2 }, 0.05);
+      for (let x = -0.6; x <= 5.5; x += 1.2) out('bush', x, oz + 0.15, x, {}, 0.05);
+      out(alt('info_totem', 'kiosk'), 5.9, D / 2 + 0.75, PI / 4); out('bike_rack', 2.0, oz - 1.05, 0, { seed: 1 }); for (let x = -6.8; x <= 7.5; x += 2.03) out('bollard', x, oz + 1.05);
+      out('planter_box', ox - 1.15, 2.6, PI / 2); out('planter_box', ox - 1.15, -1.2, PI / 2); out('bench', -3.4, oz - 1.05, PI); out('parcels', lx - 1.2, D / 2 - 2.6); out('street_lamp', lx - 2.3, 0, PI / 2);
+    } else if (kind === 'stall') {
+      // 档口：临街一排玻璃柜台，后墙是元器件货架和滚动屏，卷帘门外是市场的过道
+      pp(alt('display_counter', 'coffee_bar'), -3.3, D / 2 - 0.72); pp(alt('display_counter', 'coffee_bar'), -1.62, D / 2 - 0.72); pp(alt('parts_shelf', 'garage_shelf'), -4.15, bz + 0.4); pp(alt('parts_shelf', 'bookshelf'), -2.72, bz + 0.4);
+      if (PROPS.led_ticker) put(g, 'led_ticker', -3.43, bz + 0.02, 0, {}, 2.3);
+      pp('camp_bed', lx + 0.55, -2.7, PI / 2); pp('water_dispenser', lx + 0.45, 1.05, PI / 2); pp('boxes', lx + 0.65, -0.6, PI / 2); pp('hand_truck', 1.25, -3.2, -0.5); pp('boxes', -1.1, -3.3, 0.3);
+      out('hand_truck', 0.9, bz - 1.3, 0.6); out('parcels', -0.9, bz - 1.5, 0.2); out('parcels', -1.6, bz - 2.2, 1.1); out('e_bike', 2.7, bz - 1.3, 1.3); out(alt('van_delivery', 'car'), 0.4, bz - 2.45, PI / 2, { brand: '#f4f4f2' });
+      // 门口：堆成山的快递、等单的骑手、小吃摊
+      out('parcels', 2.0, oz, 0.2); out('parcels', 3.1, oz + 0.35, 1.0); out('parcels', 2.6, oz - 0.9, 0.5); out('hand_truck', 4.1, oz - 0.5, 0.9);
+      out('e_bike', -3.2, oz - 0.2, 1.3); out('e_bike', -2.3, oz - 0.1, 1.5); out('scooter_delivery', -0.7, oz + 0.35, 1.1, { seed: 1 });
+      out('food_cart', ox - 0.3, 2.4, PI / 2, { seed: 4 }); out('standing_banner', 5.8, D / 2 + 0.8, 0.5); out('shared_bike', ox - 1.1, D / 2 - 0.4, PI / 2);
+      out('tree_street', ox, bz + 1.5, 0, { seed: 2 }); out('power_box', ox + 0.3, -1.6, -PI / 2); out('street_lamp', lx - 2.3, 0, PI / 2); out('traffic_cone', W / 2 + 0.9, -2);
+    }
   }
   // 摆设（沿用经典版的摆法，换成高精度道具，再加几样新的）
   function decorate(g, L, bay, brand, T) {
     const { W, D, H } = L, lv = st.view.level, fz = D / 2 - 1.15, lx = -W / 2, F = 0.06;
     const pp = (name, x, z, ry = 0, o) => put(g, name, x, z, ry, { brand, seed: (x * 7 + z * 13) | 0, ...o }, F);
     const slots = []; for (let x = lx + 3.4; x < W / 2 - L.rz - 1.2; x += 3.1) slots.push(x);
-    const strip = lv === 1 ? (bay ? ['boxes', 'skateboard'] : ['camp_bed', 'water_dispenser'])
-      : lv === 2 ? (bay ? ['sofa', 'pingpong', 'kombucha'] : ['sofa', 'tea_table', 'water_dispenser'])
+    const strip = lv === 2 ? (bay ? ['sofa', 'pingpong', 'kombucha'] : ['sofa', 'tea_table', 'water_dispenser'])
         : lv === 3 ? (bay ? ['sofa', 'pingpong', 'coffee_bar', 'kombucha'] : ['sofa', 'tea_table', 'coffee_bar', 'fish_tank'])
           : lv === 4 ? (bay ? ['reception', 'sofa', 'foosball', 'pantry', 'vending', 'arcade'] : ['reception', 'sofa', 'tea_table', 'pantry', 'vending', 'fish_tank'])
             : (bay ? ['reception', 'statue_founder', 'sofa', 'pingpong', 'pantry', 'vending', 'arcade'] : ['reception', 'statue_founder', 'sofa', 'tea_table', 'pantry', 'vending', 'gong']);
-    strip.forEach((n, i) => { if (slots[i] != null) pp(PROPS[n] ? n : 'coffee_bar', slots[i], fz, Math.PI); });
-    if (lv === 1) { if (bay) { pp('garage_shelf', W / 2 - L.rz - 1.3, -D / 2 + 0.45); pp('bicycle', lx + 0.5, -D / 2 + 2.2, Math.PI / 2); } else { pp('bunk_bed', lx + 0.7, -D / 2 + 1.3, Math.PI / 2); pp('rice_cooker', lx + 0.5, 1.2, Math.PI / 2); pp('clothes_rack', W / 2 - L.rz - 1.3, -D / 2 + 0.5); } }
+    const tp = TRACK_PROP[st.view.track]; if (PROPS[tp]) strip.splice(1, 0, tp);                    // 产品赛道的标志摆设：排第二个，脸朝镜头
+    strip.forEach((n, i) => { if (slots[i] != null) pp(PROPS[n] ? n : 'coffee_bar', slots[i], n === tp ? fz + 0.1 : fz, n === tp ? 0.45 : Math.PI); });
     if (lv >= 2) { pp('plant_tall', lx + 0.55, -D / 2 + 0.6); pp(bay ? 'bean_bag' : 'money_tree', lx + 0.7, D / 2 - 3.3, 0.6); pp('printer', lx + 0.6, 2.2, Math.PI / 2); pp('whiteboard', lx + 2.4, D / 2 - 3.4, 0.9); }
     if (lv >= 3) { pp('bookshelf', lx + 0.42, -D / 2 + 3.6, Math.PI / 2); pp('plant_small', W / 2 - L.rz - 0.5, D / 2 - 0.5); pp('water_cooler', lx + 0.5, 3.6, Math.PI / 2); if (bay) pp('surfboard', lx + 0.4, -D / 2 + 5.4, Math.PI / 2); else pp('lucky_cat', lx + 3.4, fz - 1.2); }
     if (lv >= 4) { pp(PROPS.glass_room ? 'glass_room' : 'meeting_table', W / 2 - 2.5, D / 2 - 2.1, Math.PI, { screen: screens[2].m }); pp('phone_booth', lx + 0.8, -D / 2 + 5.6, Math.PI / 2); pp('trophy_case', lx + 0.42, 0.9, Math.PI / 2); pp('standing_lamp', lx + 2.2, D / 2 - 0.5); pp('locker', lx + 0.4, D / 2 - 5.4, Math.PI / 2); }
@@ -222,7 +425,8 @@ export function createRoom(stage, k, PROPS, art) {
   // 招牌：立在后墙顶上的灯箱，左边 Logo 右边公司名
   let signTex = null, signImg = null, signMat = null;
   function buildSign(parent) {
-    const L = st.L, lv = st.view.level, w = [0, 4.2, 5, 6, 7, 9][lv] || 4.2, h = w * 0.24, g = k.group(parent, -L.W / 2 + 2.6 + w / 2, L.H + 0.08, -L.D / 2 - 0.15), brand = st.view.brand || '#ff6b4a';
+    const L = st.L, lv = st.view.level, gab = lv === 1 && /garage|house/.test(st.kind);                // 带山墙的房子：招牌小一号，挂在山墙正中
+    const w = gab ? 3.4 : [0, 4.2, 5, 6, 7, 9][lv] || 4.2, h = w * 0.24, g = k.group(parent, gab ? -0.15 : -L.W / 2 + 2.6 + w / 2, L.H + 0.08, -L.D / 2 - 0.15), brand = st.view.brand || '#ff6b4a';
     k.box(w + 0.3, h + 0.3, 0.28, lv >= 3 ? '#20242b' : '#7b5a3c', g, 0, h / 2 + 0.55, 0, { r: 0.05, rough: 0.5, metal: lv >= 3 ? 0.6 : 0, tex: lv >= 3 ? 'metal' : 'wood' });
     k.box(w + 0.42, 0.08, 0.36, brand, g, 0, 0.42, 0, { rough: 0.5, tex: 'paint' }); for (const sx of [-1, 1]) k.box(0.12, 0.5, 0.12, '#4a5160', g, sx * (w / 2 - 0.5), 0.2, 0, { metal: 0.6, rough: 0.5 });
     for (let i = 0; i < 3; i++) { const x = (i - 1) * w * 0.33; k.tube([[x, h + 0.72, 0.1], [x, h + 0.95, 0.3], [x, h + 0.82, 0.52]], 0.018, '#3a4048', g, 0, 0, 0); k.box(0.14, 0.07, 0.1, '#fff1cf', g, x, h + 0.8, 0.55, { glow: '#ffe2a8', glowK: 0.2, night: 2.2 }); }      // 招牌射灯
@@ -292,7 +496,7 @@ export function createRoom(stage, k, PROPS, art) {
     drawSign();
     const dx0 = -W / 2 + 2.6, dz0 = -D / 2 + 2.4, deskW = (L.cols - 1) * L.px, deskD = (L.rows - 1) * L.pz;
     lampA.position.set(dx0 + deskW * 0.25, H + 0.6, dz0 + deskD / 2); lampB.position.set(dx0 + deskW * 0.8, H + 0.6, dz0 + deskD / 2);
-    buildFurnace(); buildRacks();
+    buildCore(); buildRacks();
     furnaceG.position.y = rackG.position.y = tw.F[tw.res].y; fireLight.position.y += tw.F[tw.res].y;
   }
   // 每层的工位怎么分：几个部门按人多人少分工位列；研究院排在最右，挨着机房和丹炉
@@ -552,8 +756,49 @@ export function createRoom(stage, k, PROPS, art) {
   // ── 丹炉：八卦石台上的三足青铜鼎，炉口有火，机柜的线缆通到炉下 ──
   let furnace = null, furnaceBakes = [];
   const fireMat = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0xff6a1a, emissiveIntensity: 0.2, roughness: 0.6 });
+  // 屋子正中摆什么：自己炼模型的是丹炉；套壳派（还没立项自研）是一颗套了壳的蛋
+  const buildCore = () => (st.view.own === false ? buildEgg() : buildFurnace());
+  // ── 套壳派：品牌色的蛋壳里，是别人家的模型在发光；一根线从墙上的「上游 API」接进来。上半个壳悬着，一呼一吸 ──
+  let egg = null;
+  const coreMat = new THREE.MeshStandardMaterial({ color: 0xbfefff, emissive: 0x39c6ff, emissiveIntensity: 0.9, roughness: 0.35 });
+  function buildEgg() {
+    for (const b of furnaceBakes) b.userData.dispose?.(); furnaceBakes = []; furnaceG.clear(); furnace = null;
+    const L = st.L, s = st.view.level >= 3 ? 1.2 : 1.0, brand = st.view.brand || '#ff6b4a', PI = Math.PI, rx = L.W / 2 - L.rz / 2, rz = clamp(-L.D / 2 + 5.9, -L.D / 2 + 4.2, L.D / 2 - 2.2), wz = -L.D / 2;
+    const root = k.group(furnaceG, rx, 0.06, rz); root.scale.setScalar(s);
+    const dk = { metal: 0.6, rough: 0.42, tex: 'metal' }, sh = { rough: 0.3, clear: 0.7, tex: 'paint' }, gold = k.mat('#e2b84a', { metal: 1, rough: 0.28 }), neon = { glow: '#39c6ff', glowK: 0.7, night: 2.6 };
+    // 底座：机柜味的八角台 + 一圈灯带，上面是线缆盘成的「鸟巢」
+    const base = k.group();
+    k.cyl(1.22, 1.32, 0.14, '#2b303b', base, 0, 0.07, 0, { seg: 8, ...dk }); k.cyl(1.02, 1.1, 0.12, '#3a4150', base, 0, 0.2, 0, { seg: 8, ...dk });
+    k.torus(1.03, 0.028, '#39c6ff', base, 0, 0.27, 0, { rx: PI / 2, ...neon });
+    ['#20242b', '#c8402f', '#20242b', '#e2b84a', '#2f6fb0', '#20242b'].forEach((c, i) => k.torus(0.5 + i * 0.075, 0.055, c, base, (i % 2) * 0.03, 0.31 + i * 0.05, (i % 3) * 0.02, { rx: PI / 2 + (i % 2 ? 0.06 : -0.05), rough: 0.6, tex: 'rubber' }));
+    const bb = k.bake(base); furnaceBakes.push(bb); root.add(bb);
+    // 下半个壳（碗口朝上），正面贴着一张自家的圆标
+    const body = k.group(null, 0, 0.44, 0);
+    k.lathe([[0, 0], [0.3, 0.03], [0.52, 0.18], [0.67, 0.42], [0.73, 0.68], [0.71, 0.92], [0.62, 0.92], [0.6, 0.8], [0, 0.8]], brand, body, 0, 0, 0, sh);
+    k.torus(0.715, 0.022, gold, body, 0, 0.92, 0, { rx: PI / 2 });
+    k.cyl(0.2, 0.2, 0.02, '#fffdf7', body, 0, 0.52, 0.7, { rx: PI / 2 - 0.2, rough: 0.5, tex: 'paper' }); k.torus(0.11, 0.022, '#1e2233', body, 0, 0.523, 0.713, { rx: -0.2, rough: 0.5 });
+    k.ball(0.59, coreMat, body, 0, 1.0, 0, { cast: false });                                               // 壳里那颗「别人家的模型」：从两半壳中间的缝里透出光来
+    for (const dy of [-0.07, 0.07, 0.21]) k.torus(Math.sqrt(0.6 * 0.6 - dy * dy), 0.012, '#eaffff', body, 0, 1.0 + dy, 0, { rx: PI / 2, glow: '#bff3ff', glowK: 0.8, night: 2.2, cast: false });
+    const bodyB = k.bake(body); furnaceBakes.push(bodyB); root.add(bodyB);
+    // 上半个壳：悬在上面，留一道一拃宽的缝
+    const lidY = 0.44 + 0.92 + 0.24, lid = k.group(null, 0, lidY, 0);
+    k.lathe([[0, 0.1], [0.6, 0.1], [0.62, 0], [0.71, 0], [0.69, 0.25], [0.6, 0.55], [0.45, 0.8], [0.25, 0.97], [0, 1.03]], brand, lid, 0, 0, 0, sh);
+    k.torus(0.715, 0.022, gold, lid, 0, 0, 0, { rx: PI / 2 });
+    const lidB = k.bake(lid); furnaceBakes.push(lidB); root.add(lidB);
+    const glow = glowSprite(0x59c8ff, 2.6); glow.position.set(0, 1.45, 0); root.add(glow);
+    // 墙上的上游接口：一个配线盒，发光的线一路拖到蛋底下
+    const cg = k.group();
+    k.box(1.0, 0.72, 0.14, '#2b303b', cg, rx, 1.45, wz + 0.09, { r: 0.03, ...dk }); k.box(0.5, 0.24, 0.03, '#39c6ff', cg, rx, 1.38, wz + 0.17, { r: 0.01, ...neon });
+    for (let i = 0; i < 4; i++) k.box(0.05, 0.05, 0.02, i % 2 ? '#7dff8a' : '#ffd23f', cg, rx - 0.3 + i * 0.2, 1.68, wz + 0.17, { glow: i % 2 ? '#7dff8a' : '#ffd23f', glowK: 0.8, night: 2.4 });
+    textSign(cg, '上游 API', 1.0, 0.3, rx, 2.05, wz + 0.1, 0, '#1e2233', '#9be7ff');
+    const path = off => [[rx + off, 1.2, wz + 0.2], [rx + off, 0.5, wz + 0.26], [rx + off, 0.1, wz + 0.6], [rx + 0.3 + off, 0.09, (rz + wz) / 2], [rx + off, 0.1, rz - 1.5 * s], [rx + off * 0.5, 0.16, rz - 0.9 * s]];
+    k.tube(path(0), 0.045, '#39c6ff', cg, 0, 0, 0, { glow: '#39c6ff', glowK: 0.5, night: 2.4 }); k.tube(path(-0.12), 0.04, '#20242b', cg, 0, 0, 0, { rough: 0.6, tex: 'rubber' });
+    const cb = k.bake(cg); furnaceBakes.push(cb); furnaceG.add(cb);
+    egg = { g: root, lid: lidB, lidY, glow, s };
+    fireLight.color.setHex(0x59c8ff); fireLight.position.set(rx, 2.3 * s, rz + 0.5);
+  }
   function buildFurnace() {
-    for (const b of furnaceBakes) b.userData.dispose?.(); furnaceBakes = []; furnaceG.clear();
+    for (const b of furnaceBakes) b.userData.dispose?.(); furnaceBakes = []; furnaceG.clear(); egg = null; fireLight.color.setHex(0xff8a3c);
     const L = st.L, s = st.view.level >= 3 ? 1.3 : 1.12, root = k.group(furnaceG, L.W / 2 - L.rz / 2, 0.06, clamp(-L.D / 2 + 5.9, -L.D / 2 + 4.2, L.D / 2 - 2.2));
     root.scale.setScalar(s);
     const bz = { metal: 0.9, rough: 0.4, tex: 'bronze' }, bronze = '#8f6b3a', dark = '#5c4526', patina = '#4f8f7c', gold = k.mat('#e2b84a', { metal: 1, rough: 0.28 }), stone = { rough: 0.85, tex: 'stone' };
@@ -767,7 +1012,7 @@ export function createRoom(stage, k, PROPS, art) {
       stage.shake(0.7); scareAll();
       if (furnace) for (let i = 0; i < 16; i++) spawn(k.ball(0.3, k.mat('#3a3d45', { alpha: 0.7, rough: 1 }), null, 0, 0, 0, { cast: false, receive: false }), furnace.g.position.x + (Math.random() - 0.5) * 0.8, fy + 2 + Math.random(), furnace.g.position.z + (Math.random() - 0.5) * 0.8, (Math.random() - 0.5) * 1.6, 1.4 + Math.random() * 1.6, (Math.random() - 0.5) * 1.6, 2 + Math.random(), { g: -0.4, spin: 0.5, grow: 1.4, fl: fy - 0.2 });
     } else if (name === 'levelup') { st.pop = 1; for (let i = 0; i < 5; i++) burst((Math.random() - 0.5) * L.W, by + L.H * 0.6, (Math.random() - 0.5) * L.D, 12, ['#ffd23f', '#fff6c2', '#ff9736'], 4.5); }
-    else if (name === 'release' && furnace) { st.release = 1.6; burst(furnace.g.position.x, fy + 2.6, furnace.g.position.z, 26, ['#ffe9a8', '#ffb347', '#ffffff'], 5); }
+    else if (name === 'release' && (furnace || egg)) { const c = furnace || egg; st.release = 1.6; burst(c.g.position.x, fy + 2.6, c.g.position.z, 26, furnace ? ['#ffe9a8', '#ffb347', '#ffffff'] : ['#bff3ff', '#59c8ff', '#ffffff'], 5); }
     else if (name === 'say') {
       const here = a => !tw.on || a?.floor === tw.open, list = [...actors.values()].filter(here), pick = data.who === 'founder' ? founder : actors.get(data.who) || list[Math.random() * list.length | 0] || (here(founder) ? founder : null);
       if (pick) say(pick, data.text || '……', false);
@@ -813,6 +1058,16 @@ export function createRoom(stage, k, PROPS, art) {
       for (const s of furnace.sparks) { const p = (t * (0.35 + heat * 0.5) + s.userData.p) % 1, a = s.userData.p * 40; s.visible = heat > 0.08 && s.userData.p < 0.3 + heat * 0.7; s.position.set(Math.sin(a + p * 3) * 0.3 * (1 + p), 2.2 + p * 2.6, Math.cos(a * 1.3) * 0.3 * (1 + p)); s.scale.setScalar(1 - p); s.rotation.set(p * 9, p * 7, 0); }
       for (const s of furnace.smoke) { const p = (t * 0.22 + s.userData.p) % 1; s.visible = heat < 0.08; s.position.set(Math.sin(p * 5 + s.userData.p * 9) * 0.15, 2.2 + p * 1.8, 0); s.scale.setScalar(0.5 + p * 1.2); }
     }
+    if (drops.length) {                                                       // 墙外的邻楼、幕墙：镜头转到它们背后时缩下去，别挡着屋里
+      const az = stage.st.azNow ?? stage.st.az, cx = Math.sin(az), cz = Math.cos(az), kf = 1 - Math.exp(-dt * 6);
+      for (const d of drops) { d.s = lerp(d.s, clamp(((d.axis === 'z' ? cz : cx) + 0.02) / 0.2, 0, 1), kf); const q = d.min + (1 - d.min) * d.s; d.o.scale.y = Math.max(0.001, q); d.o.visible = q > 0.01; }
+    }
+    if (egg) {                                                                // 套壳派的蛋：内核一明一暗，上半个壳悬着慢慢转；有发布时壳被顶起来
+      const beat = Math.sin(t * 2.1) * 0.5 + 0.5;
+      coreMat.emissiveIntensity = 0.7 + beat * 0.7 + rel * 3; fireLight.intensity = tw.on && !furnaceG.visible ? 0 : 1.6 + beat * 1.2 + rel * 5;
+      egg.lid.position.y = egg.lidY + Math.sin(t * 1.3) * 0.05 + Math.sin(rel * Math.PI) * 0.9; egg.lid.rotation.y = t * 0.25; egg.lid.rotation.z = 0.07 + Math.sin(t * 0.9) * 0.03 + rel * 0.5;
+      egg.glow.material.opacity = 0.28 + beat * 0.2 + rel * 0.5; egg.glow.scale.setScalar(2.4 + beat * 0.5);
+    }
     if (leds && (st.ledT -= dt) <= 0) { st.ledT = 0.16; for (let i = 0; i < 18; i++) leds.setColorAt(Math.random() * leds.count | 0, LEDC[Math.random() < 0.3 ? 3 : Math.random() * 3 | 0]); leds.instanceColor.needsUpdate = true; }
     for (const a of actors.values()) animActor(a, dt);
     if (founder) animActor(founder, dt);
@@ -830,7 +1085,8 @@ export function createRoom(stage, k, PROPS, art) {
   function sync(view) {
     const p = st.view, v = (st.view = { ...p, ...view, staff: view.staff || p.staff || [] });
     v.level = clamp(v.level | 0 || 1, 1, MAXLV);
-    const key = `${v.region}|${v.level}|${v.brand || ''}`, rebuilt = key !== st.key; let up = false;
+    // 什么变了要重盖房子：地区、档位、品牌色；起步那档还看落脚点；套壳派没丹炉；产品赛道的摆设（多层楼里没有）
+    const key = `${v.region}|${v.level}|${v.brand || ''}|${v.level === 1 ? startKind(v.region, v.district) : ''}|${v.own === false ? 'egg' : ''}|${FLOOR_PLANS[v.level] ? '' : v.track || ''}`, rebuilt = key !== st.key; let up = false;
     if (rebuilt) {
       up = !!st.key && p.region === v.region && v.level > p.level; st.key = key; buildRoom();
       reseatAll();
@@ -856,7 +1112,7 @@ export function createRoom(stage, k, PROPS, art) {
     lift: () => ({ on: tw.on, N: tw.N, open: tw.open, target: tw.target, pos: tw.cut, moving: !!tw.ride, dir: tw.ride ? Math.sign(tw.ride.to - tw.ride.from) : 0, eta: tw.ride ? Math.max(0, tw.ride.dur - tw.ride.t) : 0, res: tw.res, boss: tw.boss }),
     dispose() {
       off(); for (const b of bakes) b.userData.dispose?.(); for (const b of furnaceBakes) b.userData.dispose?.(); for (const x of owned) x.dispose?.(); for (const x of rackOwned) x.dispose?.();
-      for (const a of actors.values()) freeActor(a); if (founder) freeActor(founder); if (pool) { stage.scene.remove(pool.mesh); pool.dispose(); } for (const s of screens) { s.t.dispose(); s.m.dispose(); } for (const t of emojiTex.values()) t.dispose(); glowTex.dispose(); fireMat.dispose(); stage.scene.remove(world);
+      for (const a of actors.values()) freeActor(a); if (founder) freeActor(founder); if (pool) { stage.scene.remove(pool.mesh); pool.dispose(); } for (const s of screens) { s.t.dispose(); s.m.dispose(); } for (const t of emojiTex.values()) t.dispose(); glowTex.dispose(); fireMat.dispose(); coreMat.dispose(); stage.scene.remove(world);
     },
   };
 }

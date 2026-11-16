@@ -8,6 +8,12 @@ import { PROPS } from '../src/scene3a/props.js';
 import { PROPS as OLD } from '../src/scene/props.js';
 
 const expected = {
+  workbench:[1.8,.7,1.9], basketball_hoop:[1.2,1.3,3.2], picket_fence:[2,.12,.9], lemon_tree:[1.6,1.6,2.6],
+  road_barrier:[1.6,.5,1.1], news_rack:[.5,.45,1.2], manhole_steam:[.8,.8,1.8], kick_scooter:[.45,1.1,1.15], fire_escape:[2.2,.9,2.8],
+  guitar_stand:[.5,.4,1.1], pizza_stack:[.5,.5,.35], string_lights:[3,.12,.5], bulletin_board:[1.6,.4,2],
+  info_totem:[.7,.3,2.4], flag_row:[2.4,.5,4.2], standing_banner:[.8,.4,2],
+  display_counter:[1.6,.6,1], hand_truck:[.6,.7,1.3], led_ticker:[2.4,.12,.35], parts_shelf:[1.4,.45,1.9],
+  plastic_stools:[1.6,1.6,.8], shoe_rack:[.8,.3,.9], chat_sign:[1.1,.35,1.6], rubber_duck:[.8,.9,.9], plush_bear:[.9,.8,1.1], film_set:[1.9,1.3,2],
   desk_set:[1.5,.75,1.25], office_chair:[.65,.65,1.05], desk_lamp:[.3,.3,.5], server_rack:[.7,1,2.1], rack_cooling:[.7,1,2.1], whiteboard:[1.8,.5,1.9], tv_wall:[2.2,.15,1.3], poster_frame:[.9,.05,1.2], pendant_lamp:[.5,.5,1.2], wall_clock:[.4,.06,.4], fire_extinguisher:[.25,.2,.6], ac_split:[.9,.25,.3], locker:[1.2,.5,1.9], standing_desk:[1.5,.75,1.5], glass_room:[4.2,3.2,2.6], pantry:[2.6,.7,2.1], gong:[1,.5,1.5], neon_slogan:[2.4,.12,.6],
   traffic_light:[.5,2.6,4.2], bus_stop:[3.6,1.5,2.6], billboard:[6,.6,5.2], billboard_roof:[6,1,3.2], neon_sign:[.9,.3,3.2], shop_awning:[3,1.1,.9], food_cart:[1.8,1.2,2.2], food_truck:[2.4,5.2,3], kiosk:[2,2,2.6], bike_rack:[3.2,1.8,1.1], planter_box:[1.6,.6,.9], bollard:[.2,.2,.8], trash_public:[.6,.5,1], parking_meter:[.25,.25,1.3], manhole:[.8,.8,.03], utility_pole:[1.8,.4,7.5], power_box:[1,.5,1.4], scaffold:[4,1.2,6], crane_tower:[14,3,30], tree_street:[2.4,2.4,4.6], tree_cypress:[1,1,5], flower_bed:[2.4,1.2,.5],
   ac_unit:[1,.45,.8], water_tank:[1.6,1.6,2.4], water_tower_wood:[2,2,3.4], roof_vent:[.8,.8,.9], roof_hvac:[2.6,1.6,1.4], solar_array:[3.2,2,.8], sat_dish:[1.2,1.2,1.3], antenna_mast:[.6,.6,6], roof_garden:[4,3,2.4], helipad:[7,7,.1], laundry_line:[2.4,.6,1.9],
@@ -20,6 +26,7 @@ const source = readFileSync(new URL('../src/scene3a/props.js', import.meta.url),
 assert(!/Math\.random\s*\(/.test(source), 'nondeterministic random');
 assert(!/new\s+(?:\w+\.)*(?:\w*Light|\w*Texture|Mesh\w*Material)\s*\(/.test(source), 'props must use kit materials and no lights/textures');
 const small = new Set('plant_small trash_bin coffee_table desk_lamp pendant_lamp wall_clock fire_extinguisher ac_split poster_frame neon_slogan bollard parking_meter manhole roof_vent skateboard surfboard lucky_cat traffic_cone mailbox flower_bed'.split(' '));
+for (const name of 'picket_fence news_rack kick_scooter guitar_stand pizza_stack string_lights led_ticker shoe_rack manhole_steam road_barrier hand_truck'.split(' ')) small.add(name);
 const budget = n => ['crane_tower','glass_room','roof_garden','scaffold'].includes(n) ? 40000 : /^(car|robotaxi|van_|bus_city|scooter|food_truck)/.test(n) ? 20000 : /tree|bush|plant_tall/.test(n) ? 14000 : small.has(n) ? 6000 : 15000;
 const errors = [], rows = [], k = makeKit();
 function stats(g) {
@@ -43,14 +50,14 @@ function within(name, g, size) {
   assert(!b.isEmpty(), 'empty prop');
   const lo = [-w*.56, 0, -d*.56], hi = [w*.56, h*1.12, d*.56];
   if (name === 'scroll') { lo[1] = -h*.56; hi[1] = h*.56; }
-  if (name === 'pendant_lamp' || name === 'shop_awning') { lo[1] = -h*1.12; hi[1] = .015; }
-  if (['tv_wall','poster_frame','neon_slogan'].includes(name)) { lo[2] = -.005; hi[2] = d*1.12; }
+  if (['pendant_lamp','shop_awning','string_lights'].includes(name)) { lo[1] = -h*1.12; hi[1] = .015; }
+  if (['tv_wall','poster_frame','neon_slogan','string_lights','led_ticker','fire_escape'].includes(name)) { lo[2] = -.005; hi[2] = d*1.12; }
   if (name === 'shop_awning') { lo[2] = -.02; hi[2] = d*1.12; }
   if (name === 'neon_sign') { lo[0] = -.005; hi[0] = w*1.12; }
   lo[1] -= .025;
   for (let i=0;i<3;i++) assert(b.min.getComponent(i) >= lo[i]-pad && b.max.getComponent(i) <= hi[i]+pad, `bounds ${'xyz'[i]}: [${b.min.getComponent(i).toFixed(3)}, ${b.max.getComponent(i).toFixed(3)}], allowed [${lo[i].toFixed(3)}, ${hi[i].toFixed(3)}]`);
-  if (!['scroll','pendant_lamp','shop_awning'].includes(name)) assert(Math.abs(b.min.y) <= .035, `bottom is ${b.min.y.toFixed(3)}, should touch y=0`);
-  if (name === 'pendant_lamp' || name === 'shop_awning') assert(Math.abs(b.max.y) <= .035, 'hanging origin must touch y=0');
+  if (!['scroll','pendant_lamp','shop_awning','string_lights'].includes(name)) assert(Math.abs(b.min.y) <= .035, `bottom is ${b.min.y.toFixed(3)}, should touch y=0`);
+  if (['pendant_lamp','shop_awning','string_lights'].includes(name)) assert(Math.abs(b.max.y) <= .035, 'hanging origin must touch y=0');
 }
 function transforms(g) { const m = new Map(); g.traverse(n => m.set(n, JSON.stringify([n.position.toArray(), n.quaternion.toArray(), n.scale.toArray(), n.visible]))); return m; }
 function preserved(n, root) { for (let p=n;p && p!==root;p=p.parent) if (p.userData.dynamic) return true; return false; }
@@ -87,10 +94,10 @@ for (const [name,spec] of Object.entries(PROPS)) {
   rows.push({ prop:name, triangles:peak, materials, bakedMeshes, tick:hasTick?'yes':'—', budget:budget(name) });
 }
 // External artwork must stay one complete UV plane and survive static batching.
-for (const name of ['desk_set','standing_desk','rack_cooling','tv_wall','poster_frame','glass_room','bus_stop','billboard','billboard_roof','parking_meter','arcade','water_cooler','printer','bus_city']) {
+for (const name of ['desk_set','standing_desk','rack_cooling','tv_wall','poster_frame','glass_room','bus_stop','billboard','billboard_roof','parking_meter','arcade','water_cooler','printer','bus_city','standing_banner']) {
   try {
     const screen = k.mat('#eb40a8'), art = k.mat('#3f87f5'), g = PROPS[name].build(k,{seed:1,screen,art});
-    const kind = ['poster_frame','bus_stop','billboard','billboard_roof'].includes(name)?'art':'screen';
+    const kind = ['poster_frame','bus_stop','billboard','billboard_roof','standing_banner'].includes(name)?'art':'screen';
     const n=g.userData[kind]; assert(n?.isMesh,`${kind} handle missing`); assert.equal(n.material,kind==='art'?art:screen,'supplied material ignored'); assert.equal(n.geometry.type,'PlaneGeometry','surface must be a plane');
     const uv=n.geometry.attributes.uv; assert.equal(Math.min(...uv.array),0); assert.equal(Math.max(...uv.array),1); assert(preserved(n,g),'surface handle will be invalid after bake');
     const b=bake(g); assert(n.parent?.parent===b || n.parent===b,'surface not retained'); b.userData.dispose();

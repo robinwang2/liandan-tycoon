@@ -1780,10 +1780,484 @@ for (const name of Object.keys(legacySizes)) if (!rebuiltLegacy.has(name)) {
   const original = PROPS[name].build;
   PROPS[name].build = (k, o = {}) => { const sk = surfaceKit(k, name), g = original(sk, o); legacyFinish(sk, g, name, o); return g; };
 }
+// Starting-location miniatures. Keep these separate from the legacy drawings.
+function ownedGlow(k, g, color) {
+  const source = lit(k, color), m = source.clone();
+  m.onBeforeCompile = source.onBeforeCompile; m.customProgramCacheKey = source.customProgramCacheKey;
+  (g.userData.own ||= []).push(m); k.nightMats.push([m, .18, 2.6]);
+  return { source, m };
+}
+PROPS.workbench = prop([1.8, .7, 1.9], (k, g, o) => {
+  const wood = material(k, '#ba8756', 'wood', .65), steel = material(k, '#555d61', 'metal', .42, .75);
+  feet(k, g, 1.62, .54, .82, steel, 0, .07);
+  k.box(1.8, .09, .7, wood, g, 0, .855, 0, { r: .018 });
+  k.box(1.74, .91, .045, wood, g, 0, 1.435, -.32);
+  for (let row = 0; row < 8; row++) for (let col = 0; col < 18; col++)
+    k.disc(.009, C.black, g, -.79 + col * .093, 1.06 + row * .106, -.295, { seg: 8 });
+  for (let i = 0; i < 4; i++) {
+    const x = -.62 + i * .4;
+    k.box(.37, .24, .5, wood, g, x, .66, 0);
+    k.box(.15, .025, .025, steel, g, x, .69, .265);
+  }
+  k.box(1.65, .045, .55, steel, g, 0, .17, 0);
+  k.box(.53, .25, .32, C.red, g, -.35, .32, .06, { r: .022 });
+  k.box(.55, .045, .34, C.red, g, -.35, .46, .06);
+  k.tube([[-.46, .49, .06], [-.46, .55, .06], [-.24, .55, .06], [-.24, .49, .06]], .012, steel, g, 0, 0, 0);
+  for (const x of [-.52, -.18]) k.box(.028, .07, .015, C.metal, g, x, .43, .235);
+  // Vise: fixed jaw, sliding jaw, screw and cross handle.
+  k.box(.25, .06, .2, steel, g, -.67, .93, .17);
+  for (const z of [.08, .28]) k.box(.23, .12, .045, steel, g, -.67, 1.01, z);
+  bar(k, g, C.metal, [-.67, .96, .08], [-.67, .96, .34], .018);
+  bar(k, g, C.metal, [-.78, .96, .335], [-.56, .96, .335], .009);
+  // Hanging wrench, hammer, screwdriver, cable reel and drill.
+  k.box(.035, .24, .025, steel, g, -.68, 1.52, -.25);
+  k.torus(.043, .014, steel, g, -.68, 1.66, -.25, { arc: Math.PI * 1.55, rz: -.85 });
+  k.box(.035, .26, .035, C.darkWood, g, -.4, 1.49, -.25);
+  k.box(.16, .06, .06, steel, g, -.4, 1.64, -.25);
+  k.box(.045, .12, .04, brand(o), g, -.15, 1.44, -.25);
+  bar(k, g, C.metal, [-.15, 1.5, -.25], [-.15, 1.72, -.25], .009);
+  for (let i = 0; i < 3; i++) k.torus(.105 + i * .012, .009, C.black, g, .17, 1.55, -.25 + i * .01);
+  k.box(.2, .1, .09, brand(o), g, .56, 1.6, -.23, { r: .02 });
+  k.box(.07, .15, .08, brand(o), g, .59, 1.5, -.23, { rz: -.2 });
+  bar(k, g, C.metal, [.45, 1.6, -.23], [.35, 1.6, -.23], .013);
+  k.box(.32, .016, .2, '#2d8655', g, -.16, .909, .13);
+  for (let i = 0; i < 5; i++) { k.box(.035, .025, .045, C.black, g, -.27 + i * .055, .93, .12); k.box(.003, .002, .16, C.gold, g, -.27 + i * .055, .919, .13); }
+  bar(k, g, C.black, [.09, .925, .19], [.26, .925, .12], .022);
+  bar(k, g, C.metal, [.26, .925, .12], [.35, .925, .08], .008);
+  k.ball(.009, lit(k, C.orange, .08), g, .35, .925, .08, { seg: 8 });
+  k.box(.28, .025, .18, C.cream, g, .59, .916, -.06);
+  k.box(.055, .12, .06, C.cream, g, .59, .98, -.12);
+  k.box(.43, .32, .19, '#b6b19c', g, .59, 1.17, -.12, { r: .025 });
+  k.plane(.35, .24, lit(k, '#567b66', .06), g, .59, 1.18, -.021);
+});
+PROPS.basketball_hoop = prop([1.2, 1.3, 3.2], (k, g) => {
+  const steel = material(k, '#697481', 'metal', .4, .75);
+  k.box(.85, .2, .64, C.black, g, 0, .1, -.32, { r: .025 });
+  k.cyl(.045, .045, .015, C.dark, g, .22, .207, -.32);
+  bar(k, g, steel, [0, .19, -.42], [0, 2.98, -.12], .055);
+  for (const x of [-.3, .3]) bar(k, g, steel, [x, .18, -.12], [0, 1.25, -.31], .025);
+  k.box(1.16, .72, .035, k.mat(C.glass, { ...glass, metal: .1 }), g, 0, 2.82, -.05);
+  for (const x of [-.58, .58]) k.box(.035, .75, .05, C.red, g, x, 2.82, -.025);
+  for (const y of [2.46, 3.18]) k.box(1.18, .035, .05, C.red, g, 0, y, -.025);
+  for (const x of [-.2, .2]) k.box(.018, .23, .008, C.white, g, x, 2.7, -.025);
+  for (const y of [2.585, 2.815]) k.box(.4, .018, .008, C.white, g, 0, y, -.025);
+  k.box(.13, .045, .18, C.orange, g, 0, 2.52, .06);
+  k.torus(.23, .018, C.orange, g, 0, 2.52, .35, { rx: Math.PI / 2 });
+  for (let i = 0; i < 10; i++) {
+    const a = i * Math.PI / 5, b = a + .25;
+    bar(k, g, C.white, [Math.cos(a) * .22, 2.5, .35 + Math.sin(a) * .22], [Math.cos(b) * .13, 2.19, .35 + Math.sin(b) * .13], .005);
+  }
+  k.torus(.13, .005, C.white, g, 0, 2.19, .35, { rx: Math.PI / 2 });
+});
+PROPS.picket_fence = prop([2, .12, .9], (k, g) => {
+  const paint = material(k, '#eeeade', 'wood', .7);
+  for (const x of [-.95, .95]) k.box(.1, .9, .12, paint, g, x, .45, 0);
+  for (const y of [.22, .6]) k.box(2, .075, .04, paint, g, 0, y, -.035);
+  for (let i = 0; i < 11; i++) {
+    const x = -.83 + i * .166;
+    k.extrude([[-.055, .04], [.055, .04], [.055, .74], [0, .85], [-.055, .74]], .025, paint, g, x, 0, .015, { bevel: .006 });
+  }
+});
+PROPS.lemon_tree = prop([1.6, 1.6, 2.6], (k, g, o) => {
+  const bark = material(k, '#796444', 'wood', .92), leaves = ['#3e7543', '#568a42', '#71994a'].map(c => material(k, c, 'foliage', .92));
+  k.cyl(.075, .14, 1.35, bark, g, 0, .675, 0, { seg: 10 });
+  for (let i = 0; i < 7; i++) {
+    const a = i * Math.PI * 2 / 7 + hash(o.seed, 0), r = .27 + hash(o.seed, i + 1) * .12;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r, y = 1.75 + hash(o.seed, i + 20) * .3;
+    bar(k, g, bark, [0, .95, 0], [x, y, z], .035);
+    oval(k, g, leaves[i % 3], x, y, z, .34 + hash(o.seed, i + 40) * .07, .44, .35);
+    for (let j = 0; j < 2; j++) {
+      const b = a + (j ? .8 : -.8);
+      oval(k, g, C.yellow, x + Math.cos(b) * .3, y - .16 - j * .12, z + Math.sin(b) * .3, .045, .064, .045, { seg: 8 });
+    }
+  }
+  oval(k, g, leaves[2], .03, 2.17, -.03, .36, .39, .35);
+});
+PROPS.road_barrier = prop([1.6, .5, 1.1], (k, g) => {
+  const steel = material(k, '#7b8183', 'metal', .55, .65);
+  for (const x of [-.59, .59]) for (const z of [-.21, .21]) bar(k, g, steel, [x, .02, z], [x, .83, 0], .025);
+  for (const y of [.4, .79]) {
+    k.box(1.6, .18, .07, C.white, g, 0, y, .015);
+    for (let i = 0; i < 5; i++) k.box(.155, .17, .006, C.orange, g, -.66 + i * .32, y, .054, { rz: -.15 });
+  }
+  k.box(.17, .055, .13, C.black, g, .55, .915, 0);
+  const p = dynamic(k, g, 'warning-lamp', .55, 1.005, 0), { m, source } = ownedGlow(k, g, '#ffb43e');
+  k.cyl(.062, .07, .12, m, p, 0, 0, 0);
+  g.userData.tick = t => { m.emissiveIntensity = source.emissiveIntensity * (Math.sin(t * Math.PI * 2) > 0 ? 1 : .06); };
+});
+PROPS.news_rack = prop([.5, .45, 1.2], (k, g, o) => {
+  const paint = material(k, [C.red, C.blue, C.yellow, C.teal][Math.floor(hash(o.seed, 3) * 4)], 'paint', .4, .35);
+  k.box(.42, .045, .38, paint, g, 0, .0225, 0);
+  k.box(.13, .48, .16, paint, g, 0, .285, -.03);
+  // Hollow cabinet: the stack is visible through the front glazing.
+  k.box(.49, .68, .025, paint, g, 0, .86, -.2025);
+  for (const x of [-.2325, .2325]) k.box(.025, .68, .43, paint, g, x, .86, 0);
+  for (const y of [.535, 1.185]) k.box(.49, .03, .43, paint, g, 0, y, 0);
+  k.box(.44, .15, .025, paint, g, 0, 1.11, .2);
+  for (const x of [-.207, .207]) k.box(.025, .49, .025, paint, g, x, .79, .2);
+  const paper = material(k, '#e4ddcb', 'paper', .95);
+  for (let i = 0; i < 6; i++) k.box(.34, .019, .27, paper, g, 0, .57 + i * .024, .035);
+  k.box(.31, .27, .008, paper, g, 0, .87, .19);
+  labelLines(k, g, 0, .96, .197, .25, 7);
+  k.plane(.39, .46, k.mat(C.glass, { ...glass, alpha: .2 }), g, 0, .8, .217, { cast: false });
+  k.box(.16, .014, .008, C.black, g, .06, 1.115, .214);
+  k.box(.07, .023, .02, C.metal, g, .17, .82, .215);
+});
+PROPS.manhole_steam = prop([.8, .8, 1.8], (k, g) => {
+  const iron = material(k, '#515655', 'metal', .86, .65);
+  k.cyl(.39, .39, .03, iron, g, 0, .015, 0, { seg: 24 });
+  k.torus(.35, .008, C.black, g, 0, .032, 0, { rx: Math.PI / 2 });
+  for (let i = -3; i <= 3; i++) { const w = 2 * Math.sqrt(.31 ** 2 - (i * .08) ** 2); k.box(w, .009, .018, C.dark, g, 0, .034, i * .08); }
+  const vapor = material(k, '#eef3ef', 'plastic', 1, 0, { alpha: .25 });
+  const puffs = Array.from({ length: 4 }, (_, i) => {
+    const p = dynamic(k, g, `steam-${i}`);
+    oval(k, p, vapor, 0, 0, 0, .16, .22, .16, { seg: 10, cast: false }); return p;
+  });
+  g.userData.tick = t => puffs.forEach((p, i) => {
+    const u = ((t * .17 + i / 4) % 1 + 1) % 1;
+    p.position.set(Math.sin(u * 5 + i) * .06, .24 + u * 1.32, Math.cos(u * 4 + i) * .06);
+    // Expand, then shrink out at the top; opacity stays shared and immutable.
+    p.scale.setScalar((.55 + u) * Math.min(1, (1 - u) * 6));
+  });
+});
+PROPS.kick_scooter = prop([.45, 1.1, 1.15], (k, g, o) => {
+  const paint = material(k, ['#b4d746', C.orange, C.white][Math.floor(hash(o.seed, 2) * 3)], 'paint', .35, .3);
+  k.box(.19, .055, .72, paint, g, 0, .16, -.06, { r: .018 });
+  k.box(.15, .008, .53, C.black, g, 0, .193, -.08);
+  for (const z of [-.43, .43]) {
+    k.cyl(.115, .115, .06, C.black, g, 0, .115, z, { rz: Math.PI / 2, seg: 16 });
+    k.cyl(.055, .055, .065, C.metal, g, 0, .115, z, { rz: Math.PI / 2, seg: 12 });
+  }
+  bar(k, g, paint, [0, .12, .43], [0, 1.08, .31], .027);
+  bar(k, g, C.dark, [-.21, 1.1, .31], [.21, 1.1, .31], .025);
+  for (const x of [-.16, .16]) k.cyl(.03, .03, .1, C.black, g, x, 1.1, .31, { rz: Math.PI / 2 });
+  k.disc(.023, lit(k, '#fff1cc'), g, 0, .99, .353);
+  bar(k, g, C.dark, [-.06, .16, -.05], [-.18, .01, -.12], .012);
+  k.tube([[.1, 1.08, .3], [.08, .8, .36], [.03, .33, .39]], .005, C.black, g, 0, 0, 0);
+});
+PROPS.fire_escape = prop([2.2, .9, 2.8], (k, g) => {
+  const iron = material(k, '#283c35', 'metal', .65, .6);
+  // The rear half is a landing; the front half is an open stairwell.
+  for (const z of [.025, .43, .875]) k.box(2.2, .05, .05, iron, g, 0, .025, z);
+  for (let i = 0; i < 22; i++) k.box(.035, .025, .4, iron, g, -1.05 + i * .1, .05, .23);
+  for (const x of [-1.07, 1.07]) k.box(.05, .05, .85, iron, g, x, .025, .45);
+  for (let i = 0; i < 12; i++) bar(k, g, iron, [-1.06 + i * .193, .06, .875], [-1.06 + i * .193, .96, .875], .013);
+  bar(k, g, iron, [-1.08, .97, .875], [1.08, .97, .875], .022);
+  for (const x of [-1.07, 1.07]) {
+    bar(k, g, iron, [x, .97, .03], [x, .97, .875], .022);
+    for (const z of [.04, .22, .4]) bar(k, g, iron, [x, .05, z], [x, .97, z], .014);
+  }
+  // Both stringers terminate at the next module's y=.05 platform plane.
+  for (const z of [.48, .83]) bar(k, g, iron, [-.96, .07, z], [.96, 2.8, z], .025);
+  for (let i = 0; i <= 14; i++) k.box(.16, .035, .35, iron, g, -.96 + i * 1.92 / 14, .07 + i * 2.73 / 14, .655);
+  // Top landing shares its edge with the next identical module (spacing 2.8).
+  k.box(.2, .035, .42, iron, g, .96, 2.8, .65);
+  for (const x of [-1.04, 1.04]) k.box(.12, .16, .025, iron, g, x, .12, .0125);
+});
+PROPS.guitar_stand = prop([.5, .4, 1.1], (k, g) => {
+  for (const x of [-.2, .2]) bar(k, g, C.dark, [x, .015, .14], [0, .65, -.14], .016);
+  bar(k, g, C.dark, [0, .015, -.18], [0, .65, -.14], .016);
+  const wood = material(k, '#be8442', 'wood', .43, 0, { clear: .3 });
+  oval(k, g, wood, 0, .29, .015, .22, .23, .085);
+  oval(k, g, wood, 0, .49, .005, .16, .17, .075);
+  k.box(.055, .42, .045, C.darkWood, g, 0, .79, -.01);
+  k.box(.085, .12, .05, wood, g, 0, 1.03, -.01, { rz: -.08 });
+  k.disc(.057, C.black, g, 0, .45, .08);
+  k.torus(.061, .005, C.cream, g, 0, .45, .081);
+  k.box(.1, .025, .015, C.darkWood, g, 0, .24, .098);
+  for (let i = 0; i < 6; i++) {
+    bar(k, g, C.metal, [-.018 + i * .007, .25, .105], [-.018 + i * .007, 1.05, .023], .0015);
+    k.ball(.012, C.metal, g, i % 2 ? .054 : -.054, .995 + Math.floor(i / 2) * .033, -.01, { seg: 8 });
+  }
+  for (let i = 0; i < 9; i++) k.box(.056, .002, .004, C.metal, g, 0, .61 + i * .04, .014, { r: 0 });
+});
+PROPS.pizza_stack = prop([.5, .5, .35], (k, g, o) => {
+  const cardboard = material(k, '#c5a178', 'paper', .9), cheese = material(k, '#edc15b', 'plastic', .75);
+  for (let i = 0; i < 4; i++) {
+    const p = k.group(g, 0, i * .048, 0, (hash(o.seed, i) - .5) * .055);
+    k.box(.46, .044, .46, cardboard, p, 0, .022, 0);
+    k.box(.12, .025, .003, i % 2 ? C.red : brand(o), p, .08, .025, .232);
+  }
+  k.box(.46, .025, .46, cardboard, g, 0, .2045, 0);
+  const halfPizza = radius => Array.from({ length: 13 }, (_, i) => [Math.cos(i * Math.PI / 12) * radius, -Math.sin(i * Math.PI / 12) * radius]);
+  k.extrude(halfPizza(.198), .018, C.darkWood, g, 0, .217, 0, { rx: -Math.PI / 2, bevel: .003 });
+  k.extrude(halfPizza(.18), .009, cheese, g, 0, .236, 0, { rx: -Math.PI / 2, bevel: .002 });
+  for (let i = 0; i < 5; i++) { const a = (i + .5) * Math.PI / 5; k.cyl(.025, .025, .005, C.red, g, Math.cos(a) * .12, .248, Math.sin(a) * .12, { seg: 8 }); }
+  // Short opening angle keeps this half-open lid within the stacked footprint.
+  const lid = k.group(g, 0, .22, -.225); lid.rotation.x = -.23;
+  k.box(.46, .012, .46, cardboard, lid, 0, 0, .225);
+  k.box(.2, .003, .13, brand(o), lid, 0, .008, .22);
+});
+PROPS.string_lights = prop([3, .12, .5], (k, g, o) => {
+  const wire = material(k, '#43463f', 'rubber', .8), warm = lit(k, '#ffe1a3'), accent = lit(k, brand(o));
+  // Two parabolic swags join at the central wall hook.
+  const sag = u => -.008 - .3 * 4 * u * (1 - u);
+  for (let half = 0; half < 2; half++) {
+    const x0 = -1.49 + half * 1.49;
+    k.tube(Array.from({ length: 5 }, (_, i) => [x0 + i * 1.49 / 4, sag(i / 4), .025]), .007, wire, g, 0, 0, 0);
+    for (let i = 0; i < 6; i++) {
+      const u = (i + .5) / 6, x = x0 + u * 1.49, y = sag(u);
+      bar(k, g, wire, [x, y, .025], [x, y - .06, .025], .005);
+      k.cyl(.018, .018, .028, C.dark, g, x, y - .068, .025);
+      oval(k, g, i === 2 ? accent : warm, x, y - .108, .05, .027, .038, .027, { seg: 10 });
+    }
+  }
+});
+PROPS.bulletin_board = prop([1.6, .4, 2], (k, g, o) => {
+  const timber = material(k, '#947047', 'wood', .75), cork = material(k, '#b6945d', 'wood', .98);
+  for (const x of [-.66, .66]) k.box(.09, 1.94, .1, timber, g, x, .97, -.05);
+  k.box(1.46, 1.15, .08, timber, g, 0, 1.23, -.04);
+  k.box(1.34, 1.03, .018, cork, g, 0, 1.23, .012);
+  for (const z of [-.095, .095]) k.box(1.6, .045, .22, timber, g, 0, 1.94, z, { rx: z > 0 ? .2 : -.2 });
+  const papers = [C.cream, '#d1e1da', '#d9b3ab', '#b8cce3'].map(c => material(k, c, 'paper', .9));
+  for (let i = 0; i < 12; i++) {
+    const p = k.group(g, -.48 + i % 4 * .32, 1.57 - Math.floor(i / 4) * .3, .03 + i % 2 * .006);
+    p.rotation.z = (hash(o.seed, i) - .5) * .17;
+    k.box(.22 + hash(o.seed, i + 20) * .05, .24, .004, papers[i % 4], p, 0, 0, 0);
+    labelLines(k, p, 0, .065, .004, .16, 5);
+    k.ball(.009, C.red, p, 0, .1, .008, { seg: 8 });
+  }
+  for (const x of [-.4, .12]) {
+    k.box(.31, .12, .005, papers[0], g, x, .75, .05);
+    for (let j = 0; j < 7; j++) k.box(.031, .1, .005, papers[0], g, x - .13 + j * .043, .65, .05);
+  }
+});
+PROPS.info_totem = prop([.7, .3, 2.4], (k, g, o) => {
+  const steel = material(k, '#69767a', 'metal', .4, .75);
+  k.box(.7, .07, .3, steel, g, 0, .035, 0);
+  k.box(.57, 2.32, .2, steel, g, 0, 1.23, 0, { r: .02 });
+  k.plane(.48, 1.47, lit(k, '#dfebe2', .12), g, 0, 1.57, .102);
+  k.box(.47, .11, .008, brand(o), g, 0, 2.22, .108);
+  for (let i = 0; i < 5; i++) {
+    const y = 2.02 - i * .24;
+    labelLines(k, g, -.045, y, .11, .23, 2);
+    k.extrude([[0, -.035], [.05, 0], [0, .035], [0, .012], [-.045, .012], [-.045, -.012], [0, -.012]], .004, C.dark, g, .17, y, .109);
+  }
+});
+PROPS.flag_row = prop([2.4, .5, 4.2], (k, g, o) => {
+  k.box(2.4, .14, .5, material(k, '#969b98', 'stone', .92), g, 0, .07, 0);
+  const steel = material(k, '#c9d0d0', 'metal', .27, .9), flags = [];
+  for (let i = 0; i < 3; i++) {
+    const x = -.99 + i * .76;
+    k.cyl(.025, .04, 4, steel, g, x, 2.14, 0);
+    k.ball(.045, steel, g, x, 4.15, 0);
+    const p = dynamic(k, g, `flag-${i}`, x, 3.98, 0);
+    k.box(.6, .4, .012, material(k, [brand(o), C.white, C.blue][i], 'fabric', .93), p, .31, -.2, 0);
+    flags.push(p);
+    bar(k, g, C.cream, [x + .035, .45, 0], [x + .035, 4.05, 0], .003);
+  }
+  g.userData.tick = t => flags.forEach((p, i) => { p.rotation.y = Math.sin(t * 1.3 + i) * .17; p.scale.x = .95 + Math.sin(t * 1.7 + i) * .05; });
+});
+PROPS.standing_banner = prop([.8, .4, 2], (k, g, o) => {
+  k.box(.8, .075, .22, C.metal, g, 0, .0375, .04, { r: .018 });
+  for (const x of [-.27, .27]) k.box(.045, .025, .4, C.dark, g, x, .0125, 0);
+  bar(k, g, C.metal, [0, .07, -.08], [0, 1.97, -.025], .012);
+  k.box(.76, 1.84, .012, material(k, brand(o), 'fabric', .85), g, 0, 1.025, .025);
+  for (const y of [.1, 1.96]) k.box(.79, .035, .045, C.metal, g, 0, y, .025);
+  if (o.art) face(k, g, o, 'art', .74, 1.82, 0, 1.025, .033);
+  else {
+    k.box(.58, .38, .005, C.cream, g, 0, 1.54, .036);
+    for (let i = 0; i < 3; i++) k.box(.15, .15, .005, [C.blue, C.gold, C.white][i], g, -.21 + i * .21, 1.16, .036);
+    labelLines(k, g, 0, .9, .037, .55, 10, C.white);
+  }
+});
+PROPS.display_counter = prop([1.6, .6, 1], (k, g) => {
+  const alu = material(k, '#b3c0c6', 'metal', .28, .8), pane = k.mat(C.glass, { ...glass, alpha: .18, metal: .12 });
+  k.box(1.6, .35, .6, C.white, g, 0, .175, 0);
+  for (const x of [-.77, .77]) for (const z of [-.27, .27]) k.box(.035, .53, .035, alu, g, x, .615, z);
+  for (const y of [.37, .61, .87]) {
+    k.box(1.55, .018, .55, y === .37 ? alu : pane, g, 0, y, 0, { cast: y === .37 });
+    for (const z of [-.28, .28]) k.box(1.6, .025, .025, alu, g, 0, y, z);
+  }
+  k.box(1.51, .47, .008, pane, g, 0, .62, .286, { cast: false });
+  for (const x of [-.78, .78]) k.box(.008, .47, .54, pane, g, x, .62, 0, { cast: false });
+  for (let i = 0; i < 6; i++) {
+    const x = -.62 + i * .245;
+    k.box(.12, .025, .21, C.black, g, x, .635, .02);
+    k.box(.1, .003, .17, i % 2 ? '#477a8b' : '#849ca0', g, x, .65, .02);
+  }
+  for (const x of [-.49, -.12]) {
+    k.box(.3, .035, .17, '#396e53', g, x, .4, .02);
+    for (const dx of [-.075, .075]) { k.cyl(.055, .055, .025, C.black, g, x + dx, .43, .02, { seg: 12 }); k.cyl(.017, .017, .028, alu, g, x + dx, .433, .02); }
+  }
+  for (let i = 0; i < 3; i++) carton(k, g, .3 + i * .15, .38, -.01, .13, .12, .19);
+  for (const x of [-.48, .05, .53]) { k.box(.21, .075, .006, [C.yellow, C.red, C.blue][Math.round((x + .48) / .5)], g, x, .23, .304); labelLines(k, g, x, .25, .309, .14, 2); }
+  k.box(.19, .035, .19, C.dark, g, -.55, .9, .04);
+  k.box(.13, .006, .04, '#a2b792', g, -.55, .921, -.015);
+  for (let i = 0; i < 12; i++) k.box(.026, .008, .022, C.white, g, -.6 + i % 3 * .047, .925, .027 + Math.floor(i / 3) * .027);
+  k.box(.14, .06, .2, C.black, g, .03, .915, .02);
+  k.box(.1, .005, .065, lit(k, '#91c5b7', .08), g, .03, .949, -.025);
+  k.box(.35, .115, .045, C.black, g, .53, .935, -.1);
+  for (let i = 0; i < 5; i++) labelLines(k, g, .41 + i * .06, .97, -.075, .035, 4, lit(k, '#ff6444'));
+});
+PROPS.hand_truck = prop([.6, .7, 1.3], (k, g) => {
+  const steel = material(k, '#6f8586', 'metal', .47, .65);
+  for (const x of [-.245, .245]) {
+    k.cyl(.13, .13, .085, C.black, g, x, .13, -.22, { rz: Math.PI / 2 });
+    k.cyl(.055, .055, .09, C.metal, g, x, .13, -.22, { rz: Math.PI / 2 });
+  }
+  k.box(.5, .035, .57, steel, g, 0, .08, .025);
+  for (const x of [-.21, .21]) bar(k, g, steel, [x, .12, -.24], [x, 1.26, -.29], .023);
+  bar(k, g, C.black, [-.21, 1.26, -.29], [.21, 1.26, -.29], .027);
+  for (const y of [.4, .8]) k.box(.43, .04, .035, steel, g, 0, y, -.26);
+  for (let i = 0; i < 3; i++) carton(k, g, i === 1 ? .025 : 0, .1 + i * .3, .035, .43 - i * .025, .285, .43 - i * .035);
+  const strap = material(k, '#478b52', 'fabric', .87);
+  k.box(.05, .91, .008, strap, g, .055, .55, .258);
+  k.box(.05, .012, .46, strap, g, .055, 1.009, .03);
+  k.box(.05, .91, .008, strap, g, .055, .55, -.204);
+});
+PROPS.led_ticker = prop([2.4, .12, .35], (k, g) => {
+  k.box(2.4, .35, .106, material(k, '#24292b', 'metal', .5, .55), g, 0, .175, .053);
+  k.box(2.29, .25, .006, C.black, g, 0, .175, .109);
+  const bands = Array.from({ length: 3 }, (_, i) => {
+    const p = dynamic(k, g, `pixels-${i}`), red = ownedGlow(k, g, '#f84c36'), green = ownedGlow(k, g, '#52da77');
+    for (let col = 0; col < 14; col++) for (let row = 0; row < 5; row++) {
+      // Broken strokes suggest abstract glyphs, never literal brand lettering.
+      if ((col + row * 2) % 5 === 3 || (col % 5 === 4)) continue;
+      k.box(.026, .026, .005, col > 10 ? green.m : red.m, p, -1.09 + (i * 14 + col) * .053, .08 + row * .047, .115, { r: .002 });
+    }
+    return [red, green];
+  });
+  g.userData.tick = t => bands.forEach((pair, i) => pair.forEach(({ m, source }) => { m.emissiveIntensity = source.emissiveIntensity * (Math.floor(t * 2.5) % 3 === i ? 1 : .16); }));
+});
+PROPS.parts_shelf = prop([1.4, .45, 1.9], (k, g) => {
+  const steel = material(k, '#7d8b8e', 'metal', .48, .7);
+  feet(k, g, 1.32, .37, 1.9, steel, 0, .04);
+  for (const y of [.08, .44, .8, 1.16, 1.52]) k.box(1.38, .035, .44, steel, g, 0, y, 0);
+  const bins = [C.blue, C.red, C.teal].map(c => material(k, c, 'plastic', .6));
+  for (let row = 0; row < 2; row++) for (let i = 0; i < 6; i++) {
+    const x = -.56 + i * .224, y = .12 + row * .36;
+    k.box(.2, .25, .32, bins[(i + row) % 3], g, x, y + .125, 0);
+    k.box(.11, .045, .007, C.white, g, x, y + .16, .164);
+    k.box(.06, .017, .02, C.dark, g, x, y + .08, .171);
+  }
+  for (const x of [-.44, 0, .44]) {
+    k.cyl(.115, .115, .2, C.black, g, x, .93, 0, { rx: Math.PI / 2, seg: 16 });
+    for (const z of [-.115, .115]) k.cyl(.135, .135, .025, C.wood, g, x, .93, z, { rx: Math.PI / 2, seg: 16 });
+    k.disc(.035, C.dark, g, x, .93, .129);
+  }
+  for (const x of [-.42, 0, .42]) carton(k, g, x, 1.18, 0, .36, .28, .34);
+  const foil = material(k, '#78848a', 'metal', .36, .6);
+  for (let i = 0; i < 6; i++) { k.box(.42, .025, .3, foil, g, -.33, 1.55 + i * .031, 0); k.box(.18, .003, .11, C.white, g, -.33, 1.565 + i * .031, 0); }
+  carton(k, g, .34, 1.54, 0, .44, .26, .34);
+});
+PROPS.plastic_stools = prop([1.6, 1.6, .8], (k, g) => {
+  const steel = material(k, '#999e9d', 'metal', .4, .7);
+  k.box(.75, .04, .75, material(k, '#c8ba99', 'plastic', .6), g, 0, .6, 0, { r: .018 });
+  for (const x of [-.25, .25]) for (const s of [-1, 1]) bar(k, g, steel, [x, .015, s * .27], [x, .58, -s * .27], .018);
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2, p = k.group(g, Math.cos(a) * .6, 0, Math.sin(a) * .6);
+    const plastic = material(k, i % 2 ? C.blue : C.red, 'plastic', .38);
+    feet(k, p, .22, .22, .32, plastic, 0, .045);
+    k.box(.32, .055, .32, plastic, p, 0, .345, 0, { r: .025 });
+    k.box(.1, .004, .025, C.dark, p, 0, .374, 0);
+  }
+  const ceramic = material(k, '#eae5d8', 'paint', .25, 0, { clear: .5 });
+  for (const x of [-.2, .2]) {
+    k.lathe([[.05, 0], [.065, .01], [.105, .085], [.1, .09], [.087, .065]], ceramic, g, x, .62, .11, { seg: 14 });
+    k.cyl(.087, .087, .008, '#bb8d45', g, x, .69, .11, { seg: 14 });
+    for (let j = 0; j < 3; j++) k.tube([[x - .05, .699, .08 + j * .02], [x, .7, .095 + j * .02], [x + .05, .699, .08 + j * .02]], .004, C.cream, g, 0, 0, 0);
+    bar(k, g, C.darkWood, [x - .07, .72, .06], [x + .09, .72, .18], .004);
+  }
+  for (const x of [-.24, -.08, .23]) {
+    const beer = x !== .23, bottle = material(k, beer ? '#416942' : '#483322', 'plastic', .2, 0, { clear: .6 });
+    k.cyl(.025, .03, .1, bottle, g, x, .67, -.2);
+    k.cyl(.012, .023, .055, bottle, g, x, .7475, -.2);
+    k.cyl(.013, .013, .01, beer ? C.gold : C.red, g, x, .78, -.2);
+    k.box(.035, .04, .003, C.cream, g, x, .67, -.17);
+  }
+  k.cyl(.045, .045, .1, C.white, g, .08, .67, -.16);
+  k.box(.035, .045, .008, material(k, C.white, 'paper', .95), g, .08, .735, -.16, { rz: .15 });
+});
+PROPS.shoe_rack = prop([.8, .3, .9], (k, g) => {
+  const steel = material(k, '#929d9d', 'metal', .5, .65);
+  feet(k, g, .57, .24, .72, steel, 0, .025);
+  for (const y of [.06, .29, .52]) for (const z of [-.1, -.03, .04, .11]) k.box(.62, .015, .025, steel, g, -.025, y, z);
+  for (const x of [-.2, -.08, .08, .2]) {
+    oval(k, g, x < 0 ? C.blue : C.red, x, .085, .005, .045, .018, .11, { seg: 8 });
+    k.torus(.034, .01, x < 0 ? C.blue : C.red, g, x, .11, .045, { arc: Math.PI });
+    oval(k, g, C.white, x, .32, 0, .048, .025, .11, { seg: 8 });
+    oval(k, g, C.dark, x, .345, -.015, .043, .04, .08, { seg: 8 });
+    for (let j = 0; j < 3; j++) k.box(.055, .004, .006, C.white, g, x, .38, -.02 + j * .019);
+  }
+  for (const x of [-.15, .04]) {
+    oval(k, g, '#527053', x, .56, .015, .065, .035, .11);
+    k.cyl(.05, .06, .21, '#527053', g, x, .665, -.03);
+    k.cyl(.039, .039, .008, C.black, g, x, .773, -.03);
+  }
+  const umbrella = k.group(g, .345, .025, 0); umbrella.rotation.z = -.035;
+  bar(k, umbrella, C.metal, [0, 0, 0], [0, .76, 0], .008);
+  k.cone(.036, .56, material(k, '#514b68', 'fabric', .9), umbrella, 0, .34, 0, { seg: 8 });
+  k.torus(.035, .01, C.dark, umbrella, -.035, .8, 0, { arc: Math.PI * 1.5, rz: -Math.PI / 2 });
+});
+PROPS.chat_sign = prop([1.1, .35, 1.6], (k, g, o) => {
+  k.box(.63, .07, .35, C.dark, g, 0, .035, 0);
+  k.box(.055, .47, .055, C.metal, g, 0, .28, 0);
+  const glow = lit(k, brand(o));
+  k.box(1.08, 1.03, .15, glow, g, 0, 1.07, 0, { r: .12 });
+  k.box(.96, .91, .016, C.cream, g, 0, 1.07, .082, { r: .1 });
+  k.extrude([[-.35, .66], [-.39, .4], [-.08, .62]], .13, glow, g, 0, 0, -.065, { bevel: .008 });
+  const dots = [-.26, 0, .26].map((x, i) => { const p = dynamic(k, g, `chat-dot-${i}`, x, 1.06, .105); k.disc(.064, C.dark, p, 0, 0, 0); return p; });
+  g.userData.tick = t => dots.forEach((p, i) => { p.position.y = 1.06 + Math.max(0, Math.sin(t * 3.2 - i * .8)) * .055; });
+});
+PROPS.rubber_duck = prop([.8, .9, .9], (k, g) => {
+  const rubber = material(k, '#f4c934', 'plastic', .32, 0, { clear: .5 });
+  oval(k, g, rubber, 0, .29, -.07, .35, .29, .34);
+  oval(k, g, rubber, 0, .65, .06, .23, .22, .22);
+  for (const x of [-.28, .28]) oval(k, g, rubber, x, .32, -.04, .1, .13, .22);
+  oval(k, g, C.orange, 0, .59, .28, .15, .055, .12);
+  for (const x of [-.105, .105]) { oval(k, g, C.black, x, .7, .25, .022, .03, .012); k.ball(.006, C.white, g, x - .006, .71, .262, { seg: 8 }); }
+  k.torus(.24, .027, C.black, g, 0, .63, .05, { arc: Math.PI });
+  for (const x of [-.235, .235]) oval(k, g, C.dark, x, .64, .05, .052, .092, .085);
+  k.box(.48, .04, .2, C.dark, g, 0, .02, .34, { r: .015 });
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 8; col++) k.box(.043, .012, .04, C.white, g, -.196 + col * .056, .046, .28 + row * .056);
+});
+PROPS.plush_bear = prop([.9, .8, 1.1], (k, g, o) => {
+  const fur = material(k, '#ae835d', 'fabric', .98), light = material(k, '#dcc4a0', 'fabric', .98), scarf = material(k, brand(o), 'fabric', .92);
+  oval(k, g, fur, 0, .4, -.04, .31, .35, .25);
+  for (const x of [-.24, .24]) { oval(k, g, fur, x, .13, .14, .17, .13, .22); oval(k, g, light, x, .14, .325, .11, .085, .03); }
+  oval(k, g, fur, 0, .81, -.025, .3, .26, .24);
+  for (const x of [-.235, .235]) { oval(k, g, fur, x, 1, -.025, .105, .1, .07); oval(k, g, light, x, 1, .035, .062, .06, .02); }
+  oval(k, g, light, 0, .75, .198, .14, .085, .07);
+  oval(k, g, C.black, 0, .79, .263, .04, .025, .018);
+  for (const x of [-.105, .105]) k.ball(.018, C.black, g, x, .86, .192, { seg: 10 });
+  k.torus(.19, .045, scarf, g, 0, .61, -.015, { rx: Math.PI / 2 });
+  k.box(.09, .23, .035, scarf, g, -.13, .49, .22, { rz: -.18 });
+  // Beveled heart outline with two rounded fabric lobes.
+  k.extrude([[0, -.2], [.2, -.01], [.2, .1], [.11, .17], [0, .09], [-.11, .17], [-.2, .1], [-.2, -.01]], .09, scarf, g, 0, .36, .22, { bevel: .025 });
+  for (const x of [-.11, .11]) oval(k, g, scarf, x, .45, .27, .115, .11, .08);
+  for (const x of [-.28, .28]) oval(k, g, fur, x, .42, .18, .12, .19, .12);
+});
+PROPS.film_set = prop([1.9, 1.3, 2], (k, g) => {
+  const steel = material(k, '#5d6870', 'metal', .45, .7);
+  for (const x of [-.8, .8]) {
+    bar(k, g, steel, [x, .025, -.48], [x, 1.97, -.48], .019);
+    k.box(.27, .035, .25, C.dark, g, x, .0175, -.48);
+  }
+  bar(k, g, steel, [-.85, 1.97, -.48], [.85, 1.97, -.48], .025);
+  k.box(1.52, 1.72, .015, material(k, '#32994f', 'fabric', .95), g, 0, 1.07, -.48);
+  const camera = k.group(g, -.15, 0, .34);
+  for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3; bar(k, camera, steel, [Math.cos(a) * .23, .015, Math.sin(a) * .23], [0, .93, 0], .018); }
+  k.box(.28, .19, .29, C.black, camera, 0, 1.05, 0);
+  k.cyl(.07, .085, .15, C.dark, camera, 0, 1.06, -.2, { rx: Math.PI / 2 });
+  k.disc(.06, k.mat('#456477', { rough: .08, metal: .4, clear: .6 }), camera, 0, 1.06, -.278, { ry: Math.PI });
+  k.box(.1, .075, .1, C.black, camera, 0, 1.18, .04);
+  bar(k, camera, C.dark, [.09, .97, .08], [.22, .92, .22], .012);
+  const light = k.group(g, .65, 0, .16);
+  for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3; bar(k, light, steel, [Math.cos(a) * .22, .015, Math.sin(a) * .22], [0, 1.3, 0], .013); }
+  k.box(.45, .39, .15, C.black, light, 0, 1.49, 0, { r: .02 });
+  k.plane(.41, .35, lit(k, '#fff0d7'), light, 0, 1.49, -.077, { ry: Math.PI });
+  const slate = k.group(g, -.64, .025, .27); slate.rotation.x = -Math.PI / 2;
+  k.box(.35, .24, .025, C.black, slate, 0, 0, 0);
+  for (let i = 0; i < 6; i++) k.box(.05, .035, .005, i % 2 ? C.black : C.white, slate, -.145 + i * .058, .091, .017, { rz: -.15 });
+  labelLines(k, slate, 0, .03, .016, .25, 5, C.white);
+});
 // Public metadata helps galleries and diagnostics without changing the interface.
 const roofNames = new Set(['ac_unit', 'water_tank', 'water_tower_wood', 'roof_vent', 'roof_hvac', 'solar_array', 'sat_dish', 'antenna_mast', 'roof_garden', 'helipad', 'laundry_line']);
 const streetNames = new Set(['street_lamp', 'traffic_light', 'bus_stop', 'billboard', 'billboard_roof', 'neon_sign', 'shop_awning', 'food_cart', 'food_truck', 'kiosk', 'bike_rack', 'planter_box', 'bollard', 'trash_public', 'parking_meter', 'manhole', 'utility_pole', 'power_box', 'scaffold', 'crane_tower', 'bench', 'fire_hydrant', 'traffic_cone', 'mailbox', 'parcels']);
 const plantNames = new Set(['plant_small', 'plant_tall', 'money_tree', 'tree_round', 'tree_palm', 'tree_street', 'tree_cypress', 'bush', 'atrium_tree', 'flower_bed']);
+for (const name of ['basketball_hoop', 'picket_fence', 'road_barrier', 'news_rack', 'manhole_steam', 'kick_scooter', 'fire_escape', 'bulletin_board', 'info_totem', 'flag_row', 'hand_truck', 'led_ticker', 'plastic_stools']) streetNames.add(name);
+plantNames.add('lemon_tree');
 for (const [name, spec] of Object.entries(PROPS)) {
   spec.category = roofNames.has(name) ? 'Rooftop' : plantNames.has(name) ? 'Botanical' : streetNames.has(name) ? 'Street' : /^(car|robotaxi|van_|bus_city|scooter|bicycle|e_bike|shared_bike)/.test(name) ? 'Vehicles' : 'Office';
 }

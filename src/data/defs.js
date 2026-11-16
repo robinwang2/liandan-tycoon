@@ -132,7 +132,13 @@ export const OFFICES = [
   { name: '总部大楼', cap: 46, rent: 150, up: 6000 },
 ];
 export const MAX_OFFICE = OFFICES.length - 1;
-export const officeName = (S, lv = S.co.office) => { const n = OFFICES[lv].name; return typeof n === 'string' ? n : n[S.co.region]; };
+// 起步那一档叫什么，看落脚点（3A 版里六个落脚点的房子和街区各不一样）；没选落脚点的老存档按地区叫车库 / 城中村出租屋
+const START_OFFICE = { d_paloalto: '车库', d_soma: '阁楼', d_berkeley: '合租屋', d_village: '城中村出租屋', d_nanshan: '科技园孵化器', d_hqb: '华强北档口' };
+export const officeName = (S, lv = S.co.office) => {
+  const n = OFFICES[lv].name; if (typeof n === 'string') return n;
+  const d = lv === 1 ? S.founder?.traits?.find(id => START_OFFICE[id] && TRAIT[id]?.region === S.co.region) : null;
+  return d ? START_OFFICE[d] : n[S.co.region];
+};
 
 // 多层办公楼：每层住哪些部门（从 1 楼往上）。低档位两个小部门合用一层，总部一层一个部门。
 // lobby = 大堂前台，ceo = 总裁办（创始人在这儿），res 研究院那层还放着丹炉和机房

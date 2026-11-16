@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { createStage, FX, QUALITY } from './stage.js';
 import { makeKit } from './kit.js';
 import { createCity } from './city.js';
-import { createRoom } from './office.js';
+import { createRoom, startKind } from './office.js';
 import { PROPS } from './props.js';
 import { ART } from '../ui/art.js';
 
@@ -89,7 +89,7 @@ export function createOffice(container) {
   function sync(view) {
     const prev = v; v = { ...prev, ...view };
     const r = room.sync(view);
-    if (r.rebuilt) { stage.setFrame(r.frame || r.L); stage.setLift(r.lift || 0); stage.setProbe(Math.max(26, (r.top || 0) + 10)); cityOpts = { region: v.region, level: v.level, L: r.L, brand: v.brand }; city.build({ ...cityOpts, detail }); stage.refreshReflections(); if (!r.up) stage.snap(); }
+    if (r.rebuilt) { stage.setFrame(r.frame || r.L); stage.setLift(r.lift || 0); stage.setProbe(Math.max(26, (r.top || 0) + 10)); cityOpts = { region: v.region, level: v.level, L: r.L, brand: v.brand, hood: startKind(v.region, v.district) }; city.build({ ...cityOpts, detail }); stage.refreshReflections(); if (!r.up) stage.snap(); }
     const mode = v.mode === 'title' ? (v.wizard ? 'wizard' : 'title') : v.mode === 'end' ? 'end' : 'play';
     if (mode !== prev.camMode) { stage.setMode(mode); v.camMode = mode; }
     // 时间和天气
