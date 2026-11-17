@@ -1,88 +1,10 @@
 // 无界面自动试玩：抓运行时错误 + 看数值平衡。用法：node tools/sim.mjs [局数] [--smoke]
 import * as G from '../src/game/engine.js';
 import * as A from '../src/game/actions.js';
-import { advise } from '../src/game/advice.js';
-import { ENDINGS, STAGES } from '../src/data/defs.js';
+import { ENDINGS } from '../src/data/defs.js';
+import { setups, mkSetup, drain, playMonth, HINT_N, hintMonths } from './bot.mjs';
 
 const N = +(process.argv[2] || 150);
-const rand = () => Math.random();
-const setups = [];
-for (const region of ['bay', 'sz']) for (const route of ['model', 'app']) for (const track of ['chat', 'code', 'companion', 'video']) setups.push({ region, route, track });
-
-function mkSetup(s, style) {
-  const attrs = { tech: 5, cha: 5, mgmt: 5, biz: 5, net: 5, luck: 5 }, keys = Object.keys(attrs);
-  for (let i = 0; i < 10; i++) { let k; do { k = keys[Math.floor(rand() * 6)]; } while (attrs[k] >= 10); attrs[k]++; }
-  return { name: '测试员', coName: '混沌智能', modelName: '混沌', ...s, attrs, traits: [['yao', 'dropout', 'phd', 'shuangfei'][Math.floor(rand() * 4)], ['bigtech', 'lab', 'serial', 'hqb', 'influencer'][Math.floor(rand() * 5)], ['none', 'juan', 'huyou', 'geek', 'foxi'][Math.floor(rand() * 5)]], style };
-}
-
-// 把对话框一路点到底。shady = 这个机器人爱不爱走黑箱路线
-function drain(S, first, shady) {
-  let d = first || G.nextDialog(S), guard = 0;
-  while (d && guard++ < 60) {
-    const ok = d.options.map((o, i) => i).filter(i => !d.options[i].disabled);
-    if (!ok.length && d.closable) { d = G.nextDialog(S); continue; }
-    if (!ok.length) throw new Error('对话框没有可选项: ' + d.title);
-    let pool = ok;
-    if (!shady) { const clean = ok.filter(i => !/☠/.test(d.options[i].label + (d.options[i].hint || ''))); if (clean.length) pool = clean; }
-    if (pool.some(i => !/接受邀请/.test(d.options[i].label))) pool = pool.filter(i => !/接受邀请/.test(d.options[i].label));
-    if (d.id === 'broke' || d.id === 'acq_offer' || d.id === 'probe') pool = pool.filter(i => !/认输|卖了|出国|抬价/.test(d.options[i].label)).length ? pool.filter(i => !/认输|卖了|出国|抬价/.test(d.options[i].label)) : pool;
-    const r = G.choose(S, d, pool[Math.floor(rand() * pool.length)]);
-    d = r?.dialog || G.nextDialog(S);
-  }
-}
-const act = (S, id, shady) => { const a = A.ACT[id]; if ((a.show && !a.show(S)) || A.actionState(S, a).why) return false; const r = A.perform(S, id); if (r?.dialog) drain(S, r.dialog, shady); else drain(S, null, shady); return true; };
-
-// 行动提示自检：格式、文本、指向的行动都得对；顺便统计每条提示出现得多频繁
-const HINT_N = {};
-let HINT_M = 0;
-function checkHints(S) {
-  const hs = advise(S), ids = new Set();
-  HINT_M++;
-  for (const h of hs) {
-    if (!h.id || !h.title || !h.text || !['bad', 'gold', 'warn'].includes(h.lv)) throw new Error('提示格式不对: ' + JSON.stringify(h));
-    if (ids.has(h.id)) throw new Error('提示 id 重复: ' + h.id);
-    if (/undefined|NaN|null|\[object/.test(h.title + h.text)) throw new Error(`提示文本可疑 [${h.id}] ${h.title}：${h.text}`);
-    if (h.act && !A.ACT[h.act]) throw new Error('提示指向不存在的行动: ' + h.act);
-    ids.add(h.id);
-    const k = h.id.startsWith('proj-') ? 'proj' : h.id;
-    HINT_N[k] = (HINT_N[k] || 0) + 1;
-  }
-  return hs;
-}
-
-function playMonth(S, style) {
-  const shady = style === 'shady', hs = checkHints(S);
-  // 「听参谋的」机器人：先按提示做事，剩下的行动点再走通用逻辑
-  if (style === 'advice') for (const h of hs) {
-    if (S.ap <= 0 || S.over) break;
-    if (h.act && !h.later) act(S, h.act, false);
-    else if (h.id === 'hire') A.hire(S, h.hl.slice(4));
-    else if (h.id.startsWith('proj-')) G.pushProject(S, h.hl.slice(5));
-  }
-  // 算力：推理够用 + 拿预算的一部分炼丹
-  if (S.ownModel) { const budget = Math.max(0, S.cash) / (14 * G.gpuPrice(S)); A.setGpu(S, Math.max(G.inferNeed(S) * 1.1, Math.min(G.quota(S), budget))); }
-  for (const p of S.projects) if (p.kind === 'ap' && S.ap > 0 && rand() < 0.7) G.pushProject(S, p.uid);
-  let guard = 0;
-  while (S.ap > 0 && !S.over && guard++ < 12) {
-    const rw = G.runway(S);
-    if ((rw < 9 || S.t - S.lastRaiseT > 10) && act(S, 'raise', shady)) continue;
-    if (S.staff.length >= G.teamCap(S) && S.cash > 8 * A.actionState(S, A.ACT.office).cost && act(S, 'office', shady)) continue;
-    if (rw > 7 && S.staff.length < G.teamCap(S) && S.cands.length && S.ap >= 1) {
-      const c = S.cands.slice().sort((a, b) => b.skill - a.skill)[0];
-      const r = A.hire(S, c.uid); if (r && !r.err) continue;
-    }
-    if (act(S, 'release', shady)) continue;
-    if (act(S, 'ipo', shady)) continue;
-    if (!S.sprint && act(S, 'sprint', shady)) continue;
-    if (!S.ownModel && S.stage >= 3 && rand() < 0.3 && act(S, 'selfdev', shady)) continue;
-    const opts = ['hype', 'ads', 'code', 'teambuild', 'roadshow', 'goodpr', 'lobby', 'pie', 'sellcourse', 'subsidy', 'beg', 'paper'].concat(shady ? ['navy', 'fakeusers', 'digdirt', 'furnace'] : ['wash'], ['mobilize', 'utopia', 'selfcrit', 'subbotnik', 'plan', 'yank', 'bci', 'buyback', 'costcut', 'spinoff']);
-    if (!act(S, opts[Math.floor(rand() * opts.length)], shady)) { if (guard > 8) break; }
-  }
-  if (S.over) return;
-  if (S.streak.profit < 3 && S.stage >= 5 && S.policies.price !== 'premium') A.setPolicy(S, 'price', 'premium');
-  G.endMonth(S);
-  drain(S, null, shady);
-}
 
 function smoke() {
   // 显卡没有硬上限：配额以外也能租，但超出的部分越多越贵
@@ -108,7 +30,7 @@ function smoke() {
         const S = JSON.parse(snapshot); G.queueEvent(S, id);
         const d = G.nextDialog(S);
         if (!d || !d.options[i] || d.options[i].disabled) continue;
-        try { const r = G.choose(S, d, i); if (!r) throw new Error('choose 返回空'); if (/\{\w+\}|undefined|NaN/.test(d.text + d.title + (r.text || ''))) console.log(`  ⚠ 文本可疑 [${id}#${i}]`, (d.text + ' → ' + r.text).match(/.{0,20}(\{\w+\}|undefined|NaN).{0,20}/)[0]); if (!S.over) drain(S, null, true); if (Object.values(S).some(v => typeof v === 'number' && Number.isNaN(v))) throw new Error('状态里出现 NaN'); n++; }
+        try { const r = G.choose(S, d, i); if (!r) throw new Error('choose 返回空'); if (/\{[^{}\s]+\}|undefined|NaN/.test(d.text + d.title + (r.text || ''))) console.log(`  ⚠ 文本可疑 [${id}#${i}]`, (d.text + ' → ' + r.text).match(/.{0,20}(\{[^{}\s]+\}|undefined|NaN).{0,20}/)[0]); if (!S.over) drain(S, null, true); if (Object.values(S).some(v => typeof v === 'number' && Number.isNaN(v))) throw new Error('状态里出现 NaN'); n++; }
         catch (e) { console.log(`  ✗ 事件 ${id} 选项 ${i}: ${e.message}`); process.exitCode = 1; }
       }
     }
@@ -146,7 +68,7 @@ function run() {
   }
   for (const [st, r] of Object.entries(byStyle)) console.log(`${('[' + st + ']').padEnd(10)} n=${r.n} 估值中位${(med(r.val) / 1e4).toFixed(1)}亿 | ${Object.entries(r.ends).sort((a, b) => b[1] - a[1]).map(([id, c]) => `${ENDINGS[id].name}${Math.round(c / r.n * 100)}%`).join(' ')}`);
   for (const [r, X] of Object.entries(ideo)) console.log(`路线之争（${r === 'sz' ? '深圳' : '湾区'}）：${X.all} 局里 ${X.n} 局开了链 → 左翼 ${X.red} · 资本 ${X.cap} · 股权不够 ${X.fail} · 没走完 ${X.on}；成就 ${X.road} 局；估值中位 左${(med(X.val.red) / 1e4).toFixed(0)}亿 资${(med(X.val.cap) / 1e4).toFixed(0)}亿 无${(med(X.val.none) / 1e4).toFixed(0)}亿${X.heat.length ? `；终局反共压力中位 ${med(X.heat).toFixed(0)}` : ''}；${Object.entries(X.unlocked).map(([k, v]) => k + ' ' + v).join(' · ')}`);
-  console.log('提示出现频率（占所有月份）：' + Object.entries(HINT_N).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${Math.round(c / HINT_M * 100)}%`).join(' · '));
+  console.log('提示出现频率（占所有月份）：' + Object.entries(HINT_N).sort((a, b) => b[1] - a[1]).map(([k, c]) => `${k} ${Math.round(c / hintMonths.n * 100)}%`).join(' · '));
 }
 
 function trace(region, route, track, style = 'clean') {

@@ -29,16 +29,16 @@ const RULES = [
   function cash(S) {
     const net = netOf(S), rw = G.runway(S);
     if (net >= 0 || rw >= 4) return null;
-    const pf = G.perf(S), raise = avail(S, 'raise'), tips = [];
-    // 和 raiseDialog 的门槛一致：≥0.9 三份报价；0.75~0.9 只有一份流血报价；<0.75 投资人只会说「保持联系」
-    if (raise) tips.push(pf >= 0.9 ? `业绩系数 ${pf.toFixed(2)}，现在融资能拿到三份报价。` : pf >= 0.75 ? `业绩系数 ${pf.toFixed(2)}，不到 0.9，融资只有一份「趁火打劫」的报价。` : `业绩系数才 ${pf.toFixed(2)}，不到 0.75，现在去融资只会听到「保持联系」。`);
+    const pf = G.perf(S), raise = avail(S, 'raise'), tips = [], R = ACT.raise.p;
+    // 和融资窗口的门槛一致（行动.xlsx「启动融资」的参数）：≥流血线 三份报价；失败线~流血线 只有一份流血报价；<失败线 投资人只会说「保持联系」
+    if (raise) tips.push(pf >= R.流血线 ? `业绩系数 ${pf.toFixed(2)}，现在融资能拿到三份报价。` : pf >= R.失败线 ? `业绩系数 ${pf.toFixed(2)}，不到 ${R.流血线}，融资只有一份「趁火打劫」的报价。` : `业绩系数才 ${pf.toFixed(2)}，不到 ${R.失败线}，现在去融资只会听到「保持联系」。`);
     if (S.policies.price === 'free') tips.push('定价还是「免费冲量」，订阅收入只有三成。');
     const free = S.ownModel ? Math.max(0, S.gpu - G.inferNeed(S)) : 0;
     if (free >= 4) tips.push(`丹炉占着 ${free} 张卡（每月约 ${G.money(S, G.gpuRent(S) - G.gpuRent(S, S.gpu - free))}），少租几张能多撑一阵。`);
     const quick = ['sellcourse', 'subsidy'].filter(id => avail(S, id));
-    if ((!raise || pf < 0.9) && quick.length) tips.push(`${quick.map(id => `「${ACT[id].name}」`).join('、')}能先回点血。`);
+    if ((!raise || pf < R.流血线) && quick.length) tips.push(`${quick.map(id => `「${ACT[id].name}」`).join('、')}能先回点血。`);
     const h = { id: 'cash', lv: 'bad', icon: 'cash', title: rw < 1 ? '下个月发不出工资' : `钱只够撑 ${Math.floor(rw)} 个月`, text: `每月净流出 ${G.money(S, -net)}。${tips.join('')}`, go: { ltab: 'cap' } };
-    return pf >= 0.9 ? withAct(h, S, 'raise', 'sellcourse', 'subsidy') : pf >= 0.75 ? withAct(h, S, 'sellcourse', 'subsidy', 'raise') : withAct(h, S, 'sellcourse', 'subsidy');
+    return pf >= R.流血线 ? withAct(h, S, 'raise', 'sellcourse', 'subsidy') : pf >= R.失败线 ? withAct(h, S, 'sellcourse', 'subsidy', 'raise') : withAct(h, S, 'sellcourse', 'subsidy');
   },
   function outage(S) {
     const need = G.inferNeed(S);

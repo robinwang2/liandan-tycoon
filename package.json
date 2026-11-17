@@ -5,15 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
-    "build": "vite build && node tools/pack.mjs",
+    "build": "node tools/tables/export.mjs && vite build && node tools/pack.mjs",
     "sim": "node tools/sim.mjs",
     "check": "node tools/validate.mjs",
-    "build:classic": "vite build classic && node tools/pack.mjs classic"
+    "build:classic": "vite build classic && node tools/pack.mjs classic",
+    "tables": "node tools/tables/export.mjs && node tools/validate.mjs",
+    "tables:check": "node tools/tables/export.mjs --check",
+    "parity": "node tools/parity.mjs check"
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "exceljs": "^4.4.0",
     "sharp": "^0.35.5",
     "vite": "^8.3.8",
     "vite-plugin-singlefile": "^2.3.4"

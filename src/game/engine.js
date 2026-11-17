@@ -2,7 +2,7 @@
 import {
   MONTHS, START_YEAR, AGI_CAP, REGIONS, TRACKS, TRAIT, OFFICES, officeName, ROLES, STAFF_QUIRKS, POLICIES,
   PERKS, PERK, FEAT, RIVALS, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, NAMES, ATTR_NAME, META_SHOP, MOD_NAME,
-  GOALS, IDEO_FLAG_MODS, OLD_QUOTA_MULT, EAST_RIVALS,
+  GOALS, IDEO_FLAG_MODS, OLD_QUOTA_MULT, EAST_RIVALS, P,
 } from '../data/defs.js';
 import { EVENTS_CHAINS } from '../data/events_chains.js';
 import { EVENT_ART, CAT_ART } from '../data/event_art.js';
@@ -10,6 +10,11 @@ import { EVENTS_CORE } from '../data/events_core.js';
 import { EVENTS_PACK } from '../data/events_pack.js';
 import { NEWS } from '../data/news.js';
 import { IDEO_DYN, IDEO_STATIC, ideoMonth, heatDrag } from './ideology.js';
+import { text, hasText } from '../data/text.js';
+
+// 引擎自己说的话在 tables/文本.xlsx「引擎」里：tx(S, 键, 变量) 按公司所在地区挑说法
+const tx = (S, key, vars) => text(key, vars, S?.co?.region === 'bay');
+const U_YI = text('unit.yi'), U_WAN = text('unit.wan');
 
 // 路线之争（深圳版 + 湾区版）：结局后的随机事件进随机池（靠 flag 限定）；链事件、红色恐慌和动态事件 weight 0，只能被排进来
 const ALL = [...EVENTS_CORE, ...EVENTS_CHAINS, ...EVENTS_PACK, ...IDEO_STATIC, ...IDEO_DYN];
@@ -24,13 +29,13 @@ export const pick = (S, arr) => arr[Math.floor(rnd(S) * arr.length)];
 
 export function money(S, x, sign = false) {
   const a = Math.abs(x), s = x < 0 ? '-' : sign ? '+' : '';
-  const body = a >= 10000 ? (a / 10000).toFixed(a >= 1e6 ? 0 : a >= 1e5 ? 1 : 2) + '亿' : (a >= 100 ? Math.round(a) : +a.toFixed(1)) + '万';
+  const body = a >= 10000 ? (a / 10000).toFixed(a >= 1e6 ? 0 : a >= 1e5 ? 1 : 2) + U_YI : (a >= 100 ? Math.round(a) : +a.toFixed(1)) + U_WAN;
   return s + REGIONS[S.co.region].cur + body;
 }
-export const fmtUsers = x => (x >= 10000 ? (x / 10000).toFixed(2) + '亿' : x >= 100 ? Math.round(x) + '万' : +x.toFixed(1) + '万');
-export const dateStr = t => `${START_YEAR + Math.floor((t - 1) / 12)}年${((t - 1) % 12) + 1}月`;
+export const fmtUsers = x => (x >= 10000 ? (x / 10000).toFixed(2) + U_YI : x >= 100 ? Math.round(x) + U_WAN : +x.toFixed(1) + U_WAN);
+export const dateStr = t => text('date', { 年: START_YEAR + Math.floor((t - 1) / 12), 月: ((t - 1) % 12) + 1 });
 export const news = (S, msg) => { S.log.unshift({ t: S.t, msg }); if (S.log.length > 60) S.log.length = 60; };
-export const award = (S, id) => { if (ACHIEVEMENTS[id] && !S.ach.includes(id)) { S.ach.push(id); news(S, `🏆 成就达成：${ACHIEVEMENTS[id].name}`); } };
+export const award = (S, id) => { if (ACHIEVEMENTS[id] && !S.ach.includes(id)) { S.ach.push(id); news(S, tx(S, 'news.award', { 成就: ACHIEVEMENTS[id].name })); } };
 
 // ───────── 修正值：地区 / 特质 / 卡牌 / 功能 / 政策 / 限时效果 ─────────
 export function mod(S, key) {
@@ -143,11 +148,11 @@ export const pCheck = (S, attr, dc) => clamp((21 + S.founder.attrs[attr] + mod(S
 export const pOdds = (S, p) => clamp(p + (S.founder.attrs.luck - 5) * 0.03, 0.03, 0.97);
 export const rollCheck = (S, attr, dc) => rnd(S) < pCheck(S, attr, dc);
 export function optCheck(S, label, hint, attr, dc, ok, fail, pre) {
-  return { label, hint, chk: `${ATTR_NAME[attr]}检定 ${Math.round(pCheck(S, attr, dc) * 100)}%`, go: () => { pre?.(); const win = rollCheck(S, attr, dc); return { ok: win, text: (win ? ok : fail)() }; } };
+  return { label, hint, chk: tx(S, 'check.attr', { 属性: ATTR_NAME[attr], 成功率: Math.round(pCheck(S, attr, dc) * 100) }), go: () => { pre?.(); const win = rollCheck(S, attr, dc); return { ok: win, text: (win ? ok : fail)() }; } };
 }
 export function optOdds(S, label, hint, p0, ok, fail, pre) {
   const p = pOdds(S, p0);
-  return { label, hint, chk: `看运气 ${Math.round(p * 100)}%`, go: () => { pre?.(); const win = rnd(S) < p; return { ok: win, text: (win ? ok : fail)() }; } };
+  return { label, hint, chk: tx(S, 'check.odds', { 成功率: Math.round(p * 100) }), go: () => { pre?.(); const win = rnd(S) < p; return { ok: win, text: (win ? ok : fail)() }; } };
 }
 
 // ───────── 员工 ─────────
@@ -207,14 +212,14 @@ const FX = {
   unflag: (S, v) => { for (const f of [].concat(v)) delete S.flags[f]; },
   staff: (S, v, ctx) => {
     if (v === 'loseCtx') { if (ctx.staff) removeStaff(S, ctx.staff); }
-    else if (v === 'loseBest') { const b = S.staff.slice().sort((a, b) => b.skill - a.skill)[0]; if (b) { removeStaff(S, b.uid); news(S, `👋 ${b.name}（${ROLES[b.role].name}）离开了公司。`); } }
-    else if (v === 'loseRandom') { if (S.staff.length) { const b = pick(S, S.staff); removeStaff(S, b.uid); news(S, `👋 ${b.name}（${ROLES[b.role].name}）离开了公司。`); } }
+    else if (v === 'loseBest') { const b = S.staff.slice().sort((a, b) => b.skill - a.skill)[0]; if (b) { removeStaff(S, b.uid); news(S, tx(S, 'news.staffLeft', { 名字: b.name, 岗位: ROLES[b.role].name })); } }
+    else if (v === 'loseRandom') { if (S.staff.length) { const b = pick(S, S.staff); removeStaff(S, b.uid); news(S, tx(S, 'news.staffLeft', { 名字: b.name, 岗位: ROLES[b.role].name })); } }
     else {
       const role = { gainRes: 'res', gainEng: 'eng', gainOps: 'ops', gainBiz: 'biz', gainLegal: 'legal', gainStar: 'res' }[v];
       if (!role) return;
       const e = genStaff(S, role, v === 'gainStar' ? 9 : 2);
       if (v === 'gainStar') { e.skill = ri(S, 9, 10); e.quirk = 'genius'; e.salary = +((1.2 + 0.09 * e.skill ** 2) * 1.25 * 1.35).toFixed(1); }
-      addStaff(S, e); news(S, `🙌 ${e.name}（${ROLES[role].name}，能力 ${e.skill}）加入了公司。`);
+      addStaff(S, e); news(S, tx(S, 'news.staffJoined', { 名字: e.name, 岗位: ROLES[role].name, 能力: e.skill }));
     }
   },
   rival: (S, v, ctx) => { const r = rivalOf(S, ctx.rival); if (!r) return; if (v.cap) { r.drift += v.cap; r.cap += v.cap; r.bench += v.cap; } if (v.hype) r.hype = clamp(r.hype + v.hype, 0, 100); if (v.rel) r.rel = clamp(r.rel + v.rel, -100, 100); },
@@ -224,7 +229,7 @@ const FX = {
   project: (S, v, ctx) => {
     if (S.projects.some(p => p.id === v.id)) return;
     S.projects.push({ uid: 'p' + S.uid++, id: v.id, chain: v.chain || null, name: v.name, desc: v.desc || '', kind: v.kind || 'res', need: v.need || 3, done: 0, t: S.t, due: S.t + (v.months || 8), ok: v.ok || null, fail: v.fail || null, ctx });
-    news(S, `📌 新的特殊项目：${v.name}`);
+    news(S, tx(S, 'news.project', { 项目: v.name }));
   },
   chain: (S, v) => {
     const c = (S.chains[v.id] ??= { id: v.id, t: S.t, notes: [] });
@@ -265,18 +270,18 @@ export function cond(S, w) {
   return true;
 }
 function whyNot(S, req) {
-  if (req.notFlag && [].concat(req.notFlag).includes('red') && S.flags.red) return '西方资本已经不和你谈了';
-  if (req.notFlag && [].concat(req.notFlag).includes('rose') && S.flags.rose) return '主流 VC 已经不接你的电话了';
-  if (req.cash != null && S.cash < req.cash * unit(S)) return `需要现金 ${money(S, req.cash * unit(S))}`;
-  if (req.attr) for (const a in req.attr) if (S.founder.attrs[a] < req.attr[a]) return `需要${ATTR_NAME[a]} ≥ ${req.attr[a]}`;
-  return '条件不满足';
+  if (req.notFlag && [].concat(req.notFlag).includes('red') && S.flags.red) return tx(S, 'why.red');
+  if (req.notFlag && [].concat(req.notFlag).includes('rose') && S.flags.rose) return tx(S, 'why.rose');
+  if (req.cash != null && S.cash < req.cash * unit(S)) return tx(S, 'why.cash', { 现金: money(S, req.cash * unit(S)) });
+  if (req.attr) for (const a in req.attr) if (S.founder.attrs[a] < req.attr[a]) return tx(S, 'why.attr', { 属性: ATTR_NAME[a], 数值: req.attr[a] });
+  return tx(S, 'why.other');
 }
 
 // ───────── 对话框（事件 / 丑闻 / 抽卡）─────────
 export function fmt(S, s, ctx = {}) {
   if (!s) return '';
   const r = ctx.rival && rivalOf(S, ctx.rival);
-  const map = { co: S.co.name, me: S.founder.name, model: S.model?.name || S.co.modelName, rival: r?.name || '某巨头', boss: r?.boss || '某大佬', staff: ctx.staffName || '实习生小王', cur: REGIONS[S.co.region].cur };
+  const map = { co: S.co.name, me: S.founder.name, model: S.model?.name || S.co.modelName, rival: r?.name || tx(S, 'fmt.rival'), boss: r?.boss || tx(S, 'fmt.boss'), staff: ctx.staffName || tx(S, 'fmt.staff'), cur: REGIONS[S.co.region].cur };
   return String(s).replace(/\{(\w+)\}/g, (m, k) => map[k] ?? m);
 }
 function makeCtx(S, ev) {
@@ -300,8 +305,8 @@ function instEvent(S, ev, ctx) {
     }
     const out = { label: fmt(S, o.label, ctx), hint: fmt(S, o.hint, ctx), side: o.side };
     if (o.req && !cond(S, o.req)) { out.disabled = true; out.why = whyNot(S, o.req); }
-    if (o.check) out.chk = `${ATTR_NAME[o.check.attr]}检定 ${Math.round(pCheck(S, o.check.attr, o.check.dc) * 100)}%`;
-    else if (o.odds != null) out.chk = `看运气 ${Math.round(pOdds(S, o.odds) * 100)}%`;
+    if (o.check) out.chk = tx(S, 'check.attr', { 属性: ATTR_NAME[o.check.attr], 成功率: Math.round(pCheck(S, o.check.attr, o.check.dc) * 100) });
+    else if (o.odds != null) out.chk = tx(S, 'check.odds', { 成功率: Math.round(pOdds(S, o.odds) * 100) });
     out.tip = o.check || o.odds != null ? { ok: fxLines(S, o.ok?.fx), fail: fxLines(S, o.fail?.fx) } : { fx: fxLines(S, o.fx) };
     out.go = () => {
       let r, ok;
@@ -320,33 +325,33 @@ function instEvent(S, ev, ctx) {
 }
 
 function scandalDialog(S, d) {
-  const D = DIRT[d.type] || {}, sev = d.sev, sm = mod(S, 'scandalMult'), fee = unit(S) * sev / 8;
+  const D = DIRT[d.type] || {}, sev = d.sev, sm = mod(S, 'scandalMult'), fee = unit(S) * sev / P['scandal.feeDiv'];
   const hit = k => {
     S.exposed += sev * k; if (D.crime) S.exposedCrime += sev * k;
     if ((d.type === 'bench_fake' || d.type === 'bench_overfit') && S.model) { S.model.bench = S.model.cap; S.model.infl = 0; }
     if (d.type === 'fake_users') S.fake = 0;
-    if (d.type === 'cook_books') S.temp.push({ key: 'raiseMult', mult: 0.7, until: S.t + 8 });
+    if (d.type === 'cook_books') S.temp.push({ key: 'raiseMult', mult: P['scandal.cookRaiseMult'], until: S.t + P['scandal.cookMonths'] });
     removeDirt(S, d.uid);
-    if (S.exposedCrime >= 40 && !S.flags.probe) { S.flags.probe = 1; S.q.push({ type: 'event', id: 'probe' }); }
+    if (S.exposedCrime >= P['scandal.probeLine'] && !S.flags.probe) { S.flags.probe = 1; S.q.push({ type: 'event', id: 'probe' }); }
   };
-  const lose = (repK, o = {}) => applyFx(S, { rep: -sev * repK * sm, hype: o.hype ?? -sev * 0.25, reg: sev * (o.reg ?? 0.35), morale: o.morale ?? -3 });
+  const lose = (repK, o = {}) => applyFx(S, { rep: -sev * repK * sm, hype: o.hype ?? -sev * P['scandal.hype'], reg: sev * (o.reg ?? P['scandal.reg']), morale: o.morale ?? P['scandal.morale'] });
   S.fxq.push(['alarm']);
-  const pay = optCheck(S, '砸钱公关', `花 ${money(S, fee)} 摆平`, 'net', 11 + sev / 3,
-    () => { removeDirt(S, d.uid); applyFx(S, { rep: -1 }); return '稿子撤了，热搜降了，当事人「因个人原因不再回应」。钱能解决的问题，果然都不是问题。'; },
-    () => { hit(0.8); lose(0.6); addDirt(S, 'hush'); return '删帖的操作被人截了图，「花钱删帖」本身成了更大的新闻。钱花了，事儿也更大了。'; },
+  const pay = optCheck(S, tx(S, 'scandal.pay'), tx(S, 'scandal.pay.hint', { 花费: money(S, fee) }), 'net', P['scandal.payDc'] + sev / P['scandal.payDiv'],
+    () => { removeDirt(S, d.uid); applyFx(S, { rep: P['scandal.payOkRep'] }); return tx(S, 'scandal.pay.ok'); },
+    () => { hit(P['scandal.payFailHit']); lose(P['scandal.payFailLose']); addDirt(S, 'hush'); return tx(S, 'scandal.pay.fail'); },
     () => { S.cash -= fee; });
-  if (S.cash < fee) { pay.disabled = true; pay.why = '钱不够'; }
+  if (S.cash < fee) { pay.disabled = true; pay.why = tx(S, 'scandal.noCash'); }
   return {
-    kind: 'event', cat: 'dirt', icon: '💣', art: 'vault', title: `黑料引爆：${d.name}`,
-    text: `${D.blurb || '一件你以为没人知道的事，上了热搜。'}\n\n严重度 ${Math.round(sev)}${D.crime ? ' · 涉嫌违法，处理不好会惊动经侦' : ''}。全网都在等 ${S.co.name} 的回应。`,
+    kind: 'event', cat: 'dirt', icon: tx(S, 'scandal.icon'), art: tx(S, 'scandal.art'), title: tx(S, 'scandal.title', { 黑料: d.name }),
+    text: tx(S, D.crime ? 'scandal.text.crime' : 'scandal.text', { 爆料: D.blurb || tx(S, 'scandal.blurb'), 严重度: Math.round(sev), 公司: S.co.name }),
     options: [
-      optCheck(S, '矢口否认', '赢了就当没发生过', 'cha', 11 + sev / 2.2,
-        () => { removeDirt(S, d.uid); applyFx(S, { rep: -2 }); return '你的声明滴水不漏，爆料人反被质疑「蹭热度」。这事就这么过去了——存截图的人换了块硬盘继续存着。'; },
-        () => { hit(1); lose(0.9); return '你刚发完「纯属造谣」，对方就放出了第二批证据。嘴硬的截图成了全网新表情包。'; }),
-      { label: '道歉整改', hint: '体面认栽，损失可控', go: () => { hit(0.5); lose(0.45, { morale: 2, hype: -sev * 0.12, reg: 0.2 }); S.cash -= fee * 0.6; return { text: '你发了一封「深刻反思」的全员信，并成立整改小组。小组的第一项工作，是给这封信润色。' }; } },
-      optOdds(S, '甩锅给实习生', '全靠那位临时工', 0.5,
-        () => { hit(0.4); lose(0.2, { morale: -8 }); return '「系个别实习生违规操作，已辞退。」大家将信将疑地接受了。那位实习生其实三个月前就离职了。'; },
-        () => { hit(1.1); lose(1.0, { morale: -12 }); return '实习生晒出了你的语音：「就按我说的办，出了事算我的。」这条语音当天被做成了手机铃声。'; }),
+      optCheck(S, tx(S, 'scandal.deny'), tx(S, 'scandal.deny.hint'), 'cha', P['scandal.denyDc'] + sev / P['scandal.denyDiv'],
+        () => { removeDirt(S, d.uid); applyFx(S, { rep: P['scandal.denyOkRep'] }); return tx(S, 'scandal.deny.ok'); },
+        () => { hit(P['scandal.denyFailHit']); lose(P['scandal.denyFailLose']); return tx(S, 'scandal.deny.fail'); }),
+      { label: tx(S, 'scandal.sorry'), hint: tx(S, 'scandal.sorry.hint'), go: () => { hit(P['scandal.sorryHit']); lose(P['scandal.sorryLose'], { morale: P['scandal.sorryMorale'], hype: -sev * P['scandal.sorryHype'], reg: P['scandal.sorryReg'] }); S.cash -= fee * P['scandal.sorryFee']; return { text: tx(S, 'scandal.sorry.done') }; } },
+      optOdds(S, tx(S, 'scandal.blame'), tx(S, 'scandal.blame.hint'), P['scandal.blameOdds'],
+        () => { hit(P['scandal.blameOkHit']); lose(P['scandal.blameOkLose'], { morale: P['scandal.blameOkMorale'] }); return tx(S, 'scandal.blame.ok'); },
+        () => { hit(P['scandal.blameFailHit']); lose(P['scandal.blameFailLose'], { morale: P['scandal.blameFailMorale'] }); return tx(S, 'scandal.blame.fail'); }),
       pay,
     ],
   };
@@ -354,14 +359,14 @@ function scandalDialog(S, d) {
 
 export function gainPerk(S, id) { const p = PERK[id]; if (!p || S.perks.includes(id)) return; S.perks.push(id); applyFx(S, p.fx); }
 function draftDialog(S) {
-  const pool = PERKS.filter(p => !S.perks.includes(p.id)), w = p => [0, 6, 3, 1.2][p.r], picks = [];
-  while (picks.length < 3 && pool.length) {
+  const pool = PERKS.filter(p => !S.perks.includes(p.id)), w = p => [0, P['draft.w1'], P['draft.w2'], P['draft.w3']][p.r], picks = [];
+  while (picks.length < P['draft.count'] && pool.length) {
     let x = rnd(S) * pool.reduce((a, p) => a + w(p), 0);
     const i = pool.findIndex(p => (x -= w(p)) < 0);
     picks.push(pool.splice(Math.max(0, i), 1)[0]);
   }
   if (!picks.length) return null;
-  return { kind: 'cards', cat: 'sys', icon: '🃏', title: '董事会卡 · 三选一', text: '散会之前，你可以从董事会带走一样东西。', options: picks.map(p => ({ label: p.name, card: p, go: () => { gainPerk(S, p.id); return { text: `获得董事会卡「${p.name}」——${p.desc}。` }; } })) };
+  return { kind: 'cards', cat: 'sys', icon: tx(S, 'draft.icon'), title: tx(S, 'draft.title'), text: tx(S, 'draft.text'), options: picks.map(p => ({ label: p.name, card: p, go: () => { gainPerk(S, p.id); return { text: tx(S, 'draft.done', { 卡: p.name, 说明: p.desc }) }; } })) };
 }
 
 export function nextDialog(S) {
@@ -375,13 +380,15 @@ export function nextDialog(S) {
   return null;
 }
 
+// 选完以后冒出来的「变化小标签」：[键, 名字, 怎么读, 方向（1 涨是好事 / -1 涨是坏事 / 0 中性）, 格式]。名字在 文本.xlsx「引擎」的 chip.*
+const chip = k => text('chip.' + k), ideoChip = k => S => text('chip.' + k, null, S.ideo?.v === 'us');
 const SNAP = [
-  ['cash', '现金', S => S.cash, 1, 'money'], ['hype', '热度', S => S.hype, 1], ['rep', '口碑', S => S.rep, 1], ['morale', '士气', S => S.morale, 1],
-  ['reg', '监管压力', S => S.reg, -1], ['bubble', '泡沫', S => S.bubble, 0], ['users', '用户', S => S.users + S.fake, 1, 'users'], ['quality', '产品体验', S => S.quality, 1],
-  ['equity', '股权', S => S.equity, 1, 'pct'], ['quota', '显卡配额', S => quota(S), 1], ['tech', '模型能力', S => (S.ownModel ? myCap(S) : 0), 1, 'f1'], ['bench', '跑分', S => S.model?.bench ?? 0, 1, 'f1'],
-  ['dirt', '黑料', S => S.dirt.length, -1], ['proj', '特殊项目', S => S.projects.length, 0], ['staff', '员工', S => S.staff.length, 1], ['ap', '下月行动点', S => S.apNext, 1], ['perks', '董事会卡', S => S.perks.length, 1],
-  ['red', S => (S.ideo?.v === 'us' ? '社会主义' : '共产'), S => S.ideo?.red ?? 0, 0], ['capb', S => (S.ideo?.v === 'us' ? '资本主义' : '资本'), S => S.ideo?.cap ?? 0, 0],
-  ['heat', '反共压力', S => S.ideo?.heat ?? 0, -1],
+  ['cash', chip('cash'), S => S.cash, 1, 'money'], ['hype', chip('hype'), S => S.hype, 1], ['rep', chip('rep'), S => S.rep, 1], ['morale', chip('morale'), S => S.morale, 1],
+  ['reg', chip('reg'), S => S.reg, -1], ['bubble', chip('bubble'), S => S.bubble, 0], ['users', chip('users'), S => S.users + S.fake, 1, 'users'], ['quality', chip('quality'), S => S.quality, 1],
+  ['equity', chip('equity'), S => S.equity, 1, 'pct'], ['quota', chip('quota'), S => quota(S), 1], ['tech', chip('tech'), S => (S.ownModel ? myCap(S) : 0), 1, 'f1'], ['bench', chip('bench'), S => S.model?.bench ?? 0, 1, 'f1'],
+  ['dirt', chip('dirt'), S => S.dirt.length, -1], ['proj', chip('proj'), S => S.projects.length, 0], ['staff', chip('staff'), S => S.staff.length, 1], ['ap', chip('ap'), S => S.apNext, 1], ['perks', chip('perks'), S => S.perks.length, 1],
+  ['red', ideoChip('red'), S => S.ideo?.red ?? 0, 0], ['capb', ideoChip('capb'), S => S.ideo?.cap ?? 0, 0],
+  ['heat', chip('heat'), S => S.ideo?.heat ?? 0, -1],
 ];
 const snap = S => SNAP.map(r => r[2](S));
 function diff(S, a, b) {
@@ -413,7 +420,7 @@ export function newGame(setup, meta) {
   const S = {
     v: 1, rs: (Math.random() * 2 ** 32) | 0, t: 1,
     founder: { name: setup.name, attrs: { ...setup.attrs }, traits: setup.traits.filter(id => TRAIT[id]), outfit: setup.outfit || 'turtleneck' },
-    co: { name: setup.coName, region: setup.region, route: setup.route, track: setup.track, office: 1, modelName: setup.modelName || '混沌', logo: setup.logo || null, brand: setup.brand || '#ff6b4a' },
+    co: { name: setup.coName, region: setup.region, route: setup.route, track: setup.track, office: 1, modelName: setup.modelName || text('default.model'), logo: setup.logo || null, brand: setup.brand || '#ff6b4a' },
     cash: R.cash, equity: 100, stage: 0, lastRaiseT: -9, raiseBoost: 0, ap: 3, apNext: 0,
     hype: 8, rep: 50, morale: 65, reg: 10, bubble: 35, burstT: 0, outage: 0,
     users: setup.route === 'app' ? 2 : 0.3, fake: 0, quality: setup.route === 'app' ? 40 : 28,
@@ -459,7 +466,7 @@ export function newGame(setup, meta) {
   refreshCands(S);
   S.ap = apMax(S);
   if (setup.tutorial) S.tut = { on: true, open: {}, queue: [], dirt0: S.dirt.length };
-  news(S, `🏠 ${S.co.name} 在${R.name}的${officeName(S)}里成立了。`);
+  news(S, tx(S, 'news.founded', { 公司: S.co.name, 地区: R.name, 办公室: officeName(S) }));
   return S;
 }
 
@@ -491,19 +498,19 @@ export function projectRate(S, p) {
   return clamp(power(S, p.kind) / (6 + 9 * S.stage), 0.35, 2.5) / share;
 }
 // 这个人（已雇佣或候选）到底能带来什么：对比「有他」和「没他」时公司的各项产出
-const QUIRK_TEXT = { juan: '卷王：产出 ×1.25', moyu: '摸鱼大师：产出只有七成', dazui: '大嘴巴：公司每张黑料的曝光概率 +25%', loyal: '死忠：士气再低也不会主动离职', genius: '天才：产出 ×1.5（工资也贵三成多）', guanxi: '关系户：产出只有三成，但你懂的' };
+
 export function staffImpact(S, e) {
   const real = S.staff, rest = real.filter(x => x.uid !== e.uid);
   const probe = list => { S.staff = list; return { res: researchEff(S), eng: power(S, 'eng'), ops: power(S, 'ops'), b2b: revenue(S).b2b, legal: power(S, 'legal') }; };
   const a = probe(rest), b = probe([...rest, e]);
   S.staff = real;
   const lines = [], dm = mod(S, 'devMult'), gm = TRACKS[S.co.track].growth * mod(S, 'growthMult') ** 0.5;
-  if (e.role === 'res') { lines.push(`炼丹效率 +${((b.res / a.res - 1) * 100).toFixed(0)}%`, '研究类特殊项目推进更快'); if (!S.ownModel) lines.push('公司还没有自研模型，暂时用不上'); }
-  if (e.role === 'eng') { const d = b.eng - a.eng; lines.push(`产品体验每月多涨约 ${(d * 0.08 * dm * Math.max(0, 1 - S.quality / qCeil(S))).toFixed(1)}`, `功能开发进度 +${(d * dm).toFixed(1)}/月`); if (S.ownModel) lines.push(`炸炉概率 -${(d / 6).toFixed(1)}%`); }
-  if (e.role === 'ops') { const d = b.ops - a.ops; lines.push(`每月多带来约 ${fmtUsers(d / 10 * gm * (0.5 + S.t / 36))} 新用户`, `用户增长率 +${((Math.min(0.02, b.ops / 1000) - Math.min(0.02, a.ops / 1000)) * gm * 100).toFixed(2)}%/月`); }
-  if (e.role === 'biz') lines.push(`企业订单收入 ${money(S, b.b2b - a.b2b, true)}/月`, '工程类之外的商务特殊项目也靠他');
-  if (e.role === 'legal') lines.push(`每张黑料的曝光概率 -${((1 - (1 + a.legal / 12) / (1 + b.legal / 12)) * 100).toFixed(0)}%`, '出事的时候更容易摆平');
-  return { lines, quirk: e.quirk ? QUIRK_TEXT[e.quirk] : null, salary: e.salary * mod(S, 'salaryMult') };
+  if (e.role === 'res') { lines.push(tx(S, 'impact.res.eff', { 百分比: ((b.res / a.res - 1) * 100).toFixed(0) }), tx(S, 'impact.res.proj')); if (!S.ownModel) lines.push(tx(S, 'impact.res.noModel')); }
+  if (e.role === 'eng') { const d = b.eng - a.eng; lines.push(tx(S, 'impact.eng.quality', { 体验: (d * 0.08 * dm * Math.max(0, 1 - S.quality / qCeil(S))).toFixed(1) }), tx(S, 'impact.eng.dev', { 进度: (d * dm).toFixed(1) })); if (S.ownModel) lines.push(tx(S, 'impact.eng.boom', { 概率: (d / 6).toFixed(1) })); }
+  if (e.role === 'ops') { const d = b.ops - a.ops; lines.push(tx(S, 'impact.ops.users', { 用户: fmtUsers(d / 10 * gm * (0.5 + S.t / 36)) }), tx(S, 'impact.ops.growth', { 增长: ((Math.min(0.02, b.ops / 1000) - Math.min(0.02, a.ops / 1000)) * gm * 100).toFixed(2) })); }
+  if (e.role === 'biz') lines.push(tx(S, 'impact.biz.b2b', { 收入: money(S, b.b2b - a.b2b, true) }), tx(S, 'impact.biz.proj'));
+  if (e.role === 'legal') lines.push(tx(S, 'impact.legal.expose', { 概率: ((1 - (1 + a.legal / 12) / (1 + b.legal / 12)) * 100).toFixed(0) }), tx(S, 'impact.legal.fix'));
+  return { lines, quirk: e.quirk ? tx(S, 'staff.quirk', { 名字: STAFF_QUIRKS[e.quirk].name, 说明: STAFF_QUIRKS[e.quirk].desc }) : null, salary: e.salary * mod(S, 'salaryMult') };
 }
 // 花 1 行动点亲自推进一个特殊项目
 export function pushProject(S, uid) {
@@ -512,7 +519,7 @@ export function pushProject(S, uid) {
   return measure(S, () => {
     const a = S.founder.attrs, k = { res: a.tech, eng: a.tech, gpu: a.tech, ops: a.cha, biz: a.biz, legal: a.net, ap: (a.cha + a.net) / 2 }[p.kind] ?? 5;
     S.ap--; p.done += 1 + (k - 5) * 0.15;
-    return { text: `你亲自下场推了一把「${p.name}」${p.done >= p.need ? '——只差月底验收了。' : '。'}` };
+    return { text: tx(S, p.done >= p.need ? 'project.push.ready' : 'project.push', { 项目: p.name }) };
   });
 }
 // 把效果翻译成 P 社式的提示行：[文字, 好(true)/坏(false)/中性(null)]
@@ -520,29 +527,30 @@ const TEMP_INV = ['costMult', 'salaryMult', 'gpuPriceMult', 'exposeMult', 'apiCo
 export function fxLines(S, fx) {
   const out = [];
   if (!fx) return out;
-  const sg = v => (v > 0 ? '+' : '') + Math.round(v * 10) / 10, g = (name, v, pol = 1) => out.push([`${name} ${sg(v)}`, pol === 0 ? null : v * pol > 0]);
+  const sg = v => (v > 0 ? '+' : '') + Math.round(v * 10) / 10, g = (name, v, pol = 1) => out.push([tx(S, 'fx.gauge', { 名称: name, 值: sg(v) }), pol === 0 ? null : v * pol > 0]);
+  const line = (key, vars, good) => out.push([tx(S, key, vars), good]);
   for (const [k, v] of Object.entries(fx)) {
-    if (k === 'cash') out.push([`现金 ${money(S, v * unit(S), true)}`, v > 0]);
-    else if (k === 'cashAbs') out.push([`现金 ${money(S, v, true)}`, v > 0]);
-    else if (k === 'hype') g('热度', v); else if (k === 'rep') g('口碑', v); else if (k === 'morale') g('士气', v);
-    else if (k === 'reg') g('监管压力', v, -1); else if (k === 'bubble') g('泡沫', v, 0); else if (k === 'quality') g('产品体验', v);
-    else if (k === 'usersPct') out.push([`用户 ${sg(v)}%`, v > 0]);
-    else if (k === 'tech') g('模型能力', v);
-    else if (k === 'bench') out.push([`跑分 ${sg(v)}（注水）`, null]);
-    else if (k === 'quota') out.push([`显卡配额 ${sg(v)}%`, v > 0]);
-    else if (k === 'equity') out.push([`股权 ${sg(v)}%`, v > 0]);
-    else if (k === 'ap') out.push([`下月行动点 ${sg(v)}`, v > 0]);
-    else if (k === 'attr') for (const a in v) out.push([`${ATTR_NAME[a]} ${sg(v[a])}（永久）`, v[a] > 0]);
-    else if (k === 'dirt') { const type = typeof v === 'string' ? v : v.type; out.push([`留下黑料「${(typeof v === 'object' && v.name) || DIRT[type]?.name || type}」`, false]); }
-    else if (k === 'cleanDirt') out.push(['清除黑料', true]);
-    else if (k === 'expose') out.push(['引爆一张黑料', false]);
-    else if (k === 'staff') out.push([{ loseBest: '失去最强的员工', loseRandom: '失去一名员工', loseCtx: '失去这名员工', gainStar: '顶级研究员加入' }[v] || '新员工加入', !/^lose/.test(v)]);
-    else if (k === 'temp') for (const t of [].concat(v)) { const up = t.mult != null ? t.mult > 1 : t.add > 0; out.push([`${MOD_NAME[t.key] || t.key} ${t.mult != null ? '×' + t.mult : sg(t.add)}（${t.months || 6} 个月）`, TEMP_INV.includes(t.key) ? !up : up]); }
-    else if (k === 'perk') out.push(['获得一张董事会卡', true]);
-    else if (k === 'project') out.push([`开启特殊项目「${v.name}」`, null]);
-    else if (k === 'end') out.push(['本局结束', null]);
-    else if (k === 'ideo') { const us = S.ideo?.v === 'us'; if (v.red) out.push([`${us ? '社会主义' : '共产'} ${sg(v.red)}`, null]); if (v.cap) out.push([`${us ? '资本主义' : '资本'} ${sg(v.cap)}`, null]); }
-    else if (k === 'heat') out.push([`反共压力 ${sg(v)}`, v < 0]);
+    if (k === 'cash') line('fx.cash', { 值: money(S, v * unit(S), true) }, v > 0);
+    else if (k === 'cashAbs') line('fx.cash', { 值: money(S, v, true) }, v > 0);
+    else if (k === 'hype') g(chip('hype'), v); else if (k === 'rep') g(chip('rep'), v); else if (k === 'morale') g(chip('morale'), v);
+    else if (k === 'reg') g(chip('reg'), v, -1); else if (k === 'bubble') g(chip('bubble'), v, 0); else if (k === 'quality') g(chip('quality'), v);
+    else if (k === 'usersPct') line('fx.users', { 值: sg(v) }, v > 0);
+    else if (k === 'tech') g(chip('tech'), v);
+    else if (k === 'bench') line('fx.bench', { 值: sg(v) }, null);
+    else if (k === 'quota') line('fx.quota', { 值: sg(v) }, v > 0);
+    else if (k === 'equity') line('fx.equity', { 值: sg(v) }, v > 0);
+    else if (k === 'ap') line('fx.ap', { 值: sg(v) }, v > 0);
+    else if (k === 'attr') for (const a in v) line('fx.attr', { 属性: ATTR_NAME[a], 值: sg(v[a]) }, v[a] > 0);
+    else if (k === 'dirt') { const type = typeof v === 'string' ? v : v.type; line('fx.dirt', { 黑料: (typeof v === 'object' && v.name) || DIRT[type]?.name || type }, false); }
+    else if (k === 'cleanDirt') line('fx.cleanDirt', null, true);
+    else if (k === 'expose') line('fx.expose', null, false);
+    else if (k === 'staff') line(hasText('fx.staff.' + v) && v !== 'gain' ? 'fx.staff.' + v : 'fx.staff.gain', null, !/^lose/.test(v));
+    else if (k === 'temp') for (const t of [].concat(v)) { const up = t.mult != null ? t.mult > 1 : t.add > 0; line('fx.temp', { 修正: MOD_NAME[t.key] || t.key, 值: t.mult != null ? '×' + t.mult : sg(t.add), 月: t.months || 6 }, TEMP_INV.includes(t.key) ? !up : up); }
+    else if (k === 'perk') line('fx.perk', null, true);
+    else if (k === 'project') line('fx.project', { 项目: v.name }, null);
+    else if (k === 'end') line('fx.end', null, null);
+    else if (k === 'ideo') { if (v.red) out.push([tx(S, 'fx.gauge', { 名称: ideoChip('red')(S), 值: sg(v.red) }), null]); if (v.cap) out.push([tx(S, 'fx.gauge', { 名称: ideoChip('capb')(S), 值: sg(v.cap) }), null]); }
+    else if (k === 'heat') out.push([tx(S, 'fx.gauge', { 名称: chip('heat'), 值: sg(v) }), v < 0]);
   }
   return out;
 }
@@ -552,11 +560,11 @@ export function endMonth(S) {
   // 1. 算力：推理优先，剩下的进丹炉
   const need = inferNeed(S), have = S.gpu + brainGpu(S), free = Math.max(0, have - need);
   S.outage = need > have ? 1 - have / need : 0;
-  if (S.outage > 0.05) news(S, `🔥 显卡不够用，用户看到的是「服务器繁忙，请稍后再试」（缺口 ${Math.round(S.outage * 100)}%）。`);
+  if (S.outage > 0.05) news(S, tx(S, 'news.outage', { 缺口: Math.round(S.outage * 100) }));
   if (S.ownModel && S.furnace?.on) {
     let gain = free * researchEff(S) * DATA_SOURCES[S.furnace.data].mult;
     const pBoom = clamp(0.07 - power(S, 'eng') / 600, 0.015, 0.07) * mod(S, 'boomMult');
-    if (free > 0 && S.t > 3 && rnd(S) < pBoom) { gain = -S.E * 0.12; S.fxq.push(['boom']); news(S, '💥 炸炉了！loss 一夜之间变成 NaN，一部分火候灰飞烟灭。'); }
+    if (free > 0 && S.t > 3 && rnd(S) < pBoom) { gain = -S.E * 0.12; S.fxq.push(['boom']); news(S, tx(S, 'news.boom')); }
     S.E = Math.max(0, S.E + gain); S.furnace.months++;
     if (S.furnace.data === 'distill') S.E = Math.min(S.E, Math.max(0, EofCap(Math.max(...S.rivals.map(r => r.cap)) - 2) - baseE(S.t)));
   }
@@ -565,7 +573,7 @@ export function endMonth(S) {
   S.quality = clamp(S.quality + E * 0.08 * dm * Math.max(0, 1 - S.quality / qCeil(S)) - 0.6, 5, 100);
   if (S.sprint) {
     S.sprint.done += E * dm;
-    if (S.sprint.done >= S.sprint.need) { const f = FEAT[S.sprint.id]; S.feats.push(f.id); S.featDone = { id: f.id, t: S.t }; applyFx(S, f.fx); news(S, `🧩 新功能「${f.name}」上线。`); S.fxq.push(['say', { text: `「${f.name}」上线啦！` }]); S.sprint = null; }
+    if (S.sprint.done >= S.sprint.need) { const f = FEAT[S.sprint.id]; S.feats.push(f.id); S.featDone = { id: f.id, t: S.t }; applyFx(S, f.fx); news(S, tx(S, 'news.feature', { 功能: f.name })); S.fxq.push(['say', { text: tx(S, 'say.feature', { 功能: f.name }) }]); S.sprint = null; }
   }
   // 2.5 特殊项目（事件链）：按对应的人手 / 显卡推进，完成或超期都会触发后续事件
   const projEvents = [];
@@ -574,7 +582,7 @@ export function endMonth(S) {
     const finished = p.done >= p.need;
     if (!finished && S.t + 1 < p.due) continue;
     S.projects = S.projects.filter(x => x !== p);
-    news(S, finished ? `✅ 特殊项目「${p.name}」完成。` : `⌛ 特殊项目「${p.name}」超期，不了了之。`);
+    news(S, tx(S, finished ? 'news.projectDone' : 'news.projectFail', { 项目: p.name }));
     const next = finished ? p.ok : p.fail;
     if (next) projEvents.push([next, p.ctx]);
   }
@@ -608,17 +616,17 @@ export function endMonth(S) {
     r.drift = clamp(r.drift + rf(S, -0.3, 0.3), -4, 4);
     r.cap = Math.min(AGI_CAP - 0.5, frontier(S.t + 1) + r.off + r.drift);
     r.hype *= 0.93;
-    if (--r.next <= 0) { r.ver++; r.bench = r.cap + r.cheat + rf(S, -1, 1.5); r.next = ri(S, 4, 8); r.hype = clamp(r.hype + 18, 0, 100); news(S, `📣 ${r.name} 发布 ${r.model}-${r.ver}，跑分 ${r.bench.toFixed(1)}。${r.boss}：「感受一下。」`); }
+    if (--r.next <= 0) { r.ver++; r.bench = r.cap + r.cheat + rf(S, -1, 1.5); r.next = ri(S, 4, 8); r.hype = clamp(r.hype + 18, 0, 100); news(S, tx(S, 'news.rivalRelease', { 对手: r.name, 模型: r.model, 版本: r.ver, 跑分: r.bench.toFixed(1), 老板: r.boss })); }
   }
   // 6. 团队
-  if (S.morale < 25 && S.staff.length && rnd(S) < 0.3) { const e = pick(S, S.staff.filter(x => x.quirk !== 'loyal').length ? S.staff.filter(x => x.quirk !== 'loyal') : S.staff); removeStaff(S, e.uid); news(S, `👋 士气太低，${e.name}（${ROLES[e.role].name}）提了离职。`); }
+  if (S.morale < 25 && S.staff.length && rnd(S) < 0.3) { const e = pick(S, S.staff.filter(x => x.quirk !== 'loyal').length ? S.staff.filter(x => x.quirk !== 'loyal') : S.staff); removeStaff(S, e.uid); news(S, tx(S, 'news.quit', { 名字: e.name, 岗位: ROLES[e.role].name })); }
   ideoMonth(S, API);                                                  // 路线之争：读书会招新、末位淘汰
   // 7. 时间推进
   S.t++;
   S.temp = S.temp.filter(tm => tm.until > S.t);
   for (const k in S.cd) if (S.cd[k] <= S.t) delete S.cd[k];
   S.hist.push([Math.round(S.cash), +S.users.toFixed(1), Math.round(valuation(S))]);
-  if (S.t % 2 === 0 && NEWS.length) news(S, '📰 ' + fmt(S, pick(S, NEWS)));
+  if (S.t % 2 === 0 && NEWS.length) news(S, tx(S, 'news.paper', { 新闻: fmt(S, pick(S, NEWS)) }));
   refreshCands(S);
   S.ap = clamp(apMax(S) + S.apNext, 1, 7); S.apNext = 0;
   // 成就
@@ -634,8 +642,8 @@ export function endMonth(S) {
     return endGame(S, val >= 4e6 ? 'giant' : val >= 1e5 ? 'unicorn' : S.streak.profit >= 3 ? 'small' : 'zombie');
   }
   if (S.cash < 0) {
-    if (S.perks.includes('phoenix') && !S.flags.phoenixUsed) { S.flags.phoenixUsed = 1; S.cash = 6 * unit(S); S.fxq.push(['money']); news(S, '🔥 「东山再起」生效：一笔神秘资金在最后一刻到账。'); }
-    else if (S.flags.revive) { delete S.flags.revive; S.cash = 4 * unit(S); news(S, '👪 家里人默默把钱打了过来，附言：「最后一次。」'); }
+    if (S.perks.includes('phoenix') && !S.flags.phoenixUsed) { S.flags.phoenixUsed = 1; S.cash = 6 * unit(S); S.fxq.push(['money']); news(S, tx(S, 'news.phoenix')); }
+    else if (S.flags.revive) { delete S.flags.revive; S.cash = 4 * unit(S); news(S, tx(S, 'news.revive')); }
     else S.q.push({ type: 'event', id: 'broke' });
   }
   // 黑料曝光（每月最多一张）

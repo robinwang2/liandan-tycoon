@@ -56,7 +56,7 @@ const PROJECT_KINDS = new Set(['res', 'eng', 'ops', 'biz', 'legal', 'gpu', 'ap']
 const CHAIN_FX_KEYS = new Set(['id', 'note', 'done']);
 const EVENT_KEYS = new Set([
   'id', 'title', 'icon', 'cat', 'when', 'weight', 'once', 'cd', 'rival', 'text',
-  'options', 'chain', 'art', 'portrait', 'scene', 'enter', 'delay',
+  'options', 'chain', 'art', 'portrait', 'scene', 'enter', 'delay', 'p', 'textBay',
 ]);
 const OPTION_KEYS = new Set(['label', 'hint', 'req', 'text', 'fx', 'check', 'odds', 'ok', 'fail', 'fn']);
 const RESULT_KEYS = new Set(['text', 'fx']);

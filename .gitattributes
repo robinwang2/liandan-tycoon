@@ -1,0 +1,2 @@
+# 表格是二进制文件：不做换行转换，也不做文本 diff（要看改了什么，看导出的 src/data/tables/*.json）
+*.xlsx binary

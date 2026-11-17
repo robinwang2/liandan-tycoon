@@ -9,3 +9,7 @@ classic/dist/
 .DS_Store
 Thumbs.db
 .claude/settings.local.json
+
+# WPS / Excel 打开表格时留下的临时文件
+~$*
+.~*
