@@ -136,6 +136,7 @@ tools/validate.mjs   事件数据校验：npm run check（npm run tables 导出�
 tools/tables/        表格工具：export.mjs 导出并查错；schema.mjs 每张表的列和结构；lib/ 读写 xlsx、格子写法的解析；build-xlsx.mjs 从 JSON 反向生成表格
 tools/parity.mjs     对拍：固定种子打一批局，和基线逐月比对（npm run parity）；tools/bot.mjs 是自动试玩的机器人
 tools/props-check.mjs   道具库自检；tools/audio-check.mjs 音频引擎自检
+tools/art/           美术管线（给 Unity 移植做准备）：export-scene-glb.mjs 从游戏场景导出模型；qc.mjs + qc.py 用 Blender 质检、渲正交底图；split-views.mjs 把 2×2 四视图切成四张。Tripo 试验记录见 docs/unity-port-plan.md
 docs/                事件 DSL、事件链、插画、Logo、场景、道具、音效、界面的规范
 ```
 
