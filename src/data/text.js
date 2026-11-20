@@ -3,7 +3,7 @@
 import T from './tables/text.json' with { type: 'json' };
 
 export const TEXT = T.TEXT;                      // 键 → { text, bay? }
-const fill = (s, v) => String(s).replace(/\{([^{}\s]+)\}/g, (m, k) => (v && k in v ? v[k] : m));
+export const fill = (s, v) => String(s).replace(/\{([^{}\s]+)\}/g, (m, k) => (v && k in v ? v[k] : m));
 export const hasText = key => key in TEXT;
 export function text(key, vars, bay = false) {
   const e = TEXT[key];

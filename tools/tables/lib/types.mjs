@@ -37,6 +37,10 @@ export function makeTypes(V) {
     dec: v => toText(v).split('\n').map(s => s.trim()).filter(Boolean),
     enc: v => (Array.isArray(v) && v.every(x => typeof x === 'string' && x && !x.includes('\n')) ? v.join('\n') : fail(`要的是若干行文字：${JSON.stringify(v)}`)),
   });
+  def(['数或数列', 'nums'], {                                        // 一个数，或者逗号隔开的一串数（比如按名次排的系数）
+    dec: v => { if (typeof v === 'number') return v; const parts = toText(v).split(/[,，]/).map(s => s.trim()); if (parts.length > 1) { if (parts.some(s => !s)) fail('一串数中间不能有空项'); return parts.map(toNum); } return toNum(parts[0]); },
+    enc: v => (Array.isArray(v) && v.length > 1 && v.every(x => typeof x === 'number' && Number.isFinite(x)) ? v.map(numText).join(', ') : typeof v === 'number' && Number.isFinite(v) ? v : fail(`要的是一个数或一串数：${JSON.stringify(v)}`)),
+  });
   def(['JSON', 'json'], { dec: v => { try { return JSON.parse(toText(v)); } catch (e) { fail('JSON 格式不对：' + e.message); } }, enc: v => JSON.stringify(v) });
 
   // 格子写法（效果、条件……）。写的时候先按格子写法来，写不了或者读回来对不上，就退回成 JSON（并记一笔）

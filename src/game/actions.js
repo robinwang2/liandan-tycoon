@@ -14,7 +14,7 @@
 //   ok(x) / fail(x)  有检定、成功或失败时要多做点事。写了它，对应的效果列就不会自动生效（要的话在里面调 x.fx() / x.failFx()）
 // 脚本拿到的 x：{ S 状态, p 参数, a 表里这一行, T(键, 变量) 取「行动文本」里的一段话, fx(额外效果?) / failFx(额外效果?) 让效果列生效 }
 import * as G from './engine.js';
-import { DATA_SOURCES, FEATURES, FEAT, OFFICES, MAX_OFFICE, officeName, floorsOf, STAGES, INVESTORS, INVESTORS_EAST, INVESTORS_PROGRESSIVE, EAST_RIVALS, INVEST_RIVALS, ROSE_RIVALS, ROLES, DIRT, AGI_CAP, P } from '../data/defs.js';
+import { DATA_SOURCES, FEATURES, FEAT, OFFICES, MAX_OFFICE, officeName, floorsOf, STAGES, INVESTORS, INVESTORS_EAST, INVESTORS_PROGRESSIVE, EAST_RIVALS, INVEST_RIVALS, ROSE_RIVALS, ROLES, DIRT, AGI_CAP, P, fillRec } from '../data/defs.js';
 import { TAB_ROWS, ACTION_ROWS, RAISE_OFFERS, ACT_TEXT } from '../data/actions.js';
 import * as IDEO from './ideology.js';
 
@@ -22,13 +22,14 @@ const { rnd, rf, pick, money, fmtUsers, mod, power, unit, applyFx, addDirt, news
 const pct = (S, attr, dc) => Math.round(pCheck(S, attr, dc) * 100);
 const LAST_ROUND = STAGES.length - 2;                                  // 最后一轮融资（再往后就是上市）
 const bay = S => S.co.region === 'bay';
-const fill = (s, v) => String(s).replace(/\{([^{}\s]+)\}/g, (m, k) => (v && k in v ? v[k] : m));
+// 填 {变量}：代码给的变量、平衡参数，以及这一行自己的效果（{效果.热度} {临时.总成本}）；写法见 src/data/refs.js
+const fill = (s, v, rec) => fillRec(String(s), rec, v);
 // 取「行动文本」里的一段话。同一个键有几句的，执行行动时随机挑一句；按钮上的说明、点不了的原因这类每帧都在画的，固定用第一句（不能动随机数）
-function say(S, key, vars, random = false) {
+function say(S, key, vars, random = false, rec) {
   const list = ACT_TEXT[key];
   if (!list) throw new Error(`「行动文本」表里没有「${key}」`);
   const e = random && list.length > 1 ? pick(S, list) : list[0];
-  return fill(bay(S) && e.bay != null ? e.bay : e.text, vars);
+  return fill(bay(S) && e.bay != null ? e.bay : e.text, vars, rec);
 }
 export const TABS = TAB_ROWS;
 
@@ -104,7 +105,7 @@ function raiseDialog(x) {
   const offer = o => {
     const v = { 对手: rv.name };
     if (o.label.includes('{机构}')) v.机构 = pick(S, vcs);
-    const name = fill(o.label, v), note = o.note != null ? fill(o.note, { 目标: fmtUsers(target) }) : '';
+    const name = fill(o.label, v), note = o.note != null ? fill(o.note, { 目标: fmtUsers(target) }, o) : '';
     const hv = { 估值: money(S, val0 * o.vk), 出让: Math.round(o.share * 100), 到账: money(S, val0 * o.vk * o.share), 备注: note };
     return {
       label: name, hint: T(note ? 'raise.hint.note' : 'raise.hint', hv),
@@ -122,7 +123,7 @@ function raiseDialog(x) {
   return { dialog: { kind: 'event', cat: 'money', icon: T('raise.offers.icon'), art: T('raise.offers.art'), title: T('raise.offers.title', { 轮次: STAGES[k].name }), text: T('raise.offers.text', { 估值: money(S, val0), 业绩: pf.toFixed(2) }), options: offers } };
 }
 const courseIncome = (S, p) => (p.基础 + S.users * p.每万用户 + S.hype) * (1 + p.每点商业 * (S.founder.attrs.biz - 5));
-const adsGain = (S, p) => Math.max(p.用户最少, S.users * p.用户比例) * mod(S, 'growthMult') ** 0.5 * (p.体验基础 + S.quality / p.体验除数);
+const adsGain = (S, p) => Math.max(p.用户最少, S.users * p.用户比例) * mod(S, 'growthMult') ** P['users.growModExp'] * (p.体验基础 + S.quality / p.体验除数);
 const worstDirt = S => S.dirt.slice().sort((a, b) => b.sev - a.sev)[0];
 
 // ───────── 每个行动的脚本 ─────────
@@ -305,7 +306,7 @@ const HOOKS = {
   utopia: {
     show: ({ S }) => IDEO.isRed(S) && !S.flags.utopia_on,
     cost: ({ p }) => p.花费,
-    run: ({ S }) => { S.flags.utopia_on = 1; G.queueEvent(S, IDEO.chainStart(S, 'utopia')); news(S, IDEO.vtext(S).utopia.replace('{co}', S.co.name)); return IDEO.actText(S, 'utopia', G); },
+    run: ({ S }) => { S.flags.utopia_on = 1; G.queueEvent(S, IDEO.chainStart(S, 'utopia')); news(S, IDEO.vt(S, 'ideo.utopia.news', { 公司: S.co.name })); return IDEO.actText(S, 'utopia', G); },
   },
   selfcrit: {
     show: ({ S }) => IDEO.isRed(S),
@@ -330,6 +331,7 @@ const HOOKS = {
   plan: {
     show: ({ S }) => IDEO.isRed(S),
     block: ({ S, T }) => (S.ideo?.plan ? T('plan.busy', { 日期: G.dateStr(S.ideo.plan.due) }) : null),
+    vars: ({ S }) => IDEO.planRange(S),                                     // 说明里的 {月数} {最少} {最多}：读路线之争工作簿里五年计划的窗口
     run: ({ S }) => IDEO.planDialog(S, G),
   },
   // 资本路线（深圳：警惕乌托邦；湾区：我们是一家公司）
@@ -338,7 +340,7 @@ const HOOKS = {
     show: ({ S }) => IDEO.isCap(S) && !S.flags.bci_on,
     cost: ({ S, p }) => Math.max(p.最少, p.月数 * unit(S)),
     vars: ({ S, T }) => ({ 用途: T(S.ownModel ? 'bci.use.model' : 'bci.use.app') }),
-    run: x => { const { S } = x; S.flags.bci_on = 1; x.fx(); G.queueEvent(S, IDEO.chainStart(S, 'bci')); news(S, IDEO.vtext(S).bci); return IDEO.actText(S, 'bci', G); },
+    run: x => { const { S } = x; S.flags.bci_on = 1; x.fx(); G.queueEvent(S, IDEO.chainStart(S, 'bci')); news(S, IDEO.vt(S, 'ideo.bci.news')); return IDEO.actText(S, 'bci', G); },
   },
   buyback: {
     show: ({ S }) => IDEO.isCap(S),
@@ -360,7 +362,7 @@ function build(row) {
   const H = HOOKS[row.id] || {}, p = row.p || {};
   const ctx = (S, random) => ({
     S, p, a: row,
-    T: (key, vars) => say(S, key, vars, random),
+    T: (key, vars) => say(S, key, { ...p, ...vars }, random, row),             // 行动文本里也能直接写「参数」列的名字和 {效果.xxx}
     fx: extra => applyFx(S, extra ? { ...extra, ...row.fx } : row.fx),
     failFx: extra => applyFx(S, extra ? { ...extra, ...row.failFx } : row.failFx),
   });
@@ -376,7 +378,7 @@ function build(row) {
     if (own != null) return own;
     const v = { ...p };
     if (row.check) v.成功率 = pct(S, row.check.attr, row.check.dc);
-    return fill((bay(S) && row.descBay != null ? row.descBay : row.desc) ?? '', H.vars ? { ...v, ...H.vars(x) } : v);
+    return fill((bay(S) && row.descBay != null ? row.descBay : row.desc) ?? '', H.vars ? { ...v, ...H.vars(x) } : v, row);
   };
   a.run = S => {
     const x = ctx(S, true);

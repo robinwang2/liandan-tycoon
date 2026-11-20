@@ -5,6 +5,13 @@
 // 改表 → npm run tables（导出成 ./tables/*.json，顺便查错）→ 这里读进来，再补上几张派生的索引表和几个小函数。
 import T from './tables/defs.json' with { type: 'json' };
 import PARAMS from './tables/params.json' with { type: 'json' };
+import { fillDefs, fillRefs, refMaps } from './refs.js';
+
+// 说明里的 {变量}（比如「显卡价格 {显卡价格}」读这一条自己的修正）：载入时填好，游戏里拿到的就是填好的字
+fillDefs(T, PARAMS.P);
+const REF = refMaps(T);
+// 别的表（行动、事件、路线之争）里的说明也用它：rec = 这一条记录（{效果.热度} {临时.收入} 读它的效果），vars = 代码填的变量
+export const fillRec = (text, rec, vars) => fillRefs(text, { vars, P: PARAMS.P, rec, ...REF });
 
 // 平衡参数：P['键'] 取「参数」表里的值
 export const P = PARAMS.P;
