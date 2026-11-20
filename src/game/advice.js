@@ -3,11 +3,20 @@
 //   lv    bad 要紧（红）/ gold 机会或闲置（金）/ warn 留意（蓝）
 //   act   点一下就执行的行动（actions.js 里的 id）；later = 这个月行动点不够，下个月才能做
 //   go    要切过去的页签 { ltab, rtab }；hl = 要闪一下的按钮（data-a 的值）
+// 文字（连同图标）在 文本.xlsx「参谋」里，参谋自己的门槛在 平衡参数.xlsx 里（advice. 开头）；
+// 和引擎规则对应的线（离职线、逼宫线、经侦线……）直接读引擎的参数，两边不会对不上。
 import * as G from './engine.js';
 import { ACT } from './actions.js';
-import { FEATURES, FEAT, OFFICES, officeName, STAGES, ROLES, STAFF_QUIRKS, DIRT, KIND_NAME } from '../data/defs.js';
+import { IDEO_LEN, hasHeat } from './ideology.js';
+import { FEATURES, FEAT, OFFICES, officeName, STAGES, ROLES, STAFF_QUIRKS, DIRT, KIND_NAME, P } from '../data/defs.js';
+import { RAISE_OFFERS } from '../data/actions.js';
+import { text } from '../data/text.js';
 
 const num = x => Math.round(x);
+const T = (S, key, vars) => text(key, vars, S.co.region === 'bay');
+const LAST_ROUND = STAGES.length - 2;                                   // 最后一轮融资（再往后就是上市）
+const SHARE = [Math.min, Math.max].map(f => Math.round(f(...RAISE_OFFERS.map(o => o.share)) * 100));   // 每轮让出的股权：最少、最多（%）
+const acts = (S, ids) => ids.map(id => T(S, 'advice.act', { 行动: ACT[id].name })).join(T(S, 'advice.sep'));
 // 这个行动除了行动点以外还能不能做：null = 做不了；{ later } = 只差行动点
 function avail(S, id) {
   const a = ACT[id];
@@ -28,166 +37,178 @@ const RULES = [
   // ── 要紧 ──
   function cash(S) {
     const net = netOf(S), rw = G.runway(S);
-    if (net >= 0 || rw >= 4) return null;
-    const pf = G.perf(S), raise = avail(S, 'raise'), tips = [], R = ACT.raise.p;
+    if (net >= 0 || rw >= P['advice.cash.runway']) return null;
+    const pf = G.perf(S), raise = avail(S, 'raise'), tips = [], R = ACT.raise.p, pfs = pf.toFixed(2);
     // 和融资窗口的门槛一致（行动.xlsx「启动融资」的参数）：≥流血线 三份报价；失败线~流血线 只有一份流血报价；<失败线 投资人只会说「保持联系」
-    if (raise) tips.push(pf >= R.流血线 ? `业绩系数 ${pf.toFixed(2)}，现在融资能拿到三份报价。` : pf >= R.失败线 ? `业绩系数 ${pf.toFixed(2)}，不到 ${R.流血线}，融资只有一份「趁火打劫」的报价。` : `业绩系数才 ${pf.toFixed(2)}，不到 ${R.失败线}，现在去融资只会听到「保持联系」。`);
-    if (S.policies.price === 'free') tips.push('定价还是「免费冲量」，订阅收入只有三成。');
+    if (raise) tips.push(pf >= R.流血线 ? T(S, 'advice.cash.raise3', { 业绩: pfs }) : pf >= R.失败线 ? T(S, 'advice.cash.raise1', { 业绩: pfs, 流血线: R.流血线 }) : T(S, 'advice.cash.raise0', { 业绩: pfs, 失败线: R.失败线 }));
+    if (S.policies.price === 'free') tips.push(T(S, 'advice.cash.free'));
     const free = S.ownModel ? Math.max(0, S.gpu - G.inferNeed(S)) : 0;
-    if (free >= 4) tips.push(`丹炉占着 ${free} 张卡（每月约 ${G.money(S, G.gpuRent(S) - G.gpuRent(S, S.gpu - free))}），少租几张能多撑一阵。`);
+    if (free >= P['advice.cash.freeGpu']) tips.push(T(S, 'advice.cash.furnace', { 张数: free, 月租: G.money(S, G.gpuRent(S) - G.gpuRent(S, S.gpu - free)) }));
     const quick = ['sellcourse', 'subsidy'].filter(id => avail(S, id));
-    if ((!raise || pf < R.流血线) && quick.length) tips.push(`${quick.map(id => `「${ACT[id].name}」`).join('、')}能先回点血。`);
-    const h = { id: 'cash', lv: 'bad', icon: 'cash', title: rw < 1 ? '下个月发不出工资' : `钱只够撑 ${Math.floor(rw)} 个月`, text: `每月净流出 ${G.money(S, -net)}。${tips.join('')}`, go: { ltab: 'cap' } };
+    if ((!raise || pf < R.流血线) && quick.length) tips.push(T(S, 'advice.cash.quick', { 行动: acts(S, quick) }));
+    const h = { id: 'cash', lv: 'bad', icon: T(S, 'advice.cash.icon'), title: rw < 1 ? T(S, 'advice.cash.title.broke') : T(S, 'advice.cash.title', { 月数: Math.floor(rw) }), text: T(S, 'advice.cash.text', { 净流出: G.money(S, -net), 建议: tips.join('') }), go: { ltab: 'cap' } };
     return pf >= R.流血线 ? withAct(h, S, 'raise', 'sellcourse', 'subsidy') : pf >= R.失败线 ? withAct(h, S, 'sellcourse', 'subsidy', 'raise') : withAct(h, S, 'sellcourse', 'subsidy');
   },
   function outage(S) {
     const need = G.inferNeed(S);
     if (!need || S.gpu >= need) return null;
     const q = G.quota(S), gap = num((1 - S.gpu / need) * 100);
-    return { id: 'outage', lv: 'bad', icon: 'gpu', title: '显卡不够推理', text: `用户要 ${need} 张卡做推理，你只租了 ${S.gpu} 张，${gap}% 的请求在报「服务器繁忙」，口碑和用户都在流失。${need <= q ? '去「经营」把显卡加上。' : `配额只有 ${q} 张，超出的部分得按现货价租（市价 2 倍起），找皮衣教主要点配额能便宜不少。`}`, go: { ltab: 'ops' }, hl: 'gpu:+' };
+    const how = need <= q ? T(S, 'advice.outage.add') : T(S, 'advice.outage.quota', { 配额: q, 倍数: P['gpu.over0'] });
+    return { id: 'outage', lv: 'bad', icon: T(S, 'advice.outage.icon'), title: T(S, 'advice.outage.title'), text: T(S, 'advice.outage.text', { 需要: need, 租了: S.gpu, 缺口: gap, 办法: how }), go: { ltab: 'ops' }, hl: 'gpu:+' };
   },
   function crime(S) {
-    const d = S.exposedCrime >= 25 && worstCrime(S);
+    const d = S.exposedCrime >= P['advice.crime.from'] && worstCrime(S);
     if (!d) return null;
-    return withAct({ id: 'crime', lv: 'bad', icon: 'shield', title: '经侦在盯着你', text: `涉嫌违法的黑料已经曝光了 ${num(S.exposedCrime)}（到 40 经侦上门），保险柜里还躺着「${d.name}」。趁它还没爆，花钱洗掉。`, go: { rtab: 'safe' } }, S, 'wash');
+    return withAct({ id: 'crime', lv: 'bad', icon: T(S, 'advice.crime.icon'), title: T(S, 'advice.crime.title'), text: T(S, 'advice.crime.text', { 曝光: num(S.exposedCrime), 经侦线: P['scandal.probeLine'], 黑料: d.name }), go: { rtab: 'safe' } }, S, 'wash');
   },
   function projects(S) {
     return S.projects.map(p => {
       const left = p.need - p.done, n = p.due - S.t, rate = G.projectRate(S, p);
       if (left <= 0 || rate * n >= left) return null;
       const stalled = p.kind !== 'ap' && rate < 0.01;
-      if (!stalled && n > 3) return null;
+      if (!stalled && n > P['advice.proj.months']) return null;
       const reach = Math.min(99, num((p.done + rate * n) / p.need * 100));
-      const how = p.kind === 'ap' ? '这个项目只能靠你亲自花行动点攻关。' : stalled ? `现在没有${KIND_NAME[p.kind]}在推进它，加派人手或者亲自攻关。` : `可以加派${KIND_NAME[p.kind]}，或者花行动点亲自攻关。`;
-      return { id: `proj-${p.uid}`, lv: n <= 2 ? 'bad' : 'warn', icon: 'pin', title: stalled ? '特殊项目停滞了' : '项目要超期了', text: `「${p.name}」还剩 ${n} 个月到期，照现在的速度只能做完 ${reach}%。${how}`, go: { rtab: 'chain' }, hl: `push:${p.uid}`, later: S.ap < 1 };
+      const how = p.kind === 'ap' ? T(S, 'advice.proj.ap') : T(S, stalled ? 'advice.proj.stalled' : 'advice.proj.slow', { 人手: KIND_NAME[p.kind] });
+      return { id: `proj-${p.uid}`, lv: n <= P['advice.proj.urgent'] ? 'bad' : 'warn', icon: T(S, 'advice.proj.icon'), title: T(S, stalled ? 'advice.proj.title.stalled' : 'advice.proj.title.late'), text: T(S, 'advice.proj.text', { 项目: p.name, 月数: n, 完成: reach, 办法: how }), go: { rtab: 'chain' }, hl: `push:${p.uid}`, later: S.ap < 1 };
     });
   },
   function vam(S) {
     if (!S.vam) return null;
     const n = S.vam.due - S.t, cur = S.users + S.fake;
-    if (n > 4 || cur >= S.vam.target) return null;
-    return withAct({ id: 'vam', lv: 'bad', icon: 'handshake', title: '对赌快到期了', text: `${G.dateStr(S.vam.due)}前用户要到 ${G.fmtUsers(S.vam.target)}，现在只有 ${G.fmtUsers(cur)}。投放买量、炒作造势都能拉人——刷量也算数，就是会留下黑料。`, go: { ltab: 'pr' } }, S, 'ads', 'hype');
+    if (n > P['advice.vam.months'] || cur >= S.vam.target) return null;
+    return withAct({ id: 'vam', lv: 'bad', icon: T(S, 'advice.vam.icon'), title: T(S, 'advice.vam.title'), text: T(S, 'advice.vam.text', { 日期: G.dateStr(S.vam.due), 目标: G.fmtUsers(S.vam.target), 现在: G.fmtUsers(cur) }), go: { ltab: 'pr' } }, S, 'ads', 'hype');
   },
   function morale(S) {
-    if (S.morale >= 35 || S.staff.length < 2) return null;
-    const board = S.stage >= 2 && S.equity < 45 && !S.cd.coup, x996 = String(S.policies.work) === '996';
-    const text = `士气 ${num(S.morale)}，团队产出在打折${S.morale < 25 ? '，每个月都可能有人提离职' : '，低于 25 就会有人跑路'}。${x996 ? '「996」每个月还在磨士气。' : ''}${board ? `你只剩 ${num(S.equity)}% 的股权，士气再低，董事会也要动你了。` : ''}`;
-    return withAct({ id: 'morale', lv: S.morale < 25 || (board && S.morale < 28) ? 'bad' : 'warn', icon: 'smile', title: S.morale < 25 ? '有人要跑路了' : '士气低落', text, go: { ltab: 'team' } }, S, 'teambuild', 'pie');
+    if (S.morale >= P['advice.morale.line'] || S.staff.length < P['advice.morale.staff']) return null;
+    const board = S.stage >= P['coup.stage'] && S.equity < P['coup.equity'] && !S.cd.coup, x996 = String(S.policies.work) === '996', quit = S.morale < P['morale.quitLine'];
+    const body = T(S, 'advice.morale.text', {
+      士气: num(S.morale), 离职: quit ? T(S, 'advice.morale.quitting') : T(S, 'advice.morale.quitLine', { 离职线: P['morale.quitLine'] }),
+      加班: x996 ? T(S, 'advice.morale.x996') : '', 董事会: board ? T(S, 'advice.morale.board', { 股权: num(S.equity) }) : '',
+    });
+    return withAct({ id: 'morale', lv: quit || (board && S.morale < P['coup.morale']) ? 'bad' : 'warn', icon: T(S, 'advice.morale.icon'), title: T(S, quit ? 'advice.morale.title.quit' : 'advice.morale.title'), text: body, go: { ltab: 'team' } }, S, 'teambuild', 'pie');
   },
   function coup(S) {
-    if (S.stage < 2 || S.equity >= 45 || S.cd.coup || S.rep >= 34) return null;
-    return withAct({ id: 'coup', lv: S.rep < 30 ? 'bad' : 'warn', icon: 'pie', title: '董事会在嘀咕', text: `你只剩 ${num(S.equity)}% 的股权，口碑又跌到 ${num(S.rep)}，董事会随时可能换掉你。先把口碑拉回来。`, go: { ltab: 'pr' } }, S, 'goodpr');
+    if (S.stage < P['coup.stage'] || S.equity >= P['coup.equity'] || S.cd.coup || S.rep >= P['advice.coup.rep']) return null;
+    return withAct({ id: 'coup', lv: S.rep < P['coup.rep'] ? 'bad' : 'warn', icon: T(S, 'advice.coup.icon'), title: T(S, 'advice.coup.title'), text: T(S, 'advice.coup.text', { 股权: num(S.equity), 口碑: num(S.rep) }), go: { ltab: 'pr' } }, S, 'goodpr');
   },
   // ── 机会与闲置 ──
   function sprint(S) {
     const r = !S.sprint && avail(S, 'sprint');
     if (!r) return null;
     const left = FEATURES.filter(f => !S.feats.includes(f.id)).length, just = S.featDone?.t === S.t - 1 ? FEAT[S.featDone.id] : null;
-    return { id: 'sprint', lv: 'gold', icon: 'puzzle', title: just ? '功能上线了，开下一个' : '研发组闲着', text: `${just ? `「${just.name}」已经上线。` : '现在没有在开发的功能。'}工程师闲着也是闲着——开一个功能冲刺，从三份需求里挑一个（还有 ${left} 个功能没做）。`, act: 'sprint', later: r.later };
+    return { id: 'sprint', lv: 'gold', icon: T(S, 'advice.sprint.icon'), title: T(S, just ? 'advice.sprint.title.done' : 'advice.sprint.title'), text: T(S, 'advice.sprint.text', { 开头: just ? T(S, 'advice.sprint.done', { 功能: just.name }) : T(S, 'advice.sprint.none'), 剩下: left }), act: 'sprint', later: r.later };
   },
   function release(S) {
     const r = avail(S, 'release');
     if (!r) return null;
     const cap = G.myCap(S), cur = S.model?.cap, top = Math.max(...S.rivals.map(x => x.bench));
-    return { id: 'release', lv: 'gold', icon: 'rocket', title: '丹炉可以出炉了', text: `火候 ${cap.toFixed(1)}，${cur != null ? `比现役模型的 ${cur.toFixed(1)} 高出 ${(cap - cur).toFixed(1)}` : '还没有发布过模型'}。榜首跑分 ${top.toFixed(1)}，发布新模型能冲一波榜单和热度。`, act: 'release', later: r.later };
+    const vs = cur != null ? T(S, 'advice.release.vs', { 现役: cur.toFixed(1), 高出: (cap - cur).toFixed(1) }) : T(S, 'advice.release.first');
+    return { id: 'release', lv: 'gold', icon: T(S, 'advice.release.icon'), title: T(S, 'advice.release.title'), text: T(S, 'advice.release.text', { 火候: cap.toFixed(1), 对比: vs, 榜首: top.toFixed(1) }), act: 'release', later: r.later };
   },
   function ipo(S) {
     const r = avail(S, 'ipo');
     if (!r) return null;
     const d = worstCrime(S);
-    if (d) return withAct({ id: 'ipo', lv: 'gold', icon: 'bell', title: '上市前先洗白', text: `上市条件齐了，但保险柜里还有涉嫌违法的「${d.name}」。审计师翻出来就会被否，材料还会被移交有关部门。先洗白，再去敲钟。`, go: { rtab: 'safe' } }, S, 'wash');
-    return { id: 'ipo', lv: 'gold', icon: 'bell', title: '可以申请上市了', text: `D 轮融完、连续盈利 ${S.streak.profit} 个月、业绩系数 ${G.perf(S).toFixed(2)}，上市条件齐了。审计师会把保险柜翻个底朝天${S.dirt.length ? `，里面还有 ${S.dirt.length} 张黑料` : ''}。`, act: 'ipo', later: r.later };
+    if (d) return withAct({ id: 'ipo', lv: 'gold', icon: T(S, 'advice.ipo.icon'), title: T(S, 'advice.ipo.title.wash'), text: T(S, 'advice.ipo.text.wash', { 黑料: d.name }), go: { rtab: 'safe' } }, S, 'wash');
+    return { id: 'ipo', lv: 'gold', icon: T(S, 'advice.ipo.icon'), title: T(S, 'advice.ipo.title'), text: T(S, 'advice.ipo.text', { 轮次: STAGES[LAST_ROUND].name, 月数: S.streak.profit, 业绩: G.perf(S).toFixed(2), 黑料: S.dirt.length ? T(S, 'advice.ipo.dirt', { 张数: S.dirt.length }) : '' }), act: 'ipo', later: r.later };
   },
   // 融资不是越多越好：每轮都稀释股权。只在「钱快不够了」或者「业绩达标、离上一轮够久、股权还宽裕」时提醒
   function raise(S) {
-    const r = S.stage < 5 && avail(S, 'raise'), pf = G.perf(S), rw = G.runway(S);
-    if (!r || pf < 0.9 || rw < 4) return null;                                         // 缺钱的时候由 cash 那条提醒
-    const short = rw < 12, ripe = pf >= 1 && S.t - S.lastRaiseT >= 10 && S.equity >= 40;
+    const r = S.stage < LAST_ROUND && avail(S, 'raise'), pf = G.perf(S), rw = G.runway(S);
+    if (!r || pf < P['advice.raise.perf'] || rw < P['advice.cash.runway']) return null;                  // 缺钱的时候由 cash 那条提醒
+    const short = rw < P['advice.raise.short'], ripe = pf >= P['advice.raise.ripePerf'] && S.t - S.lastRaiseT >= P['advice.raise.gap'] && S.equity >= P['advice.raise.equity'];
     if (!short && !ripe) return null;
-    const chain = S.ideo?.on, after = S.equity * 0.85;                                 // 路线之争终局要握住四成股权
-    if (chain && after < 40 && !short) return null;                                    // 钱又不急，就别劝他融这一轮
-    const name = STAGES[S.stage + 1].name, eq = num(S.equity);
-    const why = short ? `账上的钱还能撑 ${Math.floor(rw)} 个月，趁业绩系数 ${pf.toFixed(2)} 还过得去，把下一轮融了。` : `业绩系数 ${pf.toFixed(2)}，已经达标，现在估值最好看。`;
-    return { id: 'raise', lv: 'gold', icon: 'handshake', title: `能融${/^[A-Z]/.test(name) ? ' ' : ''}${name}了`, text: `${why}路演能拿到三份报价，估值基准约 ${G.money(S, G.valuation(S))}。每轮要让出 12%–25% 的股权（你现在 ${eq}%${eq < 55 ? '，低于 45% 董事会就敢动你' : ''}）。${chain ? `路线之争终局时你得握有四成股权，融完这一轮大约只剩 ${num(after)}%。` : ''}${S.raiseBoost < 0.15 && avail(S, 'roadshow') ? '想把估值再抬一点，可以先做几次「路演预热」。' : ''}`, act: 'raise', later: r.later };
+    const chain = S.ideo?.on, after = S.equity * P['advice.raise.dilute'];                              // 路线之争终局要握住四成股权
+    if (chain && after < P['ideo.equity'] && !short) return null;                                       // 钱又不急，就别劝他融这一轮
+    const name = STAGES[S.stage + 1].name, eq = num(S.equity), pfs = pf.toFixed(2);
+    const why = short ? T(S, 'advice.raise.why.short', { 月数: Math.floor(rw), 业绩: pfs }) : T(S, 'advice.raise.why.ripe', { 业绩: pfs });
+    const body = T(S, 'advice.raise.text', {
+      理由: why, 估值: G.money(S, G.valuation(S)), 最少: SHARE[0], 最多: SHARE[1], 股权: eq,
+      董事会: eq < P['advice.raise.boardWarn'] ? T(S, 'advice.raise.board', { 逼宫线: P['coup.equity'] }) : '',
+      路线之争: chain ? T(S, 'advice.raise.ideo', { 剩下: num(after) }) : '',
+      预热: S.raiseBoost < P['advice.raise.boost'] && avail(S, 'roadshow') ? T(S, 'advice.raise.roadshow') : '',
+    });
+    return { id: 'raise', lv: 'gold', icon: T(S, 'advice.raise.icon'), title: T(S, 'advice.raise.title', { 轮次: (/^[A-Z]/.test(name) ? ' ' : '') + name }), text: body, act: 'raise', later: r.later };
   },
   function office(S) {
     const cap = G.teamCap(S);
     if (S.staff.length < cap) return null;
     const r = avail(S, 'office');
-    if (!r || G.runway(S) < 6 || S.cash < 2 * ACT.office.cost(S)) return null;
+    if (!r || G.runway(S) < P['advice.office.runway'] || S.cash < P['advice.office.cash'] * ACT.office.cost(S)) return null;
     const nx = S.co.office + 1, O = OFFICES[nx], extra = cap - OFFICES[S.co.office].cap;
-    return { id: 'office', lv: 'gold', icon: 'building', title: '工位坐满了', text: `团队 ${S.staff.length}/${cap} 人，再招人得先换地方：搬进「${officeName(S, nx)}」能坐 ${O.cap + extra} 人，月租 ${G.money(S, O.rent * G.mod(S, 'rentMult'))}。`, act: 'office', later: r.later };
+    return { id: 'office', lv: 'gold', icon: T(S, 'advice.office.icon'), title: T(S, 'advice.office.title'), text: T(S, 'advice.office.text', { 人数: S.staff.length, 上限: cap, 办公室: officeName(S, nx), 新上限: O.cap + extra, 月租: G.money(S, O.rent * G.mod(S, 'rentMult')) }), act: 'office', later: r.later };
   },
   function hire(S) {
     const cap = G.teamCap(S), n = S.staff.length;
-    if (n >= cap || !S.cands.length || (netOf(S) < 0 && G.runway(S) < 8)) return null;
+    if (n >= cap || !S.cands.length || (netOf(S) < 0 && G.runway(S) < P['advice.hire.runway'])) return null;
     const has = role => S.staff.some(e => e.role === role), best = list => list.slice().sort((a, b) => b.skill - a.skill)[0];
     const need = S.ownModel && !has('res') ? 'res' : !has('eng') ? 'eng' : null;
     const forNeed = need && best(S.cands.filter(c => c.role === need));
-    const star = best(S.cands.filter(c => c.quirk === 'genius' || (c.skill >= 8 && c.quirk !== 'guanxi' && c.quirk !== 'moyu')));
-    const c = forNeed || star || (n < 3 ? best(S.cands) : null);
-    if (!c || S.cash < 3 * c.salary * G.mod(S, 'salaryMult')) return null;
-    const why = forNeed ? (need === 'res' ? '丹炉要靠研究员才炼得快。' : '产品体验和功能开发都靠工程师。') : '';
-    return { id: 'hire', lv: 'gold', icon: 'search_user', title: forNeed ? `还缺${ROLES[need].name}` : star ? '有个难得的人才' : '还有空工位', text: `团队 ${n}/${cap} 人。${why}候选人里有 ${c.name}（${ROLES[c.role].name}，能力 ${c.skill}${c.quirk ? `，${STAFF_QUIRKS[c.quirk].name}` : ''}），点名字能看到具体能带来什么。`, go: { ltab: 'team' }, hl: `who:${c.uid}`, later: S.ap < 1 };
+    const star = best(S.cands.filter(c => c.quirk === 'genius' || (c.skill >= P['advice.hire.star'] && c.quirk !== 'guanxi' && c.quirk !== 'moyu')));
+    const c = forNeed || star || (n < P['advice.hire.small'] ? best(S.cands) : null);
+    if (!c || S.cash < P['advice.hire.cash'] * c.salary * G.mod(S, 'salaryMult')) return null;
+    const why = forNeed ? T(S, need === 'res' ? 'advice.hire.why.res' : 'advice.hire.why.eng') : '';
+    const title = forNeed ? T(S, 'advice.hire.title.need', { 岗位: ROLES[need].name }) : star ? T(S, 'advice.hire.title.star') : T(S, 'advice.hire.title');
+    const body = T(S, 'advice.hire.text', { 人数: n, 上限: cap, 理由: why, 名字: c.name, 岗位: ROLES[c.role].name, 能力: c.skill, 怪癖: c.quirk ? T(S, 'advice.hire.quirk', { 怪癖: STAFF_QUIRKS[c.quirk].name }) : '' });
+    return { id: 'hire', lv: 'gold', icon: T(S, 'advice.hire.icon'), title, text: body, go: { ltab: 'team' }, hl: `who:${c.uid}`, later: S.ap < 1 };
   },
   function furnace(S) {
     if (!S.ownModel || !S.furnace?.on) return null;
-    const need = G.inferNeed(S), q = G.quota(S), rw = G.runway(S);
+    const need = G.inferNeed(S), q = G.quota(S), rw = G.runway(S), icon = T(S, 'advice.furnace.icon');
     if (need > S.gpu || S.gpu >= q) return null;                                // 不够推理由 outage 那条提醒；配额用满了就没什么可说的
-    if (S.gpu === need && rw >= 6) return { id: 'furnace', lv: 'gold', icon: 'furnace', title: '丹炉是凉的', text: S.gpu ? `显卡全用在推理上了，丹炉没在炼，火候不会涨。去「经营」多租几张卡（配额还空着 ${q - S.gpu} 张）。` : `一张显卡都没租，丹炉没在炼，火候不会涨。去「经营」租几张卡（配额 ${q} 张）。`, go: { ltab: 'ops' }, hl: 'gpu:+' };
-    if (S.gpu < q * 0.5 && rw >= 18 && S.cash >= (q - S.gpu) * G.gpuPrice(S) * 6) return { id: 'furnace', lv: 'gold', icon: 'furnace', title: '显卡还能多租', text: `配额 ${q} 张只租了 ${S.gpu} 张，账上的钱撑得住。多租点卡，火候涨得更快，下次发布更有底气。`, go: { ltab: 'ops' }, hl: 'gpu:+' };
+    if (S.gpu === need && rw >= P['advice.furnace.runway']) return { id: 'furnace', lv: 'gold', icon, title: T(S, 'advice.furnace.title.cold'), text: S.gpu ? T(S, 'advice.furnace.text.cold', { 空着: q - S.gpu }) : T(S, 'advice.furnace.text.none', { 配额: q }), go: { ltab: 'ops' }, hl: 'gpu:+' };
+    if (S.gpu < q * P['advice.furnace.half'] && rw >= P['advice.furnace.rich'] && S.cash >= (q - S.gpu) * G.gpuPrice(S) * P['advice.furnace.months']) return { id: 'furnace', lv: 'gold', icon, title: T(S, 'advice.furnace.title.more'), text: T(S, 'advice.furnace.text.more', { 配额: q, 租了: S.gpu }), go: { ltab: 'ops' }, hl: 'gpu:+' };
     return null;
   },
   function selfdev(S) {
     const r = avail(S, 'selfdev');
-    if (!r || G.runway(S) < 10 || S.cash < 3 * ACT.selfdev.cost(S)) return null;
-    return { id: 'selfdev', lv: 'gold', icon: 'target', title: '可以自研模型了', text: `已经融到 ${STAGES[S.stage].name}，可以组建炼丹团队，摆脱上游 ${G.rivalOf(S, S.upstream)?.name || ''}。之后要自己租显卡、招研究员，每月成本会涨一截，但产品的天花板不再受制于人。`, act: 'selfdev', later: r.later };
+    if (!r || G.runway(S) < P['advice.selfdev.runway'] || S.cash < P['advice.selfdev.cash'] * ACT.selfdev.cost(S)) return null;
+    return { id: 'selfdev', lv: 'gold', icon: T(S, 'advice.selfdev.icon'), title: T(S, 'advice.selfdev.title'), text: T(S, 'advice.selfdev.text', { 轮次: STAGES[S.stage].name, 上游: G.rivalOf(S, S.upstream)?.name || '' }), act: 'selfdev', later: r.later };
   },
   // ── 留意 ──
   function premium(S) {                                                         // 超出配额的卡在按现货价烧钱：提醒去要配额
     const over = S.gpu - G.quota(S);
     if (over <= 0) return null;
     const extra = G.gpuRent(S) - S.gpu * G.gpuPrice(S);
-    return onlyIfAct(withAct({ id: 'premium', lv: 'warn', icon: 'gpu', title: '显卡在吃溢价', text: `有 ${over} 张卡超出配额、按现货价在租，每月比按市价多花 ${G.money(S, extra)}。找皮衣教主要点配额，这笔钱就能省下来。`, go: { ltab: 'ops' } }, S, 'beg'));
+    return onlyIfAct(withAct({ id: 'premium', lv: 'warn', icon: T(S, 'advice.premium.icon'), title: T(S, 'advice.premium.title'), text: T(S, 'advice.premium.text', { 张数: over, 多花: G.money(S, extra) }), go: { ltab: 'ops' } }, S, 'beg'));
   },
   function reg(S) {
-    if (S.reg < 70) return null;
-    return withAct({ id: 'reg', lv: S.reg >= 88 ? 'bad' : 'warn', icon: 'bank', title: S.reg >= 88 ? '监管要动手了' : '监管压力大', text: `监管压力 ${num(S.reg)}：增长受限、合规成本上升，到 100 会吃一记重锤。${S.policies.safety === 'loose' ? '安全审核还是「放飞自我」，压力每月都在猛涨。' : ''}`, go: { ltab: 'cap' } }, S, 'lobby', 'goodpr');
+    if (S.reg < P['reg.high']) return null;
+    const bad = S.reg >= P['advice.reg.bad'];
+    return withAct({ id: 'reg', lv: bad ? 'bad' : 'warn', icon: T(S, 'advice.reg.icon'), title: T(S, bad ? 'advice.reg.title.bad' : 'advice.reg.title'), text: T(S, 'advice.reg.text', { 压力: num(S.reg), 审核: S.policies.safety === 'loose' ? T(S, 'advice.reg.loose') : '' }), go: { ltab: 'cap' } }, S, 'lobby', 'goodpr');
   },
   function x996(S) {
-    if (String(S.policies.work) !== '996' || S.streak.x996 % 8 !== 7) return null;
-    return { id: 'x996', lv: 'warn', icon: 'clock', title: '996 要出事了', text: `已经连续 996 ${S.streak.x996} 个月。再熬一个月，保险柜里就会多一张「${DIRT.overwork.name}」。`, go: { ltab: 'ops' }, hl: 'pol:work:965' };
+    if (String(S.policies.work) !== '996' || S.streak.x996 % P['work.dirtMonths'] !== P['work.dirtMonths'] - 1) return null;     // 再熬一个月就留黑料
+    return { id: 'x996', lv: 'warn', icon: T(S, 'advice.x996.icon'), title: T(S, 'advice.x996.title'), text: T(S, 'advice.x996.text', { 月数: S.streak.x996, 黑料: DIRT.overwork.name }), go: { ltab: 'ops' }, hl: 'pol:work:965' };
   },
   function dirt(S) {
-    if (!S.dirt.length || (S.exposedCrime >= 25 && worstCrime(S))) return null;           // 经侦那条更急
+    if (!S.dirt.length || (S.exposedCrime >= P['advice.crime.from'] && worstCrime(S))) return null;   // 经侦那条更急
     const risk = G.leakRisk(S);                                                          // 月底至少爆一张的概率
-    if (risk < 0.08) return null;
+    if (risk < P['advice.dirt.risk']) return null;
     const d = S.dirt.slice().sort((a, b) => b.sev - a.sev)[0];
-    return withAct({ id: 'dirt', lv: risk >= 0.2 ? 'bad' : 'warn', icon: 'safe', title: '黑料随时会爆', text: `保险柜里 ${S.dirt.length} 张黑料，按现在的热度和用户量，每个月约有 ${num(risk * 100)}% 的概率被扒出一张。最重的是「${d.name}」（严重度 ${num(d.sev)}）。洗掉它，或者招个法务公关压一压。`, go: { rtab: 'safe' } }, S, 'wash');
+    return withAct({ id: 'dirt', lv: risk >= P['advice.dirt.bad'] ? 'bad' : 'warn', icon: T(S, 'advice.dirt.icon'), title: T(S, 'advice.dirt.title'), text: T(S, 'advice.dirt.text', { 张数: S.dirt.length, 概率: num(risk * 100), 黑料: d.name, 严重度: num(d.sev) }), go: { rtab: 'safe' } }, S, 'wash');
   },
-  S => (S.hype < 10 && S.t > 6 ? onlyIfAct(withAct({ id: 'hype', lv: 'warn', icon: 'flame', title: '没人记得你了', text: `热度只剩 ${num(S.hype)}，拉新和估值都在往下掉。` }, S, 'hype')) : null),
-  S => (S.rep < 30 ? onlyIfAct(withAct({ id: 'rep', lv: 'warn', icon: 'star', title: '口碑太差', text: `口碑 ${num(S.rep)}：用户留存和付费都在变差。做公益、发白皮书能补一点，☠ 捷径就先别走了。` }, S, 'goodpr')) : null),
+  S => (S.hype < P['advice.hype.line'] && S.t > P['advice.hype.from'] ? onlyIfAct(withAct({ id: 'hype', lv: 'warn', icon: T(S, 'advice.hype.icon'), title: T(S, 'advice.hype.title'), text: T(S, 'advice.hype.text', { 热度: num(S.hype) }) }, S, 'hype')) : null),
+  S => (S.rep < P['advice.rep.line'] ? onlyIfAct(withAct({ id: 'rep', lv: 'warn', icon: T(S, 'advice.rep.icon'), title: T(S, 'advice.rep.title'), text: T(S, 'advice.rep.text', { 口碑: num(S.rep) }) }, S, 'goodpr')) : null),
   // ── 路线之争 ──
-  function ideoEquity(S) {                                                      // 终局时股权要 ≥ 40%
+  function ideoEquity(S) {                                                      // 终局时股权要 ≥ ideo.equity
     const I = S.ideo;
-    if (!I?.on || S.equity >= 44) return null;
-    const low = S.equity < 40;
-    return { id: 'ideo-equity', lv: low ? 'bad' : 'warn', icon: 'pie', title: low ? '股权不到四成了' : '股权快守不住四成', text: `路线之争还剩 ${15 - I.n} 级。终局时你得握有至少 40% 股权，否则方向由董事会替你定，成就也拿不到。现在 ${S.equity.toFixed(0)}%：这段时间少融资；链里股权低于 45% 时会出现「回购」选项。`, go: { ltab: 'ideo' } };
+    if (!I?.on || S.equity >= P['advice.ideo.equity']) return null;
+    const low = S.equity < P['ideo.equity'];
+    return { id: 'ideo-equity', lv: low ? 'bad' : 'warn', icon: T(S, 'advice.ideoEquity.icon'), title: T(S, low ? 'advice.ideoEquity.title.low' : 'advice.ideoEquity.title'), text: T(S, 'advice.ideoEquity.text', { 级数: IDEO_LEN - I.n, 底线: P['ideo.equity'], 股权: S.equity.toFixed(0), 回购线: P['ideo.equityWarn'] }), go: { ltab: 'ideo' } };
   },
   function ideoNew(S) {                                                         // 刚走完：告诉玩家意识形态页有东西了
     const I = S.ideo;
-    if (!I?.result || I.result === 'fail' || S.t - I.tEnd > 3) return null;
-    const red = I.result === 'red', us = I.v === 'us';
-    const text = us
-      ? (red ? '公司走上了「共享繁荣」（嘴上照样不承认是社会主义）：「社区动员」「合作社住房实验」「登月计划」「无指责复盘会」都在「意识形态」页。' : '公司宣布「我们是一家公司」：「强制排名」「脑机实验」「股票回购」「效率之年」都在「意识形态」页。')
-      : (red ? '公司走上了红色路线：「公开动员」「乌托邦社区实验」「五年计划」「自我批评会」都在「意识形态」页。' : '公司决定警惕乌托邦：「末位淘汰」「脑机实验」「股票回购」「降本增效」都在「意识形态」页。');
-    return onlyIfAct(withAct({ id: 'ideo-new', lv: 'gold', icon: 'flag', title: '意识形态页有新行动', text, go: { ltab: 'ideo' } }, S, red ? 'mobilize' : 'yank', red ? 'plan' : 'buyback'));
+    if (!I?.result || I.result === 'fail' || S.t - I.tEnd > P['advice.ideo.newMonths']) return null;
+    const red = I.result === 'red';
+    const body = text(red ? 'advice.ideoNew.red' : 'advice.ideoNew.cap', null, I.v === 'us');    // 两个版本解锁的行动不一样：「湾区文本」是湾区版
+    return onlyIfAct(withAct({ id: 'ideo-new', lv: 'gold', icon: T(S, 'advice.ideoNew.icon'), title: T(S, 'advice.ideoNew.title'), text: body, go: { ltab: 'ideo' } }, S, red ? 'mobilize' : 'yank', red ? 'plan' : 'buyback'));
   },
   function ideoHeat(S) {                                                        // 湾区：反共压力太大
     const I = S.ideo;
-    if (I?.v !== 'us' || !(I.on || I.result === 'red') || (I.heat || 0) < 60) return null;
-    const r = Math.round(I.heat / 6), b = Math.round(I.heat / 4);
-    return { id: 'ideo-heat', lv: I.heat >= 80 ? 'bad' : 'warn', icon: 'warning', title: '反共压力很大', text: `反共压力 ${Math.round(I.heat)}：融资估值 -${r}%、企业订单 -${b}%${I.on ? '，社会主义条每月还会被磨掉一点' : ''}。资本主义的选项，和红色恐慌事件里那句「我们不是社会主义」，都能压一压。`, go: { ltab: 'ideo' } };
+    if (!hasHeat(I?.v) || !(I.on || I.result === 'red') || (I.heat || 0) < P['advice.ideo.heat']) return null;
+    const r = Math.round(I.heat / (P['ideo.heat.raiseDiv'] / 100)), b = Math.round(I.heat / (P['ideo.heat.b2bDiv'] / 100));    // 和引擎里的拖累一致
+    return { id: 'ideo-heat', lv: I.heat >= P['advice.ideo.heatBad'] ? 'bad' : 'warn', icon: T(S, 'advice.ideoHeat.icon'), title: T(S, 'advice.ideoHeat.title'), text: T(S, 'advice.ideoHeat.text', { 压力: Math.round(I.heat), 估值: r, 订单: b, 磨掉: I.on ? T(S, 'advice.ideoHeat.grind') : '' }), go: { ltab: 'ideo' } };
   },
 ];
 
@@ -199,10 +220,10 @@ export function advise(S) {
   for (const rule of RULES) for (const h of [].concat(rule(S) || [])) if (h && !(mute[h.id] > S.t)) out.push(h);
   return out.sort((a, b) => ORDER[a.lv] - ORDER[b.lv] || (a.later ? 1 : 0) - (b.later ? 1 : 0));
 }
-// 「先别提醒」：急事只静音到下个月，其他的静音 3 个月
+// 「先别提醒」：急事只静音到下个月，其他的静音久一点
+export const muteMonths = h => (h.lv === 'bad' ? P['advice.mute.bad'] : P['advice.mute.other']);
 export function muteHint(S, h) {
   const m = (S.hintMute ??= {});
   for (const k in m) if (m[k] <= S.t) delete m[k];
-  m[h.id] = S.t + (h.lv === 'bad' ? 1 : 3);
+  m[h.id] = S.t + muteMonths(h);
 }
-export const muteMonths = h => (h.lv === 'bad' ? 1 : 3);

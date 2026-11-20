@@ -52,7 +52,7 @@
  "ATTRS":[
   {"id":"tech","name":"技术","icon":"🧠","desc":"炼丹效率、亲自写代码的效果"},
   {"id":"cha","name":"口才","icon":"🎤","desc":"融资估值、炒作、舌战群儒"},
-  {"id":"mgmt","name":"管理","icon":"📋","desc":"团队人数上限；9 点起每月多 1 行动点"},
+  {"id":"mgmt","name":"管理","icon":"📋","desc":"团队人数上限；{ap.mgmtLine} 点起每月多 {ap.mgmtBonus} 行动点"},
   {"id":"biz","name":"商业","icon":"💼","desc":"收入、谈判、企业订单"},
   {"id":"net","name":"人脉","icon":"🤝","desc":"招人质量、拿卡、摆平麻烦"},
   {"id":"luck","name":"运气","icon":"🍀","desc":"一切赌一把的事"}
@@ -66,7 +66,7 @@
    "tagline":"钱多、人贵、故事值钱",
    "cash":170,
    "quota":50,
-   "desc":["融资估值 +20%","工资 ×1.4，房租 ×1.6","显卡敞开供应","国会山随时请你喝茶"],
+   "desc":["融资估值 {融资估值}","工资 {工资:×}，房租 {房租:×}","显卡敞开供应","国会山随时请你喝茶"],
    "mods":{"raiseMult":1.2,"salaryMult":1.4,"rentMult":1.6}
   },
   "sz":{
@@ -77,13 +77,19 @@
    "tagline":"人卷、货全、来了就是深圳人",
    "cash":120,
    "quota":32,
-   "desc":["工资 ×0.75，房租 ×0.8","团队产出 +10%（卷）","高端显卡受管制：配额低、价格 +20%","补贴与备案齐飞"],
+   "desc":["工资 {工资:×}，房租 {房租:×}","团队产出 {团队产出}（卷）","高端显卡受管制：配额低、价格 {显卡价格}","补贴与备案齐飞"],
    "mods":{"salaryMult":0.75,"rentMult":0.8,"outputMult":1.1,"gpuPriceMult":1.2}
   }
  },
  "ROUTES":{
   "model":{"id":"model","name":"炼丹派","icon":"⚗️","sub":"自己训练基础模型","desc":["开局自带一个开源微调的小模型和一座丹炉","烧卡如烧钱，但上限是 AGI","可以冲榜单、卖 API"]},
-  "app":{"id":"app","name":"套壳派","icon":"🥚","sub":"在别人的模型上做应用","desc":["开局自带已上线的产品和 2 万用户，产品开发 +15%","不用抢显卡，来钱快","命门捏在上游手里；融到 A 轮后可立项自研"]}
+  "app":{
+   "id":"app",
+   "name":"套壳派",
+   "icon":"🥚",
+   "sub":"在别人的模型上做应用",
+   "desc":["开局自带已上线的产品和 {start.usersApp} 万用户，产品开发 {dev.appMult:增}","不用抢显卡，来钱快","命门捏在上游手里；融到 A 轮后可立项自研"]
+  }
  },
  "TRACKS":{
   "chat":{"id":"chat","name":"通用助手","icon":"💬","cap":60000,"arpu":0.6,"infer":0.5,"growth":1,"desc":"市场最大也最卷，拼的是模型能力"},
@@ -93,28 +99,36 @@
  },
  "TRAITS":{
   "edu":[
-   {"id":"yao","name":"五道口天才班","icon":"🎓","desc":"技术 +2；招到的人更强","attr":{"tech":2},"mods":{"hireSkill":0.6}},
-   {"id":"dropout","name":"湾区名校辍学","icon":"🚪","desc":"口才 +2，技术 -1；融资估值 +10%","attr":{"cha":2,"tech":-1},"mods":{"raiseMult":1.1}},
-   {"id":"phd","name":"海归博士","icon":"📜","desc":"技术 +1，人脉 +1；开局口碑 +10","attr":{"tech":1,"net":1},"start":{"rep":10}},
+   {"id":"yao","name":"五道口天才班","icon":"🎓","desc":"技术 {技术}；招到的人更强","attr":{"tech":2},"mods":{"hireSkill":0.6}},
+   {"id":"dropout","name":"湾区名校辍学","icon":"🚪","desc":"口才 {口才}，技术 {技术}；融资估值 {融资估值}","attr":{"cha":2,"tech":-1},"mods":{"raiseMult":1.1}},
+   {"id":"phd","name":"海归博士","icon":"📜","desc":"技术 {技术}，人脉 {人脉}；开局口碑 {口碑}","attr":{"tech":1,"net":1},"start":{"rep":10}},
    {
     "id":"shuangfei",
     "name":"双非逆袭",
     "icon":"🔥",
-    "desc":"运气 +2，管理 +1；总成本 -8%；开局口碑 -5",
+    "desc":"运气 {运气}，管理 {管理}；总成本 {总成本}；开局口碑 {口碑}",
     "attr":{"luck":2,"mgmt":1},
     "mods":{"costMult":0.92},
     "start":{"rep":-5}
    },
-   {"id":"bootcamp","name":"三个月速成班","icon":"⏱️","desc":"商业 +2；产品开发 +20%，炼丹 -15%","cost":2,"attr":{"biz":2},"mods":{"devMult":1.2,"researchMult":0.85}}
+   {
+    "id":"bootcamp",
+    "name":"三个月速成班",
+    "icon":"⏱️",
+    "desc":"商业 {商业}；产品开发 {产品开发}，炼丹 {炼丹效率}",
+    "cost":2,
+    "attr":{"biz":2},
+    "mods":{"devMult":1.2,"researchMult":0.85}
+   }
   ],
   "bg":[
-   {"id":"bigtech","name":"大厂高 P","icon":"🏢","desc":"管理 +2；开局带 2 名老部下","attr":{"mgmt":2},"start":{"staff":["eng","ops"]}},
-   {"id":"lab","name":"前 OpenBI 研究员","icon":"🧪","desc":"技术 +2；开局模型更强；自带黑料「带走前东家机密」","attr":{"tech":2},"start":{"tech":5,"dirt":"nda"}},
+   {"id":"bigtech","name":"大厂高 P","icon":"🏢","desc":"管理 {管理}；开局带 2 名老部下","attr":{"mgmt":2},"start":{"staff":["eng","ops"]}},
+   {"id":"lab","name":"前 OpenBI 研究员","icon":"🧪","desc":"技术 {技术}；开局模型更强；自带黑料「带走前东家机密」","attr":{"tech":2},"start":{"tech":5,"dirt":"nda"}},
    {
     "id":"serial",
     "name":"连续创业者",
     "icon":"♻️",
-    "desc":"口才 +2；开局资金 +80；上个项目的烂账还在",
+    "desc":"口才 {口才}；开局资金 {现金}；上个项目的烂账还在",
     "attr":{"cha":2},
     "start":{"cash":80,"dirt":{"type":"cook_books","sev":10,"name":"上个项目的烂账"}}
    },
@@ -122,7 +136,7 @@
     "id":"hqb",
     "name":"华强北档口老板",
     "icon":"🔌",
-    "desc":"人脉 +1，商业 +1；显卡价格 -20%，配额 +30%",
+    "desc":"人脉 {人脉}，商业 {商业}；显卡价格 {显卡价格}，配额 {显卡配额}",
     "attr":{"net":1,"biz":1},
     "mods":{"gpuPriceMult":0.8,"quotaMult":1.3}
    },
@@ -130,39 +144,47 @@
     "id":"influencer",
     "name":"科技博主",
     "icon":"📱",
-    "desc":"口才 +1；开局热度 +25、用户 +3 万；炒作效果 +25%",
+    "desc":"口才 {口才}；开局热度 {热度}、用户 {用户} 万；炒作效果 {炒作效果}",
     "attr":{"cha":1},
     "mods":{"hypeGainMult":1.25},
     "start":{"hype":25,"users":3}
    },
-   {"id":"rich","name":"家里有矿","icon":"💎","desc":"开局资金 ×3；口碑 -8；士气每月 -0.5","cost":3,"mods":{"moraleAdd":-0.5},"start":{"cashMult":3,"rep":-8}},
-   {"id":"quant","name":"量化交易员","icon":"📈","desc":"商业 +2，运气 +1；收入 +8%","cost":4,"attr":{"biz":2,"luck":1},"mods":{"revMult":1.08}}
+   {
+    "id":"rich",
+    "name":"家里有矿",
+    "icon":"💎",
+    "desc":"开局资金 {现金倍数:×}；口碑 {口碑}；士气每月 {月士气}",
+    "cost":3,
+    "mods":{"moraleAdd":-0.5},
+    "start":{"cashMult":3,"rep":-8}
+   },
+   {"id":"quant","name":"量化交易员","icon":"📈","desc":"商业 {商业}，运气 {运气}；收入 {收入}","cost":4,"attr":{"biz":2,"luck":1},"mods":{"revMult":1.08}}
   ],
   "quirk":[
    {"id":"none","name":"普通人","icon":"🙂","desc":"没有怪癖，也是一种怪癖"},
-   {"id":"juan","name":"卷王","icon":"🌙","desc":"每月行动点 +1；士气每月 -1","mods":{"apAdd":1,"moraleAdd":-1}},
-   {"id":"huyou","name":"大忽悠","icon":"🎈","desc":"炒作效果 +30%；黑料更重 +25%","mods":{"hypeGainMult":1.3,"dirtGainMult":1.25}},
-   {"id":"geek","name":"社恐技术宅","icon":"🦔","desc":"技术 +2，口才 -2；炼丹 +10%","attr":{"tech":2,"cha":-2},"mods":{"researchMult":1.1}},
-   {"id":"foxi","name":"佛系","icon":"🍵","desc":"士气每月 +1.5；团队产出 -8%","mods":{"moraleAdd":1.5,"outputMult":0.92}},
-   {"id":"gambler","name":"赌徒","icon":"🎲","desc":"运气 +3；但所有属性检定 -1","cost":4,"attr":{"luck":3},"mods":{"checkAdd":-1}}
+   {"id":"juan","name":"卷王","icon":"🌙","desc":"每月行动点 {行动点}；士气每月 {月士气}","mods":{"apAdd":1,"moraleAdd":-1}},
+   {"id":"huyou","name":"大忽悠","icon":"🎈","desc":"炒作效果 {炒作效果}；黑料更重 {黑料加重}","mods":{"hypeGainMult":1.3,"dirtGainMult":1.25}},
+   {"id":"geek","name":"社恐技术宅","icon":"🦔","desc":"技术 {技术}，口才 {口才}；炼丹 {炼丹效率}","attr":{"tech":2,"cha":-2},"mods":{"researchMult":1.1}},
+   {"id":"foxi","name":"佛系","icon":"🍵","desc":"士气每月 {月士气}；团队产出 {团队产出}","mods":{"moraleAdd":1.5,"outputMult":0.92}},
+   {"id":"gambler","name":"赌徒","icon":"🎲","desc":"运气 {运气}；但所有属性检定 {检定加值}","cost":4,"attr":{"luck":3},"mods":{"checkAdd":-1}}
   ],
   "motto":[
-   {"id":"m_allin","name":"「All in AI」","icon":"🎯","desc":"炒作效果 +10%，热度也凉得更快","mods":{"hypeGainMult":1.1,"hypeDecayMult":1.1}},
-   {"id":"m_first","name":"「第一性原理」","icon":"🧱","desc":"技术 +1，口才 -1","attr":{"tech":1,"cha":-1}},
-   {"id":"m_lead","name":"「遥遥领先」","icon":"📏","desc":"每次发布跑分白送 +1.5；黑料更重 +10%","mods":{"benchAdd":1.5,"dirtGainMult":1.1}},
-   {"id":"m_long","name":"「长期主义」","icon":"🌲","desc":"士气每月 +0.8，融资估值 -5%","mods":{"moraleAdd":0.8,"raiseMult":0.95}},
-   {"id":"m_cost","name":"「降本增效」","icon":"✂️","desc":"总成本 -5%，士气每月 -0.8","mods":{"costMult":0.95,"moraleAdd":-0.8}},
-   {"id":"m_friend","name":"「交个朋友」","icon":"🤝","desc":"人脉 +1，运气 -1","attr":{"net":1,"luck":-1}}
+   {"id":"m_allin","name":"「All in AI」","icon":"🎯","desc":"炒作效果 {炒作效果}，热度也凉得更快","mods":{"hypeGainMult":1.1,"hypeDecayMult":1.1}},
+   {"id":"m_first","name":"「第一性原理」","icon":"🧱","desc":"技术 {技术}，口才 {口才}","attr":{"tech":1,"cha":-1}},
+   {"id":"m_lead","name":"「遥遥领先」","icon":"📏","desc":"每次发布跑分白送 {跑分加成}；黑料更重 {黑料加重}","mods":{"benchAdd":1.5,"dirtGainMult":1.1}},
+   {"id":"m_long","name":"「长期主义」","icon":"🌲","desc":"士气每月 {月士气}，融资估值 {融资估值}","mods":{"moraleAdd":0.8,"raiseMult":0.95}},
+   {"id":"m_cost","name":"「降本增效」","icon":"✂️","desc":"总成本 {总成本}，士气每月 {月士气}","mods":{"costMult":0.95,"moraleAdd":-0.8}},
+   {"id":"m_friend","name":"「交个朋友」","icon":"🤝","desc":"人脉 {人脉}，运气 {运气}","attr":{"net":1,"luck":-1}}
   ],
   "cofounder":[
-   {"id":"c_solo","name":"独狼","icon":"🐺","desc":"股权全是你的；所有属性检定 +1","mods":{"checkAdd":1}},
-   {"id":"c_tech","name":"技术合伙人","icon":"🧑‍🔬","desc":"开局带一名死忠的强力研究员；让出 12% 股权","start":{"staff":[{"role":"res","bonus":3}],"equity":-12}},
-   {"id":"c_sales","name":"销售合伙人","icon":"🧑‍💼","desc":"开局带一名死忠的强力商务；让出 12% 股权","start":{"staff":[{"role":"biz","bonus":3}],"equity":-12}},
+   {"id":"c_solo","name":"独狼","icon":"🐺","desc":"股权全是你的；所有属性检定 {检定加值}","mods":{"checkAdd":1}},
+   {"id":"c_tech","name":"技术合伙人","icon":"🧑‍🔬","desc":"开局带一名死忠的强力研究员；让出 {股权:去号}% 股权","start":{"staff":[{"role":"res","bonus":3}],"equity":-12}},
+   {"id":"c_sales","name":"销售合伙人","icon":"🧑‍💼","desc":"开局带一名死忠的强力商务；让出 {股权:去号}% 股权","start":{"staff":[{"role":"biz","bonus":3}],"equity":-12}},
    {
     "id":"c_roommate",
     "name":"大学室友",
     "icon":"🛏️",
-    "desc":"开局带一名死忠的工程师；士气每月 +1；让出 15% 股权",
+    "desc":"开局带一名死忠的工程师；士气每月 {月士气}；让出 {股权:去号}% 股权",
     "mods":{"moraleAdd":1},
     "start":{"staff":[{"role":"eng","bonus":3}],"equity":-15}
    },
@@ -170,56 +192,56 @@
     "id":"c_spouse",
     "name":"夫妻店",
     "icon":"💍",
-    "desc":"开局带一名死忠的运营；总成本 -5%；让出 10% 股权",
+    "desc":"开局带一名死忠的运营；总成本 {总成本}；让出 {股权:去号}% 股权",
     "mods":{"costMult":0.95},
     "start":{"staff":[{"role":"ops","bonus":3}],"equity":-10}
    }
   ],
   "seed":[
    {"id":"s_self","name":"自掏腰包","icon":"👛","desc":"没有额外的钱，也没有人管你"},
-   {"id":"s_family","name":"亲友轮","icon":"👪","desc":"开局资金 +60；每年过年被问一次进度（士气每月 -0.3）","mods":{"moraleAdd":-0.3},"start":{"cash":60}},
-   {"id":"s_incubator","name":"进孵化器","icon":"🐣","desc":"开局资金 +50、人脉 +1；让出 7% 股权","attr":{"net":1},"start":{"cash":50,"equity":-7}},
-   {"id":"s_card","name":"刷爆信用卡","icon":"💳","desc":"开局资金 +100；一年后连本带利要还","start":{"cash":100,"debt":12}},
-   {"id":"s_grant","name":"人才计划","icon":"🏅","desc":"开局资金 +80、监管压力 -5","region":"sz","start":{"cash":80,"reg":-5}},
+   {"id":"s_family","name":"亲友轮","icon":"👪","desc":"开局资金 {现金}；每年过年被问一次进度（士气每月 {月士气}）","mods":{"moraleAdd":-0.3},"start":{"cash":60}},
+   {"id":"s_incubator","name":"进孵化器","icon":"🐣","desc":"开局资金 {现金}、人脉 {人脉}；让出 {股权:去号}% 股权","attr":{"net":1},"start":{"cash":50,"equity":-7}},
+   {"id":"s_card","name":"刷爆信用卡","icon":"💳","desc":"开局资金 {现金}；一年后连本带利要还","start":{"cash":100,"debt":12}},
+   {"id":"s_grant","name":"人才计划","icon":"🏅","desc":"开局资金 {现金}、监管压力 {监管}","region":"sz","start":{"cash":80,"reg":-5}},
    {
     "id":"s_alumni",
     "name":"校友天使",
     "icon":"🎓",
-    "desc":"开局资金 +90、融资估值 +5%；让出 9% 股权",
+    "desc":"开局资金 {现金}、融资估值 {融资估值}；让出 {股权:去号}% 股权",
     "region":"bay",
     "mods":{"raiseMult":1.05},
     "start":{"cash":90,"equity":-9}
    }
   ],
   "district":[
-   {"id":"d_paloalto","name":"帕洛阿尔托车库","icon":"🚗","desc":"融资估值 +5%，房租 +20%","region":"bay","mods":{"raiseMult":1.05,"rentMult":1.2}},
-   {"id":"d_soma","name":"旧金山市区阁楼","icon":"🌁","desc":"招到的人更强；士气每月 -0.5（楼下天天有状况）","region":"bay","mods":{"hireSkill":0.5,"moraleAdd":-0.5}},
+   {"id":"d_paloalto","name":"帕洛阿尔托车库","icon":"🚗","desc":"融资估值 {融资估值}，房租 {房租}","region":"bay","mods":{"raiseMult":1.05,"rentMult":1.2}},
+   {"id":"d_soma","name":"旧金山市区阁楼","icon":"🌁","desc":"招到的人更强；士气每月 {月士气}（楼下天天有状况）","region":"bay","mods":{"hireSkill":0.5,"moraleAdd":-0.5}},
    {
     "id":"d_berkeley",
     "name":"大学城合租屋",
     "icon":"🎒",
-    "desc":"工资 -10%，房租 -30%；融资估值 -3%",
+    "desc":"工资 {工资}，房租 {房租}；融资估值 {融资估值}",
     "region":"bay",
     "mods":{"salaryMult":0.9,"rentMult":0.7,"raiseMult":0.97}
    },
-   {"id":"d_nanshan","name":"南山科技园","icon":"🏙️","desc":"招到的人更强，房租 +30%","region":"sz","mods":{"hireSkill":0.5,"rentMult":1.3}},
-   {"id":"d_hqb","name":"华强北","icon":"🔌","desc":"显卡价格 -10%，配额 +15%","region":"sz","mods":{"gpuPriceMult":0.9,"quotaMult":1.15}},
+   {"id":"d_nanshan","name":"南山科技园","icon":"🏙️","desc":"招到的人更强，房租 {房租}","region":"sz","mods":{"hireSkill":0.5,"rentMult":1.3}},
+   {"id":"d_hqb","name":"华强北","icon":"🔌","desc":"显卡价格 {显卡价格}，配额 {显卡配额}","region":"sz","mods":{"gpuPriceMult":0.9,"quotaMult":1.15}},
    {
     "id":"d_village",
     "name":"城中村握手楼",
     "icon":"🏘️",
-    "desc":"房租 -40%，总成本 -4%；开局口碑 -3",
+    "desc":"房租 {房租}，总成本 {总成本}；开局口碑 {口碑}",
     "region":"sz",
     "mods":{"rentMult":0.6,"costMult":0.96},
     "start":{"rep":-3}
    }
   ],
   "mission":[
-   {"id":"v_agi","name":"「确保 AGI 造福全人类」","icon":"🌍","desc":"口碑每月 +0.3、炒作效果 +5%；监管更爱盯着你","mods":{"repAdd":0.3,"hypeGainMult":1.05,"regMult":1.1}},
-   {"id":"v_tool","name":"「让每个人都用得起 AI」","icon":"🔧","desc":"用户增长 +8%，订阅收入 -8%","mods":{"growthMult":1.08,"payMult":0.92}},
-   {"id":"v_money","name":"「为股东创造价值」","icon":"💵","desc":"全部收入 +6%，口碑每月 -0.2","mods":{"revMult":1.06,"repAdd":-0.2}},
-   {"id":"v_safe","name":"「安全第一」","icon":"🛡️","desc":"监管压力增长 -20%，炼丹 -5%","mods":{"regMult":0.8,"researchMult":0.95}},
-   {"id":"v_fun","name":"「就是觉得好玩」","icon":"🎈","desc":"士气每月 +1、运气 +1；融资估值 -5%","attr":{"luck":1},"mods":{"moraleAdd":1,"raiseMult":0.95}}
+   {"id":"v_agi","name":"「确保 AGI 造福全人类」","icon":"🌍","desc":"口碑每月 {月口碑}、炒作效果 {炒作效果}；监管更爱盯着你","mods":{"repAdd":0.3,"hypeGainMult":1.05,"regMult":1.1}},
+   {"id":"v_tool","name":"「让每个人都用得起 AI」","icon":"🔧","desc":"用户增长 {用户增长}，订阅收入 {订阅收入}","mods":{"growthMult":1.08,"payMult":0.92}},
+   {"id":"v_money","name":"「为股东创造价值」","icon":"💵","desc":"全部收入 {收入}，口碑每月 {月口碑}","mods":{"revMult":1.06,"repAdd":-0.2}},
+   {"id":"v_safe","name":"「安全第一」","icon":"🛡️","desc":"监管压力增长 {监管增速}，炼丹 {炼丹效率}","mods":{"regMult":0.8,"researchMult":0.95}},
+   {"id":"v_fun","name":"「就是觉得好玩」","icon":"🎈","desc":"士气每月 {月士气}、运气 {运气}；融资估值 {融资估值}","attr":{"luck":1},"mods":{"moraleAdd":1,"raiseMult":0.95}}
   ]
  },
  "START_OFFICE":{"d_paloalto":"车库","d_soma":"阁楼","d_berkeley":"合租屋","d_nanshan":"科技园孵化器","d_hqb":"华强北档口","d_village":"城中村出租屋"},
@@ -263,96 +285,96 @@
   "legal":{"name":"法务公关","icon":"⚖️","pay":0.95,"color":"#8a93a6"}
  },
  "STAFF_QUIRKS":{
-  "juan":{"name":"卷王","out":1.25,"pay":1,"desc":"产出 ×1.25"},
+  "juan":{"name":"卷王","out":1.25,"pay":1,"desc":"产出 {产出:×}"},
   "moyu":{"name":"摸鱼大师","out":0.7,"pay":1,"desc":"产出只有七成"},
-  "dazui":{"name":"大嘴巴","out":1,"pay":1,"desc":"公司每张黑料的曝光概率 +25%"},
+  "dazui":{"name":"大嘴巴","out":1,"pay":1,"desc":"公司每张黑料的曝光概率 {dirt.bigMouth:%:±}"},
   "loyal":{"name":"死忠","out":1,"pay":0.95,"desc":"士气再低也不会主动离职"},
-  "genius":{"name":"天才","out":1.5,"pay":1.35,"desc":"产出 ×1.5（工资也贵三成多）"},
+  "genius":{"name":"天才","out":1.5,"pay":1.35,"desc":"产出 {产出:×}（工资也贵三成多）"},
   "guanxi":{"name":"关系户","out":0.3,"pay":1.1,"desc":"产出只有三成，但你懂的"}
  },
  "POLICIES":{
   "work":{
    "name":"工作制",
-   "opts":{"965":{"name":"965","desc":"正常上下班"},"996":{"name":"996","desc":"产出 +25%，士气每月 -3，早晚被举报","mods":{"outputMult":1.25,"moraleAdd":-3}}}
+   "opts":{"965":{"name":"965","desc":"正常上下班"},"996":{"name":"996","desc":"产出 {团队产出}，士气每月 {月士气}，早晚被举报","mods":{"outputMult":1.25,"moraleAdd":-3}}}
   },
   "price":{
    "name":"定价",
    "opts":{
-    "free":{"name":"免费冲量","desc":"增长 +50%，订阅收入 ×0.3","mods":{"growthMult":1.5,"payMult":0.3}},
+    "free":{"name":"免费冲量","desc":"增长 {用户增长}，订阅收入 {订阅收入:×}","mods":{"growthMult":1.5,"payMult":0.3}},
     "std":{"name":"标准订阅","desc":"不偏不倚"},
-    "premium":{"name":"高价收割","desc":"订阅收入 ×1.8，增长 ×0.6，流失 +2%","mods":{"payMult":1.8,"growthMult":0.6,"churnAdd":0.02}}
+    "premium":{"name":"高价收割","desc":"订阅收入 {订阅收入:×}，增长 {用户增长:×}，流失 {月流失}","mods":{"payMult":1.8,"growthMult":0.6,"churnAdd":0.02}}
    }
   },
   "safety":{
    "name":"安全审核",
    "opts":{
-    "loose":{"name":"放飞自我","desc":"增长 +15%、炼丹 +10%；监管压力猛涨","mods":{"growthMult":1.15,"researchMult":1.1,"regAdd":0.9}},
+    "loose":{"name":"放飞自我","desc":"增长 {用户增长}、炼丹 {炼丹效率}；监管压力猛涨","mods":{"growthMult":1.15,"researchMult":1.1,"regAdd":0.9}},
     "std":{"name":"行业标准","desc":"不偏不倚"},
-    "strict":{"name":"严防死守","desc":"口碑每月 +0.5、监管压力回落；增长 -10%，成本 +4%","mods":{"repAdd":0.5,"regAdd":-0.8,"growthMult":0.9,"costMult":1.04}}
+    "strict":{"name":"严防死守","desc":"口碑每月 {月口碑}、监管压力回落；增长 {用户增长}，成本 {总成本}","mods":{"repAdd":0.5,"regAdd":-0.8,"growthMult":0.9,"costMult":1.04}}
    }
   }
  },
  "PERKS":[
-  {"id":"gpu_dinner","r":2,"name":"皮衣教主的饭局","icon":"🍜","desc":"显卡价格 -20%，配额 +50%","mods":{"gpuPriceMult":0.8,"quotaMult":1.5}},
-  {"id":"water_army","r":1,"name":"水军矩阵","icon":"🌊","desc":"炒作效果 +35%；黑料曝光率 +10%","mods":{"hypeGainMult":1.35,"exposeMult":1.1}},
-  {"id":"academician","r":2,"name":"院士站台","icon":"🏅","desc":"融资估值 +12%，监管压力增长 -30%","mods":{"raiseMult":1.12,"regMult":0.7}},
-  {"id":"law_team","r":2,"name":"法务天团","icon":"⚖️","desc":"黑料曝光率 -40%","mods":{"exposeMult":0.6}},
-  {"id":"wolf","r":1,"name":"狼性文化","icon":"🐺","desc":"团队产出 +15%，士气每月 -1.5","mods":{"outputMult":1.15,"moraleAdd":-1.5}},
-  {"id":"growth_hack","r":1,"name":"增长黑客","icon":"🚀","desc":"用户增长 +25%","mods":{"growthMult":1.25}},
-  {"id":"esop","r":1,"name":"期权池","icon":"🥧","desc":"士气每月 +2；立刻让出 3% 股权","mods":{"moraleAdd":2},"fx":{"equity":-3}},
-  {"id":"gov","r":2,"name":"政府关系","icon":"🏛️","desc":"监管压力增长 -50%，总成本 -3%","mods":{"regMult":0.5,"costMult":0.97}},
-  {"id":"oss","r":1,"name":"开源社区","icon":"🌱","desc":"口碑每月 +0.6，招到的人更强，热度衰减更慢","mods":{"repAdd":0.6,"hireSkill":0.6,"hypeDecayMult":0.8}},
-  {"id":"data_mine","r":2,"name":"数据金矿","icon":"⛏️","desc":"炼丹效率 +25%","mods":{"researchMult":1.25}},
+  {"id":"gpu_dinner","r":2,"name":"皮衣教主的饭局","icon":"🍜","desc":"显卡价格 {显卡价格}，配额 {显卡配额}","mods":{"gpuPriceMult":0.8,"quotaMult":1.5}},
+  {"id":"water_army","r":1,"name":"水军矩阵","icon":"🌊","desc":"炒作效果 {炒作效果}；黑料曝光率 {黑料曝光率}","mods":{"hypeGainMult":1.35,"exposeMult":1.1}},
+  {"id":"academician","r":2,"name":"院士站台","icon":"🏅","desc":"融资估值 {融资估值}，监管压力增长 {监管增速}","mods":{"raiseMult":1.12,"regMult":0.7}},
+  {"id":"law_team","r":2,"name":"法务天团","icon":"⚖️","desc":"黑料曝光率 {黑料曝光率}","mods":{"exposeMult":0.6}},
+  {"id":"wolf","r":1,"name":"狼性文化","icon":"🐺","desc":"团队产出 {团队产出}，士气每月 {月士气}","mods":{"outputMult":1.15,"moraleAdd":-1.5}},
+  {"id":"growth_hack","r":1,"name":"增长黑客","icon":"🚀","desc":"用户增长 {用户增长}","mods":{"growthMult":1.25}},
+  {"id":"esop","r":1,"name":"期权池","icon":"🥧","desc":"士气每月 {月士气}；立刻让出 {股权:去号}% 股权","mods":{"moraleAdd":2},"fx":{"equity":-3}},
+  {"id":"gov","r":2,"name":"政府关系","icon":"🏛️","desc":"监管压力增长 {监管增速}，总成本 {总成本}","mods":{"regMult":0.5,"costMult":0.97}},
+  {"id":"oss","r":1,"name":"开源社区","icon":"🌱","desc":"口碑每月 {月口碑}，招到的人更强，热度衰减更慢","mods":{"repAdd":0.6,"hireSkill":0.6,"hypeDecayMult":0.8}},
+  {"id":"data_mine","r":2,"name":"数据金矿","icon":"⛏️","desc":"炼丹效率 {炼丹效率}","mods":{"researchMult":1.25}},
   {
    "id":"distill_master",
    "r":1,
    "name":"蒸馏大师",
    "icon":"🧪",
-   "desc":"炼丹 +15%，产品开发 +10%；黑料更重 +20%",
+   "desc":"炼丹 {炼丹效率}，产品开发 {产品开发}；黑料更重 {黑料加重}",
    "mods":{"researchMult":1.15,"devMult":1.1,"dirtGainMult":1.2}
   },
-  {"id":"lean","r":1,"name":"精益创业","icon":"✂️","desc":"总成本 -10%","mods":{"costMult":0.9}},
-  {"id":"kol_ceo","r":1,"name":"网红 CEO","icon":"🤳","desc":"口才 +2，热度衰减更慢","mods":{"hypeDecayMult":0.85},"fx":{"attr":{"cha":2}}},
-  {"id":"time_lord","r":3,"name":"时间管理大师","icon":"⏰","desc":"每月行动点 +1","mods":{"apAdd":1}},
+  {"id":"lean","r":1,"name":"精益创业","icon":"✂️","desc":"总成本 {总成本}","mods":{"costMult":0.9}},
+  {"id":"kol_ceo","r":1,"name":"网红 CEO","icon":"🤳","desc":"口才 {口才}，热度衰减更慢","mods":{"hypeDecayMult":0.85},"fx":{"attr":{"cha":2}}},
+  {"id":"time_lord","r":3,"name":"时间管理大师","icon":"⏰","desc":"每月行动点 {行动点}","mods":{"apAdd":1}},
   {"id":"scapegoat","r":2,"name":"甩锅话术","icon":"🫵","desc":"丑闻造成的口碑损失减半","mods":{"scandalMult":0.5}},
   {"id":"phoenix","r":3,"name":"东山再起","icon":"🔥","desc":"破产时自动获得一笔救命钱（仅一次）"},
-  {"id":"sales_iron","r":1,"name":"销售铁军","icon":"🪖","desc":"全部收入 +12%","mods":{"revMult":1.12}},
-  {"id":"infra_guru","r":1,"name":"推理优化","icon":"🧮","desc":"推理占卡与 API 成本 -30%","mods":{"inferMult":0.7,"apiCostMult":0.7}},
-  {"id":"star_board","r":2,"name":"明星董事","icon":"🌟","desc":"融资估值 +20%","mods":{"raiseMult":1.2}},
-  {"id":"hr_magic","r":1,"name":"猎头直通车","icon":"🎣","desc":"候选人更强，工资 -10%","mods":{"hireSkill":1,"salaryMult":0.9}},
+  {"id":"sales_iron","r":1,"name":"销售铁军","icon":"🪖","desc":"全部收入 {收入}","mods":{"revMult":1.12}},
+  {"id":"infra_guru","r":1,"name":"推理优化","icon":"🧮","desc":"推理占卡与 API 成本 {API成本}","mods":{"inferMult":0.7,"apiCostMult":0.7}},
+  {"id":"star_board","r":2,"name":"明星董事","icon":"🌟","desc":"融资估值 {融资估值}","mods":{"raiseMult":1.2}},
+  {"id":"hr_magic","r":1,"name":"猎头直通车","icon":"🎣","desc":"候选人更强，工资 {工资}","mods":{"hireSkill":1,"salaryMult":0.9}},
   {
    "id":"safety_brand",
    "r":2,
    "name":"安全人设",
    "icon":"🛡️",
-   "desc":"口碑每月 +0.8，监管压力增长 -25%，炒作效果 -10%",
+   "desc":"口碑每月 {月口碑}，监管压力增长 {监管增速}，炒作效果 {炒作效果}",
    "mods":{"repAdd":0.8,"regMult":0.75,"hypeGainMult":0.9}
   },
-  {"id":"acc","r":1,"name":"加速主义","icon":"⏩","desc":"炼丹 +12%、开发 +12%；监管压力增长 +30%","mods":{"researchMult":1.12,"devMult":1.12,"regMult":1.3}},
-  {"id":"fengshui","r":1,"name":"风水机房","icon":"🧿","desc":"运气 +2，炸炉概率减半","mods":{"boomMult":0.5},"fx":{"attr":{"luck":2}}},
-  {"id":"ppt","r":1,"name":"PPT 之神","icon":"📊","desc":"口才 +1，融资估值 +8%","mods":{"raiseMult":1.08},"fx":{"attr":{"cha":1}}},
-  {"id":"cfo","r":2,"name":"华尔街 CFO","icon":"🧾","desc":"商业 +2，对赌失败的惩罚减半","mods":{"vamMult":0.5},"fx":{"attr":{"biz":2}}},
-  {"id":"cto","r":2,"name":"扫地僧 CTO","icon":"🧹","desc":"技术 +2，产品开发 +15%","mods":{"devMult":1.15},"fx":{"attr":{"tech":2}}},
-  {"id":"canteen","r":1,"name":"免费食堂","icon":"🍱","desc":"士气每月 +1.5","mods":{"moraleAdd":1.5}},
-  {"id":"moat","r":2,"name":"用户护城河","icon":"🏰","desc":"用户流失 -2%/月","mods":{"churnAdd":-0.02}},
-  {"id":"insider","r":2,"name":"榜单内线","icon":"🕵️","desc":"每次发布跑分白送 +3，不算黑料","mods":{"benchAdd":3}},
-  {"id":"angel_wing","r":3,"name":"神秘金主","icon":"🪽","desc":"立刻到账 6 个月支出的现金","fx":{"cash":6}},
-  {"id":"big_office","r":1,"name":"工位折叠术","icon":"🪑","desc":"团队人数上限 +4","mods":{"teamCapAdd":4}},
-  {"id":"silver_tongue","r":2,"name":"舌灿莲花","icon":"👅","desc":"所有属性检定 +2","mods":{"checkAdd":2}}
+  {"id":"acc","r":1,"name":"加速主义","icon":"⏩","desc":"炼丹 {炼丹效率}、开发 {产品开发}；监管压力增长 {监管增速}","mods":{"researchMult":1.12,"devMult":1.12,"regMult":1.3}},
+  {"id":"fengshui","r":1,"name":"风水机房","icon":"🧿","desc":"运气 {运气}，炸炉概率减半","mods":{"boomMult":0.5},"fx":{"attr":{"luck":2}}},
+  {"id":"ppt","r":1,"name":"PPT 之神","icon":"📊","desc":"口才 {口才}，融资估值 {融资估值}","mods":{"raiseMult":1.08},"fx":{"attr":{"cha":1}}},
+  {"id":"cfo","r":2,"name":"华尔街 CFO","icon":"🧾","desc":"商业 {商业}，对赌失败的惩罚减半","mods":{"vamMult":0.5},"fx":{"attr":{"biz":2}}},
+  {"id":"cto","r":2,"name":"扫地僧 CTO","icon":"🧹","desc":"技术 {技术}，产品开发 {产品开发}","mods":{"devMult":1.15},"fx":{"attr":{"tech":2}}},
+  {"id":"canteen","r":1,"name":"免费食堂","icon":"🍱","desc":"士气每月 {月士气}","mods":{"moraleAdd":1.5}},
+  {"id":"moat","r":2,"name":"用户护城河","icon":"🏰","desc":"用户流失 {月流失}/月","mods":{"churnAdd":-0.02}},
+  {"id":"insider","r":2,"name":"榜单内线","icon":"🕵️","desc":"每次发布跑分白送 {跑分加成}，不算黑料","mods":{"benchAdd":3}},
+  {"id":"angel_wing","r":3,"name":"神秘金主","icon":"🪽","desc":"立刻到账 {现金:数} 个月支出的现金","fx":{"cash":6}},
+  {"id":"big_office","r":1,"name":"工位折叠术","icon":"🪑","desc":"团队人数上限 {人数上限}","mods":{"teamCapAdd":4}},
+  {"id":"silver_tongue","r":2,"name":"舌灿莲花","icon":"👅","desc":"所有属性检定 {检定加值}","mods":{"checkAdd":2}}
  ],
  "FEATURES":[
-  {"id":"voice","name":"语音模式","icon":"🎙️","need":30,"desc":"体验 +8，增长 +10%","fx":{"quality":8},"mods":{"growthMult":1.1}},
-  {"id":"agent","name":"智能体 Agent","icon":"🤖","need":60,"desc":"体验 +6，收入 +10%（偶尔替用户乱下单）","fx":{"quality":6},"mods":{"revMult":1.1}},
-  {"id":"memory","name":"长期记忆","icon":"🧷","need":40,"desc":"流失 -1.5%/月","mods":{"churnAdd":-0.015}},
-  {"id":"multimodal","name":"多模态","icon":"🖼️","need":50,"desc":"体验 +10，热度 +8","fx":{"quality":10,"hype":8}},
-  {"id":"community","name":"社区广场","icon":"🏟️","need":35,"desc":"增长 +15%","mods":{"growthMult":1.15}},
-  {"id":"vip","name":"会员体系","icon":"👑","need":25,"desc":"订阅收入 +15%，口碑 -3","fx":{"rep":-3},"mods":{"payMult":1.15}},
+  {"id":"voice","name":"语音模式","icon":"🎙️","need":30,"desc":"体验 {体验}，增长 {用户增长}","fx":{"quality":8},"mods":{"growthMult":1.1}},
+  {"id":"agent","name":"智能体 Agent","icon":"🤖","need":60,"desc":"体验 {体验}，收入 {收入}（偶尔替用户乱下单）","fx":{"quality":6},"mods":{"revMult":1.1}},
+  {"id":"memory","name":"长期记忆","icon":"🧷","need":40,"desc":"流失 {月流失}/月","mods":{"churnAdd":-0.015}},
+  {"id":"multimodal","name":"多模态","icon":"🖼️","need":50,"desc":"体验 {体验}，热度 {热度}","fx":{"quality":10,"hype":8}},
+  {"id":"community","name":"社区广场","icon":"🏟️","need":35,"desc":"增长 {用户增长}","mods":{"growthMult":1.15}},
+  {"id":"vip","name":"会员体系","icon":"👑","need":25,"desc":"订阅收入 {订阅收入}，口碑 {口碑}","fx":{"rep":-3},"mods":{"payMult":1.15}},
   {"id":"enterprise","name":"企业版","icon":"🏢","need":55,"desc":"企业订单收入翻倍","mods":{"b2bMult":2}},
-  {"id":"plugin","name":"插件商店","icon":"🧩","need":45,"desc":"体验 +5，收入 +5%，增长 +8%","fx":{"quality":5},"mods":{"revMult":1.05,"growthMult":1.08}},
-  {"id":"ads","name":"信息流广告","icon":"📺","need":20,"desc":"订阅收入 +22%，口碑 -6，流失 +1%/月","fx":{"rep":-6},"mods":{"payMult":1.22,"churnAdd":0.01}},
-  {"id":"checkin","name":"签到打卡","icon":"📅","need":15,"desc":"流失 -1%/月（被吐槽像某拼购）","mods":{"churnAdd":-0.01}},
-  {"id":"filter","name":"内容安全网","icon":"🧯","need":30,"desc":"监管压力 -10，口碑 +4","fx":{"reg":-10,"rep":4}},
-  {"id":"viral","name":"分享裂变","icon":"🧲","need":25,"desc":"增长 +20%（「帮我砍一刀」）","mods":{"growthMult":1.2}}
+  {"id":"plugin","name":"插件商店","icon":"🧩","need":45,"desc":"体验 {体验}，收入 {收入}，增长 {用户增长}","fx":{"quality":5},"mods":{"revMult":1.05,"growthMult":1.08}},
+  {"id":"ads","name":"信息流广告","icon":"📺","need":20,"desc":"订阅收入 {订阅收入}，口碑 {口碑}，流失 {月流失}/月","fx":{"rep":-6},"mods":{"payMult":1.22,"churnAdd":0.01}},
+  {"id":"checkin","name":"签到打卡","icon":"📅","need":15,"desc":"流失 {月流失}/月（被吐槽像某拼购）","mods":{"churnAdd":-0.01}},
+  {"id":"filter","name":"内容安全网","icon":"🧯","need":30,"desc":"监管压力 {监管}，口碑 {口碑}","fx":{"reg":-10,"rep":4}},
+  {"id":"viral","name":"分享裂变","icon":"🧲","need":25,"desc":"增长 {用户增长}（「帮我砍一刀」）","mods":{"growthMult":1.2}}
  ],
  "RIVALS":[
   {"id":"openbi","name":"OpenBI","boss":"山姆·奥特慢","model":"GTP","off":2,"cheat":2,"color":"#10a37f","style":"炒作之王"},
@@ -380,9 +402,9 @@
  "OLD_QUOTA_MULT":[1,1.6,3,7,20,60,60],
  "DATA_SOURCES":{
   "open":{"name":"开源数据","mult":1,"desc":"免费、干净、人人都有"},
-  "buy":{"name":"合规采购","mult":1.2,"desc":"效率 +20%，每月多花 30% 显卡钱"},
-  "scrape":{"name":"全网爬取","mult":1.35,"desc":"效率 +35%，留下黑料「违规爬数据」","dirt":"scrape"},
-  "distill":{"name":"蒸馏对手","mult":1.7,"desc":"效率 +70%，但超不过榜首；留下黑料「蒸馏对手模型」","dirt":"distill"}
+  "buy":{"name":"合规采购","mult":1.2,"desc":"效率 {效率}，每月多花 {furnace.buyMult:增:去号} 显卡钱"},
+  "scrape":{"name":"全网爬取","mult":1.35,"desc":"效率 {效率}，留下黑料「违规爬数据」","dirt":"scrape"},
+  "distill":{"name":"蒸馏对手","mult":1.7,"desc":"效率 {效率}，但超不过榜首；留下黑料「蒸馏对手模型」","dirt":"distill"}
  },
  "DIRT":{
   "bench_fake":{"name":"跑分造假","sev":18,"blurb":"有人把你们的模型拉出来实测，成绩离榜单差了十万八千里，还顺手贴出了训练集里的测试题。"},
@@ -424,43 +446,43 @@
  "ACHIEVEMENTS":{
   "chepole":{"name":"再也吃不到 Chepole 了","icon":"🌯","desc":"连续四次拒绝同事的 Chepole 邀请"},
   "clean":{"name":"出淤泥而不染","icon":"🪷","desc":"好结局通关，且全程没留下任何黑料"},
-  "dirty":{"name":"黑料收藏家","icon":"🗄️","desc":"保险柜里同时躺着 6 张黑料"},
+  "dirty":{"name":"黑料收藏家","icon":"🗄️","desc":"保险柜里同时躺着 {ach.dirty} 张黑料"},
   "top1":{"name":"榜一大哥","icon":"🥇","desc":"登顶跑分榜"},
   "fake1":{"name":"遥遥领先","icon":"📏","desc":"靠注水的跑分登顶"},
-  "boot":{"name":"不拿一分钱","icon":"🥾","desc":"不融资撑过 24 个月"},
-  "m100":{"name":"百万雄师","icon":"👥","desc":"用户突破 100 万"},
-  "y1":{"name":"一亿人的选择","icon":"🌏","desc":"用户突破 1 亿"},
+  "boot":{"name":"不拿一分钱","icon":"🥾","desc":"不融资撑过 {ach.boot} 个月"},
+  "m100":{"name":"百万雄师","icon":"👥","desc":"用户突破 {ach.m100:万}"},
+  "y1":{"name":"一亿人的选择","icon":"🌏","desc":"用户突破 {ach.y1:万}"},
   "comeback":{"name":"五日归来","icon":"↩️","desc":"被董事会开除后杀了回来"},
   "winter":{"name":"裸泳冠军","icon":"🩲","desc":"泡沫破裂时账上的钱不够烧 3 个月，却活到了最后"},
   "sewing":{"name":"缝纫机学徒","icon":"🧵","desc":"达成结局「踩缝纫机」"},
   "agi":{"name":"造物主","icon":"✨","desc":"炼出 AGI"},
   "ipo":{"name":"敲钟人","icon":"🔔","desc":"达成结局「上市敲钟」"},
-  "x996":{"name":"福报传人","icon":"🌃","desc":"连续 24 个月实行 996"},
+  "x996":{"name":"福报传人","icon":"🌃","desc":"连续 {ach.x996} 个月实行 996"},
   "leather":{"name":"皮衣之友","icon":"🧥","desc":"在皮衣教主最艰难的时候挺了他"},
-  "allend":{"name":"人生百态","icon":"🎭","desc":"解锁 8 种不同结局"},
-  "road":{"name":"未曾设想的道路","icon":"🛤️","desc":"国资入股后走完「路线之争」，终局时仍握有至少 40% 股权"}
+  "allend":{"name":"人生百态","icon":"🎭","desc":"解锁 {ach.allend} 种不同结局"},
+  "road":{"name":"未曾设想的道路","icon":"🛤️","desc":"国资入股后走完「路线之争」，终局时仍握有至少 {ideo.equity}% 股权"}
  },
  "GOALS":{
   "model":{"name":"炼出 AGI，然后上市","desc":""},
   "app":{"name":"做出一亿人每天在用的 AI 产品","desc":""},
   "red":{
    "name":"为了共产主义乌托邦而制造 AGI",
-   "desc":"士气每月 +1、口碑每月 +0.3、监管压力增长 -40%、工资 -8%；融资估值 -15%，再也拿不到西方融资",
+   "desc":"士气每月 {月士气}、口碑每月 {月口碑}、监管压力增长 {监管增速}、工资 {工资}；融资估值 {融资估值}，再也拿不到西方融资",
    "mods":{"moraleAdd":1,"repAdd":0.3,"regMult":0.6,"salaryMult":0.92,"raiseMult":0.85}
   },
   "cap":{
    "name":"稳健经营，警惕泡沫，先活下来再谈 AGI",
-   "desc":"总成本 -5%、黑料曝光率 -15%、监管压力增长 -10%；炒作效果 -10%",
+   "desc":"总成本 {总成本}、黑料曝光率 {黑料曝光率}、监管压力增长 {监管增速}；炒作效果 {炒作效果}",
    "mods":{"costMult":0.95,"exposeMult":0.85,"regMult":0.9,"hypeGainMult":0.9}
   },
   "rose":{
    "name":"为全体利益相关者的共享繁荣而制造 AGI",
-   "desc":"士气每月 +1、用户增长 +5%、招到的人更强；监管压力增长 +25%、融资估值 -10%、工资 -5%；主流 VC 不再投钱，反共压力挥之不去",
+   "desc":"士气每月 {月士气}、用户增长 {用户增长}、招到的人更强；监管压力增长 {监管增速}、融资估值 {融资估值}、工资 {工资}；主流 VC 不再投钱，反共压力挥之不去",
    "mods":{"moraleAdd":1,"growthMult":1.05,"hireSkill":0.5,"regMult":1.25,"raiseMult":0.9,"salaryMult":0.95}
   },
   "missionco":{
    "name":"专注使命，不谈政治：做最好的 AGI",
-   "desc":"总成本 -5%、黑料曝光率 -15%、监管压力增长 -10%；炒作效果 -10%",
+   "desc":"总成本 {总成本}、黑料曝光率 {黑料曝光率}、监管压力增长 {监管增速}；炒作效果 {炒作效果}",
    "mods":{"costMult":0.95,"exposeMult":0.85,"regMult":0.9,"hypeGainMult":0.9}
   }
  },
@@ -470,10 +492,10 @@
   {"id":"t_rich","name":"解锁经历：家里有矿","cost":3,"trait":"rich"},
   {"id":"t_quant","name":"解锁经历：量化交易员","cost":4,"trait":"quant"},
   {"id":"t_gambler","name":"解锁怪癖：赌徒","cost":4,"trait":"gambler"},
-  {"id":"m_cash","name":"老妈的私房钱：开局资金 +60","cost":2},
-  {"id":"m_gpu","name":"祖传矿卡：开局显卡配额 +40%","cost":3},
-  {"id":"m_point","name":"天赋异禀：开局属性点 +1","cost":5},
-  {"id":"m_point2","name":"天赋异禀 II：开局属性点再 +1","cost":8,"need":"m_point"},
+  {"id":"m_cash","name":"老妈的私房钱：开局资金 +{meta.cash}","cost":2},
+  {"id":"m_gpu","name":"祖传矿卡：开局显卡配额 {meta.gpu:增}","cost":3},
+  {"id":"m_point","name":"天赋异禀：开局属性点 +{meta.attrPoint}","cost":5},
+  {"id":"m_point2","name":"天赋异禀 II：开局属性点再 +{meta.attrPoint}","cost":8,"need":"m_point"},
   {"id":"m_perk","name":"董事会熟人：开局先抽一张董事会卡","cost":6},
   {"id":"m_revive","name":"家底殷实：每局第一次破产时有人兜底","cost":8}
  ],

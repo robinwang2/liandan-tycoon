@@ -277,18 +277,20 @@ const DEFS = {
 // ───────── 平衡参数.xlsx ─────────
 const PARAMS = {
   file: '平衡参数.xlsx', out: 'params',
-  about: ['公式里的数字。代码管「怎么算」，这张表管「调多少」。', '「最小」「最大」填了的话，导出时会检查「值」有没有越界。'],
+  about: ['公式里的数字。代码管「怎么算」，这张表管「调多少」。', '「值」一般是一个数；按名次、按顺序排的一组系数写成逗号隔开的一串数。「最小」「最大」填了的话，导出时会检查「值」有没有越界。', '参数名的前缀是它管的系统：model 模型和算力、users 用户、rev 收入、cost 支出、val 估值、perf 业绩、gpu 显卡、staff 员工、dirt 黑料、hype/morale/rep/reg/bubble 几项仪表、rival 对手、event 随机事件、start 开局、score 结算、ach 成就、ideo 路线之争……'],
   sheets: [{
     name: '参数', about: '一行一个参数。',
-    cols: C([['参数', 'key', '标识', { w: 22 }], ['值', 'value', '小数', { w: 10 }], ['单位', 'unit', '文本', { w: 8 }], ['最小', 'min', '小数', { w: 8 }], ['最大', 'max', '小数', { w: 8 }], ['说明', 'desc', '文本', { w: 60 }], ['在哪用', 'use', '文本', { w: 30 }]]),
+    cols: C([['参数', 'key', '标识', { w: 24 }], ['值', 'value', '数或数列', { w: 14 }], ['单位', 'unit', '文本', { w: 8 }], ['最小', 'min', '小数', { w: 8 }], ['最大', 'max', '小数', { w: 8 }], ['说明', 'desc', '文本', { w: 60 }], ['在哪用', 'use', '文本', { w: 30 }]]),
     pack: d => d.ROWS.map(r => ({ ...r })),
     unpack: (rows, out, ctx) => {
       out.ROWS = rows.map(strip); out.P = {};
       for (const r of rows) {
         if (r.value == null) { ctx.fail(r, 'value', `参数 ${r.key} 没填值`); continue; }
         if (r.key in out.P) ctx.fail(r, 'key', `参数「${r.key}」重复了`);
-        if (r.min != null && r.value < r.min) ctx.fail(r, 'value', `${r.key} = ${r.value}，小于最小值 ${r.min}`);
-        if (r.max != null && r.value > r.max) ctx.fail(r, 'value', `${r.key} = ${r.value}，大于最大值 ${r.max}`);
+        for (const x of [].concat(r.value)) {
+          if (r.min != null && x < r.min) ctx.fail(r, 'value', `${r.key} = ${x}，小于最小值 ${r.min}`);
+          if (r.max != null && x > r.max) ctx.fail(r, 'value', `${r.key} = ${x}，大于最大值 ${r.max}`);
+        }
         out.P[r.key] = r.value;
       }
     },
@@ -329,13 +331,26 @@ const CHAINS = {
 };
 
 // ───────── 路线之争（两本，结构一样）─────────
-const flat = (obj, pre, out = []) => { for (const [k, v] of Object.entries(obj)) { if (typeof v === 'string') out.push({ key: pre + k, text: v }); else if (v && typeof v === 'object' && !Array.isArray(v)) flat(v, pre + k + '.', out); else throw new Error(`文本包 ${pre}${k} 里有不是文字的东西`); } return out; };
-const unflat = (rows, out, ctx) => { for (const r of rows) { const path = r.key.split('.'); let o = out; for (const p of path.slice(0, -1)) { o[p] ??= {}; if (typeof o[p] !== 'object') ctx.fail(r, 'key', `键「${r.key}」和前面的键冲突`); o = o[p]; } o[path.at(-1)] = r.text; } };
 const STAGE_OPT_COLS = [SIDE_COL, ...after(OPT_COLS, 'fx', [BARS_COLS[0]]).filter(c => !['note', 'failNote'].includes(c[1])), BARS_COLS[1]];
 const ideoBook = (ver, zh) => ({
   file: `路线之争-${zh}.xlsx`, out: `ideology_${ver}`,
   about: [`「路线之争」${zh}版的全部内容：角色、15 级阶段、卡池、结局、结局后的事件、两条一次性事件链，以及意识形态行动的文案。`, '立场：red 左翼 / cap 资本 / mid 务实。进度条写法：左翼+9 资本-2。'],
   sheets: [
+    {
+      name: '版本设定', about: '这个版本的几项基本设定。值是数字就填数字，是 id 就填 id。', cols: C([['设定', 'key', '标识', { w: 16 }], ['值', 'value', '文本', { w: 16 }], ['说明', 'note', '文本', { w: 72 }]]),
+      pack: d => { const rows = [], walk = (o, pre) => { for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object') walk(x, pre + k + '.'); else rows.push({ key: pre + k, value: String(x), note: d.VER_DOC?.[pre + k] }); }; walk(d.VER, ''); return rows; },
+      unpack: (rows, out, ctx) => {
+        out.VER = {}; out.VER_DOC = {};
+        for (const r of rows) {
+          if (r.value == null) { ctx.fail(r, 'value', `设定 ${r.key} 没填值`); continue; }
+          const path = r.key.split('.'); let o = out.VER;
+          for (const p of path.slice(0, -1)) { o[p] ??= {}; if (typeof o[p] !== 'object') { ctx.fail(r, 'key', `「${r.key}」和前面的设定冲突`); break; } o = o[p]; }
+          if (path.at(-1) in o) ctx.fail(r, 'key', `设定「${r.key}」重复了`);
+          o[path.at(-1)] = /^-?\d+(\.\d+)?$/.test(r.value.trim()) ? Number(r.value) : r.value;
+          if (r.note != null) out.VER_DOC[r.key] = r.note;
+        }
+      },
+    },
     { name: '角色', about: '三位主要角色（正文里直接写名字）。', cols: C([ID, ['名字', 'name', '文本', { w: 12 }], ['身份', 'role', '文本', { w: 24 }], ['简介', 'desc', '文本', { w: 70 }]]), ...map('IDEO_CAST') },
     {
       name: '阶段', about: '15 级，按顺序，每月一级。', cols: C([['第几级', 'n', '整数', { w: 7 }], ['标题', 'title', '文本', { w: 22 }], ICON, ['插画', 'art', '标识', { w: 14 }], ['立绘', 'portrait', '标识', { w: 10 }], ['正文', 'text', '文本', { long: true, w: 100 }]]),
@@ -395,11 +410,12 @@ const ideoBook = (ver, zh) => ({
       pack: d => Object.entries(d.ACT_TEXT).flatMap(([act, arr]) => arr.map(text => ({ act, text }))),
       unpack: (rows, out) => { out.ACT_TEXT = {}; for (const r of rows) (out.ACT_TEXT[r.act] ??= []).push(r.text); },
     },
-    {
-      name: '文本', about: '「五年计划」和「末位淘汰」两个窗口里的文字。键是给程序认的，别改。', cols: C([['键', 'key', '标识', { w: 34 }], ['文本', 'text', '文本', { long: true, w: 110 }]]),
-      pack: d => [...flat(d.PLAN_TEXT, 'PLAN_TEXT.'), ...flat(d.YANK_TEXT, 'YANK_TEXT.')],
-      unpack: (rows, out, ctx) => { out.PLAN_TEXT = {}; out.YANK_TEXT = {}; unflat(rows, out, ctx); },
-    },
+    ...eventSheets('系统事件', '系统选项', picker('SYS_EVENTS'), {
+      evCols: [...EVENT_COLS, ['参数', 'p', '参数', { w: 20 }]],
+      optCols: [...OPT_COLS.filter(c => !['note', 'failNote'].includes(c[1])), ['脚本', 'fn', '标识', { w: 9 }], ['参数', 'p', '参数', { w: 22 }]],
+      about: '代码弹出来的几个窗口：ideo_entry「接盘老股」（中后期的入口）、ideo_plan「五年计划」立项、ideo_plan_ok / ideo_plan_fail 计划到期（完成 / 没完成）、ideo_yank「末位淘汰」确认。标题、正文、图标、插画、选项的文字、效果和检定都在这里改；分类和权重由代码定，这两列空着。',
+      optAbout: '「脚本」是这个选项背后那段代码的名字（别改，改了就对不上）。「参数」是脚本用的数：接盘老股里 rofr 的「份额」「溢价」（价格 = 估值 × 份额% × 溢价）、stall 拖延失败时加的反共压力；五年计划里每个目标的算法（目标 = max(现在 × 倍数, 现在 + 至少)，模型是 现在 + 提升），「效果」是立项那一刻生效的限时加成。提示里的 {价格} {份额} {目标} 是代码填的。',
+    }),
   ],
 });
 
@@ -471,7 +487,52 @@ const TEXTS = {
     '键是给程序认的，别改；文本随便改。{名字} 是代码算好填进去的值，别删（可以挪位置）。「湾区文本」填了的话湾区用它。每个键只写一行。'],
   sheets: [
     textSheet('引擎', '数值引擎自己说的话：新闻流里的句子、黑料引爆和董事会卡的窗口、选项上的检定和「点不了」的原因、选完以后冒出来的变化小标签、鼠标悬停时的效果预览、员工说明气泡。黑料引爆窗口里的数字在 平衡参数.xlsx 里（scandal. 开头）。'),
+    textSheet('参谋', '参谋提示（左边「行动提示」里的那几条）：每条提示的图标、标题、正文和接在正文里的几句。什么时候出现由代码和 平衡参数.xlsx 里 advice. 开头的门槛决定；提示里提到的线（离职线、逼宫线、经侦线……）直接读引擎的参数。'),
+    textSheet('教学', '新手教学里「学长老周」说的话：每一步一个标题、一段正文（tut.<步骤>.title / .text）。每一步第几个月开放在 平衡参数.xlsx 里（tut. 开头）；高亮哪个按钮、切到哪个页签由代码定。'),
+    textSheet('界面', '界面上的字：标题画面、建角向导、局外成长、顶栏、左右两边的面板、底栏、事件窗的框、结局页、设置、菜单和几个确认窗、行动提示的按钮话术、员工气泡。{名字} 是代码填的值；有的值本身是一段带格式的字（比如加粗的数字），照样当一个变量用。一行一项的（随机名字、员工的口头禅）每行写一个。'),
+    textSheet('路线之争', '路线之争的两地版本对照：「文本」是深圳版，「湾区文本」是湾区版（空着 = 两地一样）。进度条和立场的名字、开链和结局的新闻、情境日志、每一级正文后面接的局势提醒、处置左倾员工的结果和提示、五年计划和末位淘汰的新闻、意识形态页上的几句话。窗口本身（标题、正文、选项）在两本「路线之争」工作簿里；数字在 平衡参数.xlsx 里（ideo. 开头）。'),
   ],
 };
 
-export const BOOKS = [DEFS, PARAMS, EVENTS, CHAINS, ACTS, TEXTS, ideoBook('cn', '深圳'), ideoBook('us', '湾区')];
+// ───────── 音频.xlsx ─────────
+const AUDIO = {
+  file: '音频.xlsx', out: 'audio',
+  about: ['声音都是浏览器现场合成的（src/audio/audio.js）：合成的配方在代码里，这里是参数和清单。', '「音量」「配乐」游戏会读；「音效」是清单，以后做 Unity 版要把每种声音录成文件，用它跟进。'],
+  sheets: [
+    {
+      name: '音量', about: '玩家没调过音量时的默认值（0~1）。', cols: C([['通道', 'key', '标识', { w: 10 }], ['默认音量', 'value', '小数', { w: 10 }], ['说明', 'note', '文本', { w: 20 }]]),
+      pack: d => Object.entries(d.VOLUMES).map(([key, value]) => ({ key, value, note: d.VOLUME_DOC?.[key] })),
+      unpack: (rows, out) => { out.VOLUMES = {}; out.VOLUME_DOC = {}; for (const r of rows) { out.VOLUMES[r.key] = r.value; if (r.note != null) out.VOLUME_DOC[r.key] = r.note; } },
+    },
+    {
+      name: '配乐', about: '生成式配乐的七种情绪。根音 = MIDI 音高；音阶 = 相对根音的半音数；和弦走向 = 每小节的和弦根音（音阶里的半音偏移）；速度 = 每分钟拍数；密度 = 每拍出音符的机会（0~1）；亮度 = 低通滤波的截止频率（Hz）。什么时候用哪种由代码按局势定（见「什么时候」）。id 别改。',
+      cols: C([['情绪', 'id', '标识', { w: 9 }], ['根音', 'root', '整数', { w: 6 }], ['音阶', 'scale', '数或数列', { w: 18 }], ['和弦走向', 'chords', '数或数列', { w: 12 }], ['速度', 'bpm', '整数', { w: 6 }], ['密度', 'density', '小数', { w: 6 }], ['亮度', 'bright', '整数', { w: 7 }], ['什么时候', 'note', '文本', { w: 44 }]]),
+      pack: d => Object.entries(d.MOODS).map(([id, m]) => ({ id, ...m, note: d.MOOD_DOC?.[id] })),
+      unpack: (rows, out) => { out.MOODS = {}; out.MOOD_DOC = {}; for (const r of rows) { const { id, note, ...m } = strip(r); out.MOODS[id] = m; if (note != null) out.MOOD_DOC[id] = note; } },
+    },
+    {
+      name: '音效', about: '全部音效（合成的配方在代码里，按 id 对上；id 别改）。「状态」「文件」给 Unity 版录音用：现场合成 → 已录制 → 已换成文件。',
+      cols: C([ID, ['名字', 'name', '文本', { w: 12 }], ['在哪响', 'use', '文本', { w: 40 }], ['状态', 'status', '文本', { w: 10, list: ['现场合成', '已录制', '已换成文件'] }], ['文件', 'file', '文本', { w: 30 }]]), ...list('SFX'),
+    },
+  ],
+};
+// ───────── 美术.xlsx ─────────
+const ART = {
+  file: '美术.xlsx', out: 'art',
+  about: ['美术资源清单：给 3D 模型和插画的制作管线（Tripo / Blender）跟进用，游戏不读这本表。', '「道具」「插画」里的尺寸、三角面、材质数、用到几处由 node tools/art/inventory.mjs 从代码里重新算；「状态」「源文件」「来源」「授权」「备注」手填，重新算的时候会保留。'],
+  sheets: [
+    {
+      name: '道具', about: '3D 场景里的全部道具（src/scene3a/props.js）。尺寸单位是米（宽 × 深 × 高）；三角面是四种随机外观里最多的那种；面数预算和 tools/props-check.mjs 用的一样。',
+      cols: C([ID, ['宽', 'w', '小数', { w: 6 }], ['深', 'd', '小数', { w: 6 }], ['高', 'h', '小数', { w: 6 }], ['三角面', 'tris', '整数', { w: 8 }], ['面数预算', 'budget', '整数', { w: 9 }], ['材质数', 'mats', '整数', { w: 7 }], ['有动画', 'anim', '是否', { w: 7 }],
+        ['状态', 'status', '文本', { w: 10, list: ['程序生成', 'AI 生成中', 'AI 已出模', '人工精修', '已进引擎'] }], ['源文件', 'src', '文本', { w: 28 }], ['备注', 'note', '文本', { w: 30 }]]),
+      ...list('PROPS'),
+    },
+    {
+      name: '插画', about: '事件窗、结局页用的插画（src/assets/art）。「用到几处」= 表格和代码里引用它的次数，0 就是没用上。',
+      cols: C([ID, ['文件', 'file', '文本', { w: 30 }], ['用到几处', 'uses', '整数', { w: 8 }], ['来源', 'source', '文本', { w: 16 }], ['授权', 'license', '文本', { w: 16 }], ['备注', 'note', '文本', { w: 30 }]]),
+      ...list('ART'),
+    },
+  ],
+};
+
+export const BOOKS = [DEFS, PARAMS, EVENTS, CHAINS, ACTS, TEXTS, ideoBook('cn', '深圳'), ideoBook('us', '湾区'), AUDIO, ART];

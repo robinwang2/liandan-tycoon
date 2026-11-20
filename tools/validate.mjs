@@ -1,11 +1,15 @@
 import { access } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
+import { checkTexts } from './textcheck.mjs';
+import { readFileSync } from 'node:fs';
+import { DEF_FIELDS, defTexts, missingRefs, refMaps } from '../src/data/refs.js';
 
 const root = path.resolve(import.meta.dirname, '..');
+const DEFS = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(root, 'src/data/tables/defs.json'), 'utf8'));
 const problems = [];
 // 核心事件（EVENTS_CORE）由引擎按规则触发，篇幅和选项数不受「事件包」的写作规范限制
-const problem = (where, message) => { if (where.startsWith('EVENTS_CORE') && /超过|必须有 2~4 个/.test(message)) return; problems.push(`${where}: ${message}`); };
+const problem = (where, message) => { if (where.startsWith('EVENTS_CORE') && /超过|必须有 2~4 个/.test(message)) return; problems.push([where, message]); };
 
 const WHEN_KEYS = new Set([
   'tMin', 'tMax', 'region', 'route', 'track', 'ownModel', 'stageMin', 'stageMax',
@@ -525,20 +529,42 @@ function checkIdeo(mod, name, cfg) {
   const [fRed, fCap, fCell] = cfg.flags;
   if (flagged(fRed) < 4 || flagged(fCap) < 4 || flagged(fCell) < 1) problem(`${name}.IDEO_EVENTS`, `数量不够：${fRed} ${flagged(fRed)}/4、${fCap} ${flagged(fCap)}/4、${fCell} ${flagged(fCell)}/1`);
 
-  const plan = isObject(mod.PLAN_TEXT) ? mod.PLAN_TEXT : {};
-  say(plan.title, `${name}.PLAN_TEXT.title`, 14); say(plan.text, `${name}.PLAN_TEXT.text`);
-  say(plan.okTitle, `${name}.PLAN_TEXT.okTitle`, 14); say(plan.okText, `${name}.PLAN_TEXT.okText`);
-  say(plan.failTitle, `${name}.PLAN_TEXT.failTitle`, 14); say(plan.failText, `${name}.PLAN_TEXT.failText`);
-  for (const k of ['users', 'model', 'rev']) { say(plan.targets?.[k]?.label, `${name}.PLAN_TEXT.targets.${k}.label`, 12); say(plan.targets?.[k]?.hint, `${name}.PLAN_TEXT.targets.${k}.hint`, 18); }
-  for (const k of ['honest', 'fake']) { say(plan.failOpts?.[k]?.label, `${name}.PLAN_TEXT.failOpts.${k}.label`, 12); say(plan.failOpts?.[k]?.hint, `${name}.PLAN_TEXT.failOpts.${k}.hint`, 18); say(plan.failOpts?.[k]?.text, `${name}.PLAN_TEXT.failOpts.${k}.text`); }
+  // 代码弹的几个窗口（「系统事件」表）：每个窗口该有哪些选项（按「脚本」列对上代码）
+  const SYS_NEED = { ideo_entry: ['accept', 'rofr', 'stall'], ideo_plan: ['users', 'model', 'rev'], ideo_plan_ok: ['ok'], ideo_plan_fail: ['honest', 'fake'], ideo_yank: ['go', 'no'] };
+  const sys = Object.fromEntries((Array.isArray(mod.SYS_EVENTS) ? mod.SYS_EVENTS : []).map(e => [e.id, e]));
+  for (const id of Object.keys(sys)) if (!SYS_NEED[id]) problem(`${name}.SYS_EVENTS.${id}`, '代码里没有这个窗口');
+  for (const [id, fns] of Object.entries(SYS_NEED)) {
+    const e = sys[id], at = `${name}.SYS_EVENTS.${id}`;
+    if (!e) { problem(at, '缺少这个窗口'); continue; }
+    say(e.title, `${at}.title`, 14); say(e.text, `${at}.text`);
+    if (typeof e.icon !== 'string' || !e.icon.trim()) problem(at, '缺少图标');
+    if (own(e, 'art') && !ART_KEYS.has(e.art)) problem(at, `非法 art key: ${e.art}`);
+    const opts = Array.isArray(e.options) ? e.options : [];
+    if (opts.map(o => o.fn).join() !== fns.join()) problem(at, `选项的「脚本」应该依次是 ${fns.join('、')}，现在是 ${opts.map(o => o.fn).join('、')}`);
+    for (const o of opts) {
+      const ot = `${at}.${o.fn}`, { fn: _fn, p: _p, ...base } = o;
+      if (o.fn === 'no' || id === 'ideo_plan') { say(o.label, `${ot}.label`, 12); if (o.fn !== 'no') say(o.hint, `${ot}.hint`, 18); if (o.fx && Object.keys(o.fx).length) checkFx(o.fx, `${ot}.fx`); continue; }
+      if (id === 'ideo_entry') { const { hint: _h, ...rest } = base; checkOption(rest, ot); } else checkOption(base, ot);
+    }
+  }
+  const rofr = sys.ideo_entry?.options?.find(o => o.fn === 'rofr');
+  for (const k of ['份额', '溢价']) if (typeof rofr?.p?.[k] !== 'number') problem(`${name}.SYS_EVENTS.ideo_entry.rofr`, `参数里要有「${k}」`);
+  if (typeof sys.ideo_plan?.p?.月数 !== 'number') problem(`${name}.SYS_EVENTS.ideo_plan`, '参数里要有「月数」');
+  for (const o of sys.ideo_plan?.options || []) for (const k of o.fn === 'model' ? ['提升'] : ['倍数', '至少']) if (typeof o.p?.[k] !== 'number') problem(`${name}.SYS_EVENTS.ideo_plan.${o.fn}`, `参数里要有「${k}」`);
+  // 版本设定
+  const X = isObject(mod.VER) ? mod.VER : {};
+  for (const k of ['red', 'cap', 'heat']) if (typeof X.start?.[k] !== 'number' || X.start[k] < 0 || X.start[k] > 100) problem(`${name}.VER.start.${k}`, '要填 0~100 的数字');
+  for (const k of ['red', 'cap']) if (!DEFS.GOALS[X.goal?.[k]]) problem(`${name}.VER.goal.${k}`, `设定.xlsx「公司目标」里没有「${X.goal?.[k]}」`);
+  for (const k of ['red', 'cap', 'cell', 'on']) if (typeof X.flag?.[k] !== 'string' || !X.flag[k]) problem(`${name}.VER.flag.${k}`, '缺少标记名');
+  for (const k of ['utopia', 'bci']) if (!ids.has(X.chain?.[k])) problem(`${name}.VER.chain.${k}`, `没有 id 是「${X.chain?.[k]}」的事件`);
+  if (![0, 1].includes(X.heat?.on)) problem(`${name}.VER.heat.on`, '只能填 0 或 1');
+  if (!/^#[0-9a-f]{6}$/i.test(X.brand || '')) problem(`${name}.VER.brand`, '颜色要写成 #rrggbb');
+  if (cfg.flags.join() !== [X.flag?.red, X.flag?.cap, X.flag?.cell].join()) problem(`${name}.VER.flag`, `结局后事件用的标记是 ${cfg.flags.join('、')}，版本设定里不一样`);
   const actText = isObject(mod.ACT_TEXT) ? mod.ACT_TEXT : {};
   for (const k of ['mobilize', 'utopia', 'selfcrit', 'subbotnik', 'plan', 'yank', 'bci', 'buyback', 'costcut', 'spinoff']) {
     const v = actText[k];
     if (!Array.isArray(v) || v.length < 2 || v.length > 3 || v.some(s => typeof s !== 'string' || !s.trim())) problem(`${name}.ACT_TEXT.${k}`, '应为 2~3 句文案的数组');
   }
-  const yank = isObject(mod.YANK_TEXT) ? mod.YANK_TEXT : {};
-  say(yank.title, `${name}.YANK_TEXT.title`, 14); say(yank.text, `${name}.YANK_TEXT.text`);
-  say(yank.go?.label, `${name}.YANK_TEXT.go.label`, 12); say(yank.go?.hint, `${name}.YANK_TEXT.go.hint`, 18); say(yank.go?.text, `${name}.YANK_TEXT.go.text`); say(yank.no?.label, `${name}.YANK_TEXT.no.label`, 12);
 
   if (cfg.us) {
     // 红色恐慌事件：engine 按反共压力排进来
@@ -553,7 +579,7 @@ function checkIdeo(mod, name, cfg) {
       if (!JSON.stringify(e?.options || []).includes('heat')) problem(at, '至少一个选项要动反共压力 heat');
     });
     // 读着不出戏：湾区版里不该出现深圳版的专有名词
-    const flat = JSON.stringify([mod.IDEO_CAST, stages, pool, endings, mod.IDEO_CHAINS, mod.UTOPIA_EVENTS, mod.BCI_EVENTS, plan, actText, yank, events, scare]);
+    const flat = JSON.stringify([mod.IDEO_CAST, stages, pool, endings, mod.IDEO_CHAINS, mod.UTOPIA_EVENTS, mod.BCI_EVENTS, mod.SYS_EVENTS, actText, events, scare]);
     for (const w of CN_ONLY) if (flat.includes(w)) problem(name, `湾区版里出现了深圳版的词「${w}」`);
   }
   return { stages: stages?.length ?? 0, cards: pool.length };
@@ -563,8 +589,96 @@ const PORTRAITS = new Set(['longhair', 'streamer']);
 const cnStat = checkIdeo(ideoModule, 'CN', { utopia: 'utopia', bci: 'bci', flags: ['red', 'capb', 'red_cell'] });
 const usStat = checkIdeo(usModule, 'US', { utopia: 'utopia_us', bci: 'bci_us', flags: ['rose', 'missionco', 'rose_cell'], us: true });
 
+// 报问题时说清楚在哪本表、哪张表、哪一条（表里按 id 找）：内部的数据路径 → 「事件.xlsx › 随机事件（id xxx） › 第 2 个选项」
+const BOOK = {
+  EVENTS_PACK: '事件.xlsx › 随机事件', EVENTS_CORE: '事件.xlsx › 系统事件', EVENTS_CHAINS: '事件链.xlsx › 链事件',
+  IDEO_EVENTS: '路线之争-深圳.xlsx › 事件（结局后）', UTOPIA_EVENTS: '路线之争-深圳.xlsx › 事件（公社实验）', BCI_EVENTS: '路线之争-深圳.xlsx › 事件（脑机实验）',
+  US_IDEO_EVENTS: '路线之争-湾区.xlsx › 事件（结局后）', US_UTOPIA_EVENTS: '路线之争-湾区.xlsx › 事件（公社实验）', US_BCI_EVENTS: '路线之争-湾区.xlsx › 事件（脑机实验）', US_SCARE_EVENTS: '路线之争-湾区.xlsx › 事件（红色恐慌）',
+};
+const IDEO_BOOK = { CN: '路线之争-深圳.xlsx', US: '路线之争-湾区.xlsx' };
+const tail = s => s.replace(/^\.(?:options|opts)\[(\d+)\]/, (m, i) => ` › 第 ${+i + 1} 个选项`);
+function locate(where) {
+  let m;
+  if ((m = /^([A-Z_]+)\[(\d+)\](.*)$/.exec(where)) && BOOK[m[1]]) { const id = sources.find(s => s.name === m[1])?.events?.[+m[2]]?.id; return `${BOOK[m[1]]}（${id ? 'id ' + id : '第 ' + (+m[2] + 1) + ' 个'}）${tail(m[3])}`; }
+  if ((m = /^(CN|US)\.IDEO_STAGES\[(\d+)\](.*)$/.exec(where))) return `${IDEO_BOOK[m[1]]} › 阶段（第 ${+m[2] + 1} 级）${tail(m[3])}`;
+  if ((m = /^(CN|US)\.IDEO_POOL\[(\d+)\](.*)$/.exec(where))) return `${IDEO_BOOK[m[1]]} › 卡池（第 ${+m[2] + 1} 张）${tail(m[3])}`;
+  if ((m = /^(CN|US)\.IDEO_ENDINGS\.(\w+)(.*)$/.exec(where))) return `${IDEO_BOOK[m[1]]} › 结局（${m[2]}）${tail(m[3])}`;
+  if ((m = /^(CN|US)\.SYS_EVENTS\.(\w+)(.*)$/.exec(where))) return `${IDEO_BOOK[m[1]]} › 系统事件（id ${m[2]}）${m[3].replace(/^\.(\w+)/, ' › 脚本是 $1 的选项')}`;
+  if ((m = /^(CN|US)\.VER(.*)$/.exec(where))) return `${IDEO_BOOK[m[1]]} › 版本设定${m[2].replace(/^\./, ' › ')}`;
+  if ((m = /^(CN|US)\.(\w+)(.*)$/.exec(where))) return `${IDEO_BOOK[m[1]]} › ${m[2]}${m[3]}`;
+  return where;
+}
+// 音频.xlsx：音效清单和代码里的配方一一对上；配乐的七种情绪一个不少（界面按名字切换）
+{
+  const fsp = await import('node:fs/promises'), AU = JSON.parse(await fsp.readFile(path.join(root, 'src/data/tables/audio.json'), 'utf8'));
+  const asrc = await fsp.readFile(path.join(root, 'src/audio/audio.js'), 'utf8'), names = /const NAMES = new Set\('([^']+)'/.exec(asrc)[1].split(' ');
+  const ids = AU.SFX.map(s => s.id);
+  for (const n of names) if (!ids.includes(n)) problems.push(['音频', `音频.xlsx › 音效：少了「${n}」（代码里有这种音效）`]);
+  for (const n of ids) if (!names.includes(n)) problems.push(['音频', `音频.xlsx › 音效：「${n}」代码里没有这种音效的配方`]);
+  for (const m of ['title', 'calm', 'focus', 'tense', 'crisis', 'triumph', 'defeat']) if (!AU.MOODS[m]) problems.push(['音频', `音频.xlsx › 配乐：少了情绪「${m}」`]);
+  for (const [id, m] of Object.entries(AU.MOODS)) for (const k of ['scale', 'chords']) if (!Array.isArray(m[k]) || m[k].some(x => !Number.isInteger(x))) problems.push(['音频', `音频.xlsx › 配乐（${id}）：${k} 要写成逗号隔开的一串整数`]);
+  // 美术.xlsx：清单是脚本算出来的，代码里加了道具或插画、清单没跟上的话提醒一下
+  const AR = JSON.parse(await fsp.readFile(path.join(root, 'src/data/tables/art.json'), 'utf8'));
+  const psrc = await fsp.readFile(path.join(root, 'src/scene3a/props.js'), 'utf8'), body = psrc.slice(psrc.indexOf('export const PROPS = {'));
+  const propIds = [...body.matchAll(/^ {2}(\w+): prop\(/gm)].map(m => m[1]), have = new Set(AR.PROPS.map(p => p.id));
+  const files = (await fsp.readdir(path.join(root, 'src/assets/art'))).filter(f => f.endsWith('.webp')).map(f => f.replace(/\.webp$/, '')), arts = new Set(AR.ART.map(a => a.id));
+  const stale = [...propIds.filter(id => !have.has(id)), ...files.filter(id => !arts.has(id))];
+  if (stale.length) console.log(`⚠ 美术.xlsx 的清单没跟上代码（${stale.slice(0, 8).join('、')}${stale.length > 8 ? '……' : ''}）：跑一下 node tools/art/inventory.mjs`);
+}
+// 只读原始导出：游戏模块已就地填过部分说明，不能用来检查模板。
+const rawTable = name => JSON.parse(readFileSync(path.join(root, `src/data/tables/${name}.json`), 'utf8'));
+const actions = rawTable('actions'), events = rawTable('events'), texts = rawTable('text'), { P } = rawTable('params');
+const maps = refMaps(DEFS), byAction = Object.fromEntries(actions.ACTIONS.map(row => [row.id, row]));
+const byEvent = Object.fromEntries(events.EVENTS_CORE.map(row => [row.id, row]));
+const opt = (id, label) => byEvent[id]?.options.find(row => row.label === label);
+function assertNumber(where, text, pattern, value, source) {
+  const match = pattern.exec(text ?? '');
+  if (!match || Number(match[1]) !== value) problem(where, `文案写的是${match ? ' ' + match[1] : '（未找到数字）'}，${source}是 ${value}；请核对并修改文案或对应参数`);
+}
+assertNumber('设定.xlsx › 成就（winter）', DEFS.ACHIEVEMENTS.winter.desc, /不够烧\s*(\d+)\s*个月/, byEvent.bubble_burst.p.裸泳线, '系统事件 bubble_burst 的裸泳线');
+assertNumber('事件.xlsx › 系统选项（broke › 借过桥贷款）', opt('broke', '借过桥贷款')?.hint, /半年后要还\s*(\d+)\s*个月/, -opt('debt_due', '连本带利还清')?.fx?.cash, 'debt_due 实际扣款月数（-fx.cash）');
+for (const [kind, size] of [['tune', '小'], ['leak', '大']]) {
+  const key = `release.${kind}.hint`, params = byAction.release.p;
+  const mid = Math.round((params[size + '注水下限'] + params[size + '注水上限']) / 2);
+  for (const row of actions.TEXT[key]) for (const field of ['text', 'bay']) if (field === 'text' || row[field] != null)
+    assertNumber(`行动.xlsx › 行动文本（${key}.${field}）`, row[field], /跑分\s*\+([\d.]+)\s*左右/, mid, `release 的${size}注水区间中值（四舍五入）`);
+}
+for (const field of ['desc', 'descBay', 'us']) if (field === 'desc' || /人以上/.test(byAction.yank[field]))
+  assertNumber(`行动.xlsx › 行动（yank.${field}）`, byAction.yank[field], /部门[（(]\s*(\d+)\s*人以上/, P['ideo.yank.minDept'], '平衡参数 ideo.yank.minDept');
+for (const key of ['ui.gauge.reg.tip', 'advice.reg.text', 'tut.policy.text']) for (const field of ['text', 'bay']) {
+  if (field === 'text' || texts.TEXT[key][field] != null) assertNumber(`文本.xlsx › ${texts.SHEET[key]}（${key}.${field}）`, texts.TEXT[key][field], /到\s*(\d+)\s*(?:吃|会吃一记|会被)重锤/, P['reg.max'], '平衡参数 reg.max');
+}
+
+const defSheets = { ROUTES: '路线', PERKS: '董事会卡', FEATURES: '功能', GOALS: '公司目标', POLICIES: '政策', REGIONS: '地区', TRAITS: '特质', STAFF_QUIRKS: '员工怪癖', DATA_SOURCES: '数据源', META_SHOP: '局外商店', ACHIEVEMENTS: '成就', ATTRS: '属性' };
+for (const [name, id, rec, field, host] of defTexts(DEFS)) {
+  for (const error of missingRefs(host[field], { P, rec, ...maps, fields: DEF_FIELDS[name].fields, bare: true })) problem(`设定.xlsx › ${defSheets[name]}（${id}）`, error);
+}
+function checkRefs(where, row, fields, rec = row) {
+  for (const field of fields) {
+    const text = row[field];
+    if (!text?.includes('{')) continue;
+    const known = Array.from(text.matchAll(/\{([^{}\s:：.]+)(?=[:：}])/g), match => match[1]);
+    for (const error of missingRefs(text, { P, rec, ...maps, known })) problem(where, `${field}：${error}`);
+  }
+}
+for (const row of actions.ACTIONS) checkRefs(`行动.xlsx › 行动（${row.id}）`, row, ['desc', 'descBay']);
+for (const [key, rows] of Object.entries(actions.TEXT)) for (const row of rows) checkRefs(`行动.xlsx › 行动文本（${key}）`, row, ['text', 'bay'], byAction[key.split('.')[0]] || {});
+for (const row of actions.OFFERS) checkRefs(`行动.xlsx › 融资报价（${row.label}）`, row, ['note']);
+for (const [sheet, list] of [['系统选项', events.EVENTS_CORE], ['随机选项', events.EVENTS_PACK]]) for (const event of list) for (const row of event.options || [])
+  checkRefs(`事件.xlsx › ${sheet}（${event.id} › ${row.label}）`, row, ['label', 'hint']);
+for (const [name, city] of [['ideology_cn', '深圳'], ['ideology_us', '湾区']]) {
+  const data = rawTable(name);
+  for (const event of data.SYS_EVENTS) for (const row of event.options) checkRefs(`路线之争-${city}.xlsx › 系统选项（${event.id} › ${row.fn}）`, row, ['hint']);
+  for (const [id, ending] of Object.entries(data.IDEO_ENDINGS)) for (const row of ending.options || []) checkRefs(`路线之争-${city}.xlsx › 结局选项（${id} › ${row.act}）`, row, ['hint', 'text']);
+}
+
+// 文本.xlsx 和代码对不对得上（tools/textcheck.mjs）
+const txt = checkTexts(root);
+for (const e of txt.errors) problems.push(['文本', e]);
+for (const w of txt.warnings) console.log('⚠ ' + w);
 if (problems.length) {
-  console.error(problems.join('\n'));
+  console.error(problems.map(([w, m]) => (w === '文本' || w === '音频' ? m : `${locate(w)}：${m}`)).join('\n'));
   process.exit(1);
 }
+console.log(`文本.xlsx ${txt.keys} 个键、代码里 ${txt.calls} 处取字，都对得上`);
 console.log(`OK ${allEvents.length} events, ${Object.keys(chains || {}).length} chains, ${news.length} news, ideology 深圳 ${cnStat.stages} 级 / ${cnStat.cards} 张卡、湾区 ${usStat.stages} 级 / ${usStat.cards} 张卡`);

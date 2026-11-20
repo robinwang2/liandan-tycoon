@@ -1,14 +1,8 @@
 // 全部声音现场合成；节点预算包含总线、效果器和已经排进前瞻窗口的声部。
-const VOLUMES = { master: 0.7, music: 0.35, sfx: 0.6, amb: 0.45 };
-const MOODS = {
-  title:   { root: 50, scale: [0, 2, 4, 7, 9], chords: [0, 5, 7, 2], bpm: 72, density: .42, bright: 2400 },
-  calm:    { root: 48, scale: [0, 2, 3, 7, 10], chords: [0, 5, 3, 7], bpm: 64, density: .19, bright: 1100 },
-  focus:   { root: 50, scale: [0, 2, 3, 7, 10], chords: [0, 7, 5, 3], bpm: 82, density: .48, bright: 1600 },
-  tense:   { root: 45, scale: [0, 3, 5, 7, 10], chords: [0, 5, 3, 7], bpm: 68, density: .17, bright: 850 },
-  crisis:  { root: 43, scale: [0, 1, 3, 6, 7, 10], chords: [0, 1, 0, 6], bpm: 104, density: .3, bright: 900 },   // 危机：见 crisisStep
-  triumph: { root: 50, scale: [0, 2, 4, 7, 9], chords: [0, 5, 7, 0], bpm: 88, density: .65, bright: 3000 },
-  defeat:  { root: 45, scale: [0, 3, 5, 7, 10], chords: [0, 5, 3, 0], bpm: 48, density: .16, bright: 650 },
-};
+// 默认音量和配乐的七种情绪在 tables/音频.xlsx 里（改表 → npm run tables）；合成的配方在下面的代码里
+import A from '../data/tables/audio.json' with { type: 'json' };
+const VOLUMES = A.VOLUMES;
+const MOODS = A.MOODS;
 const NAMES = new Set('click hover tab open close choose turn coin spend good bad stamp card hire fire levelup release confetti alarm boom cameo toast notify lift ding error type rain_start burn freeze bloom'.split(' '));
 const clamp = (x, lo, hi, fallback) => typeof x === 'number' && Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : fallback;
 const hz = midi => 440 * 2 ** ((midi - 69) / 12);

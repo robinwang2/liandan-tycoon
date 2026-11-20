@@ -2,7 +2,7 @@
 import {
   MONTHS, START_YEAR, AGI_CAP, REGIONS, TRACKS, TRAIT, OFFICES, officeName, ROLES, STAFF_QUIRKS, POLICIES,
   PERKS, PERK, FEAT, RIVALS, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, NAMES, ATTR_NAME, META_SHOP, MOD_NAME,
-  GOALS, IDEO_FLAG_MODS, OLD_QUOTA_MULT, EAST_RIVALS, P,
+  GOALS, IDEO_FLAG_MODS, OLD_QUOTA_MULT, EAST_RIVALS, ROSE_RIVALS, P,
 } from '../data/defs.js';
 import { EVENTS_CHAINS } from '../data/events_chains.js';
 import { EVENT_ART, CAT_ART } from '../data/event_art.js';
@@ -50,31 +50,31 @@ export function mod(S, key) {
   if (S.ideo?.goal) add(GOALS[S.ideo.goal]?.mods);                     // 公司目标（路线之争之后）
   for (const f in IDEO_FLAG_MODS) if (S.flags[f]) add(IDEO_FLAG_MODS[f]);
   for (const tm of S.temp) if (tm.key === key) v = mult ? v * (tm.mult ?? 1) : v + (tm.add ?? 0);
-  if (key === 'devMult' && S.co.route === 'app') v *= 1.15;
+  if (key === 'devMult' && S.co.route === 'app') v *= P['dev.appMult'];
   if (key === 'raiseMult' || key === 'b2bMult') v *= heatDrag(S, key);   // 湾区：反共压力拖累融资估值和企业订单
   return v;
 }
 
 // ───────── 派生数值 ─────────
-export const capOf = E => 6.16 * Math.log2(1 + E / 20);           // 有效算力 → 模型能力
-export const EofCap = c => 20 * (2 ** (c / 6.16) - 1);
-export const frontierE = t => 11500 * 2.2 ** ((t - 1) / 12);       // 巨头的有效算力：每年翻 2.2 倍
+export const capOf = E => P['model.capK'] * Math.log2(1 + E / P['model.capE0']);           // 有效算力 → 模型能力
+export const EofCap = c => P['model.capE0'] * (2 ** (c / P['model.capK']) - 1);
+export const frontierE = t => P['rival.frontierE0'] * P['rival.frontierGrowth'] ** ((t - 1) / 12);   // 巨头的有效算力：每年翻几倍
 export const frontier = t => capOf(frontierE(t));                  // 行业前沿能力
-export const baseE = t => frontierE(t) / 8;                        // 开源基座：人人都能白嫖的起点
+export const baseE = t => frontierE(t) / P['model.baseDiv'];        // 开源基座：人人都能白嫖的起点
 export const myCap = S => capOf(baseE(S.t) + S.E);                 // 丹炉火候 = 开源基座 + 自己炼的
 export function power(S, role) {
   let p = 0;
   for (const e of S.staff) if (e.role === role) p += e.skill * (STAFF_QUIRKS[e.quirk]?.out ?? 1);
   const A = S.founder.attrs;
-  const base = { res: A.tech * 0.5, eng: A.tech * 0.4, ops: A.cha * 0.35, biz: A.biz * 0.45, legal: A.net * 0.2 }[role];
-  return (p * (0.6 + 0.8 * S.morale / 100) + base) * mod(S, 'outputMult');
+  const base = { res: A.tech * P['staff.selfRes'], eng: A.tech * P['staff.selfEng'], ops: A.cha * P['staff.selfOps'], biz: A.biz * P['staff.selfBiz'], legal: A.net * P['staff.selfLegal'] }[role];
+  return (p * (P['staff.morale0'] + P['staff.moraleK'] * S.morale / 100) + base) * mod(S, 'outputMult');
 }
-export const researchEff = S => (1 + power(S, 'res') / 35) * (1 + 0.05 * (S.founder.attrs.tech - 5)) * mod(S, 'researchMult') ** 0.7;
+export const researchEff = S => (1 + power(S, 'res') / P['model.resDiv']) * (1 + P['model.techK'] * (S.founder.attrs.tech - 5)) * mod(S, 'researchMult') ** P['model.resModExp'];
 export const rivalOf = (S, id) => S.rivals.find(r => r.id === id);
-export const upCap = S => (rivalOf(S, S.upstream)?.cap ?? 30) - 1;
-export const usesOwn = S => !!S.model && (S.co.route === 'model' || S.model.cap >= upCap(S) - 2);
+export const upCap = S => (rivalOf(S, S.upstream)?.cap ?? 30) - P['app.upLag'];
+export const usesOwn = S => !!S.model && (S.co.route === 'model' || S.model.cap >= upCap(S) - P['app.ownGap']);
 export const usedCap = S => (usesOwn(S) ? S.model.cap : upCap(S));
-export const qCeil = S => 35 + 0.65 * usedCap(S);                 // 产品体验的天花板：取决于背后的模型有多强
+export const qCeil = S => P['quality.ceil0'] + P['quality.ceilK'] * usedCap(S);                 // 产品体验的天花板：取决于背后的模型有多强
 export function board(S) {
   const rows = S.rivals.map(r => ({ id: r.id, name: r.name, model: `${r.model}-${r.ver}`, bench: r.bench, me: false }));
   if (S.model) rows.push({ id: 'me', name: S.co.name, model: S.model.name, bench: S.model.bench, me: true });
@@ -83,69 +83,71 @@ export function board(S) {
 export const rank = S => { const i = board(S).findIndex(r => r.me); return i < 0 ? 99 : i + 1; };
 // 显卡配额：供应商愿意按市价卖给你的量。不跟融资轮次绑定，看两样东西：
 // ① 行业产能：基础配额每月涨 4.5%（一年约 ×1.7）；② 采购记录：租满配额的老客户每月多给一点，超租的部分有三成半会转成长约（见 endMonth）
-export const quotaFloor = S => S.quotaBase * 1.045 ** (Math.max(1, S.t) - 1);
+export const quotaFloor = S => S.quotaBase * P['gpu.quotaGrowth'] ** (Math.max(1, S.t) - 1);
 export const quota = S => Math.round((quotaFloor(S) + (S.quotaEarn || 0)) * (1 + S.quotaAdd) * mod(S, 'quotaMult'));
 // 脑机实验成功以后：员工睡觉时也在帮丹炉算梯度，每人折合几张卡（固件年年升级，越来越多）
-export const brainGpu = S => (S.flags?.bci_ok && S.ownModel ? Math.round(S.staff.reduce((a, e) => a + 2 + e.skill, 0) * (1 + S.t / 36)) : 0);
+export const brainGpu = S => (S.flags?.bci_ok && S.ownModel ? Math.round(S.staff.reduce((a, e) => a + P['bci.gpuBase'] + e.skill, 0) * (1 + S.t / P['bci.growMonths'])) : 0);
 export const gpuPrice = S => S.gpuBase * mod(S, 'gpuPriceMult');
 // 显卡月租。配额只是「按市价拿货」的份额，不是硬上限：超出配额的去黄牛和云厂商那里现租，
 // 第 k 张超额卡的单价约为 市价 × (2 + k / 配额)，租得越多越贵
 export function gpuRent(S, n = S.gpu) {
   const q = Math.max(1, quota(S)), p = gpuPrice(S), x = Math.max(0, n - q);
-  return (n - x) * p + x * p * (2 + x / (2 * q));
+  return (n - x) * p + x * p * (P['gpu.over0'] + x / (P['gpu.overDiv'] * q));
 }
-export const overMult = S => { const q = Math.max(1, quota(S)), x = Math.max(0, S.gpu - q); return x ? 2 + x / (2 * q) : 1; };   // 超额部分的平均溢价倍数
+export const overMult = S => { const q = Math.max(1, quota(S)), x = Math.max(0, S.gpu - q); return x ? P['gpu.over0'] + x / (P['gpu.overDiv'] * q) : 1; };   // 超额部分的平均溢价倍数
 export const inferNeed = S => (usesOwn(S) ? Math.ceil(S.users * TRACKS[S.co.track].infer * mod(S, 'inferMult')) : 0);
 export const teamCap = S => OFFICES[S.co.office].cap + Math.max(0, S.founder.attrs.mgmt - 5) + mod(S, 'teamCapAdd');
-export const apMax = S => 3 + (S.founder.attrs.mgmt >= 9 ? 1 : 0) + mod(S, 'apAdd');
+export const apMax = S => P['ap.base'] + (S.founder.attrs.mgmt >= P['ap.mgmtLine'] ? P['ap.mgmtBonus'] : 0) + mod(S, 'apAdd');
 export const dirtTotal = S => S.dirt.reduce((a, d) => a + d.sev, 0);
 // 一张黑料这个月被扒出来的概率：越重、热度越高、用户越多越容易爆；法务公关能压一压，大嘴巴员工会帮倒忙
 export function exposeP(S, d) {
   const L = power(S, 'legal'), big = S.staff.filter(e => e.quirk === 'dazui').length;
-  return 0.011 * (d.sev / 10) * (1 + S.hype / 120) * (1 + Math.min(1.5, S.users / 3000)) * mod(S, 'exposeMult') * (1 + 0.25 * big) / (1 + L / 12);
+  return P['dirt.expose'] * (d.sev / P['dirt.sevDiv']) * (1 + S.hype / P['dirt.hypeDiv']) * (1 + Math.min(P['dirt.usersMax'], S.users / P['dirt.usersDiv'])) * mod(S, 'exposeMult') * (1 + P['dirt.bigMouth'] * big) / (1 + L / P['dirt.legalDiv']);
 }
 // 这个月底至少爆出一张黑料的概率（行动提示和界面的危机等级共用）；f 只看某一类黑料，比如涉嫌违法的
-export const leakRisk = (S, f) => 1 - S.dirt.filter(d => d.t <= S.t - 1 && (!f || f(d))).reduce((k, d) => k * (1 - exposeP(S, d)), 1);
+export const leakRisk = (S, f) => 1 - S.dirt.filter(d => d.t <= S.t + 1 - P['dirt.hideMonths'] && (!f || f(d))).reduce((k, d) => k * (1 - exposeP(S, d)), 1);
 // 整个赛道当下的用户盘子：AI 普及率逐年上升；一家公司最多吃下六成
-export const market = S => TRACKS[S.co.track].cap * Math.min(1, 0.02 * 1.057 ** S.t);
+export const market = S => TRACKS[S.co.track].cap * Math.min(1, P['market.start'] * P['market.growth'] ** S.t);
 // 你最多能吃下多大份额：看产品体验、模型竞争力和热度
-export const shareCap = S => 0.04 + 0.22 * S.quality / 100 + 0.14 * clamp((usedCap(S) - (frontier(S.t) - 18)) / 22, 0, 1.3) + 0.1 * S.hype / 100;
+// 模型相对行业前沿的竞争力（0 ~ model.relMax）
+const relCap = S => clamp((usedCap(S) - (frontier(S.t) - P['model.relGap'])) / P['model.relSpan'], 0, P['model.relMax']);
+export const shareCap = S => P['share.base'] + P['share.quality'] * S.quality / 100 + P['share.model'] * relCap(S) + P['share.hype'] * S.hype / 100;
 
 export function costs(S) {
   const salary = S.staff.reduce((a, e) => a + e.salary, 0) * mod(S, 'salaryMult');
   const rent = OFFICES[S.co.office].rent * mod(S, 'rentMult');
   let gpu = gpuRent(S);
-  if (S.furnace?.on && S.furnace.data === 'buy') gpu *= 1.3;
-  const api = usesOwn(S) ? 0 : S.users * TRACKS[S.co.track].infer * 2.5 * S.apiIdx * mod(S, 'apiCostMult') * (S.flags.bci_ok ? 0.65 : 1);   // 脑机实验：员工大脑帮着跑推理
-  const misc = 1 + S.staff.length * 0.25 + S.users * 0.08;
-  const k = mod(S, 'costMult') * (S.reg >= 70 ? 1.06 : 1);          // 监管压力过高：合规成本上升
+  if (S.furnace?.on && S.furnace.data === 'buy') gpu *= P['furnace.buyMult'];
+  const api = usesOwn(S) ? 0 : S.users * TRACKS[S.co.track].infer * P['cost.apiPerUser'] * S.apiIdx * mod(S, 'apiCostMult') * (S.flags.bci_ok ? P['bci.apiMult'] : 1);   // 脑机实验：员工大脑帮着跑推理
+  const misc = P['cost.misc'] + S.staff.length * P['cost.miscStaff'] + S.users * P['cost.miscUser'];
+  const k = mod(S, 'costMult') * (S.reg >= P['reg.high'] ? P['reg.costMult'] : 1);          // 监管压力过高：合规成本上升
   return { salary: salary * k, rent: rent * k, gpu: gpu * k, api: api * k, misc: misc * k, total: (salary + rent + gpu + api + misc) * k };
 }
 export function revenue(S) {
-  const T = TRACKS[S.co.track], rm = mod(S, 'revMult') ** 0.75 * (1 + 0.03 * (S.founder.attrs.biz - 5));   // 收入加成叠多了会递减
-  const payF = (0.5 + S.quality / 200) * (0.75 + S.rep / 400);
-  const sub = S.users * T.arpu * payF * mod(S, 'payMult') ** 0.85 * rm;
-  const api = S.model && S.ownModel ? 30 * 1.06 ** S.t * ([1, 0.6, 0.36, 0.22, 0.13, 0.08, 0.05][rank(S) - 1] ?? 0.03) * rm : 0;
-  const b2b = power(S, 'biz') * 2 * (0.4 + usedCap(S) / 100) * (1 + S.t / 36) * mod(S, 'b2bMult') * rm;
+  const T = TRACKS[S.co.track], rm = mod(S, 'revMult') ** P['rev.modExp'] * (1 + P['rev.bizK'] * (S.founder.attrs.biz - 5));   // 收入加成叠多了会递减
+  const payF = (P['rev.pay0'] + S.quality / P['rev.payQDiv']) * (P['rev.payRep0'] + S.rep / P['rev.payRepDiv']);
+  const sub = S.users * T.arpu * payF * mod(S, 'payMult') ** P['rev.payModExp'] * rm;
+  const api = S.model && S.ownModel ? P['rev.api0'] * P['rev.apiGrowth'] ** S.t * (P['rev.apiByRank'][rank(S) - 1] ?? P['rev.apiRankElse']) * rm : 0;
+  const b2b = power(S, 'biz') * P['rev.b2bK'] * (P['rev.b2bCap0'] + usedCap(S) / 100) * (1 + S.t / P['rev.b2bGrowMonths']) * mod(S, 'b2bMult') * rm;
   return { sub, api, b2b, total: sub + api + b2b };
 }
-export const unit = S => Math.max(10, costs(S).total);            // 「一个月支出」：事件里的金额单位
+export const unit = S => Math.max(P['money.unitMin'], costs(S).total);            // 「一个月支出」：事件里的金额单位
 export function runway(S) { const net = revenue(S).total - costs(S).total; return net >= 0 ? 99 : Math.max(0, S.cash) / -net; }
 export function perf(S) {
-  const tg = STAGES[Math.min(6, S.stage + 1)];
-  const uS = clamp((S.users + S.fake) / tg.users, 0, 1.5), rS = clamp(revenue(S).total / tg.rev, 0, 1.5);
-  const tS = S.model ? ([1.4, 1.15, 0.95, 0.75, 0.55, 0.4, 0.3][rank(S) - 1] ?? 0.2) * (S.co.route === 'model' ? 1 : 0.7) : 0;
+  const tg = STAGES[Math.min(STAGES.length - 1, S.stage + 1)];
+  const uS = clamp((S.users + S.fake) / tg.users, 0, P['perf.max']), rS = clamp(revenue(S).total / tg.rev, 0, P['perf.max']);
+  const tS = S.model ? (P['perf.techByRank'][rank(S) - 1] ?? P['perf.techElse']) * (S.co.route === 'model' ? 1 : P['perf.appTech']) : 0;
   const s = [uS, rS, tS].sort((a, b) => b - a);
-  return 0.25 + 0.6 * s[0] + 0.25 * s[1] + 0.1 * s[2];
+  return P['perf.base'] + P['perf.w'][0] * s[0] + P['perf.w'][1] * s[1] + P['perf.w'][2] * s[2];
 }
 export function valuation(S) {
-  const tg = STAGES[Math.min(6, S.stage + 1)];
-  return tg.base * perf(S) * (0.55 + S.bubble / 100) * (1 + S.hype / 300) * (1 + 0.03 * (S.founder.attrs.cha - 5)) * mod(S, 'raiseMult') * (1 + S.raiseBoost);
+  const tg = STAGES[Math.min(STAGES.length - 1, S.stage + 1)];
+  return tg.base * perf(S) * (P['val.bubble0'] + S.bubble / 100) * (1 + S.hype / P['val.hypeDiv']) * (1 + P['val.chaK'] * (S.founder.attrs.cha - 5)) * mod(S, 'raiseMult') * (1 + S.raiseBoost);
 }
 
 // ───────── 检定 ─────────
-export const pCheck = (S, attr, dc) => clamp((21 + S.founder.attrs[attr] + mod(S, 'checkAdd') - dc) / 20, 0.05, 0.95);
-export const pOdds = (S, p) => clamp(p + (S.founder.attrs.luck - 5) * 0.03, 0.03, 0.97);
+export const pCheck = (S, attr, dc) => clamp((P['check.base'] + S.founder.attrs[attr] + mod(S, 'checkAdd') - dc) / P['check.span'], P['check.min'], P['check.max']);
+export const pOdds = (S, p) => clamp(p + (S.founder.attrs.luck - 5) * P['odds.luckK'], P['odds.min'], P['odds.max']);
 export const rollCheck = (S, attr, dc) => rnd(S) < pCheck(S, attr, dc);
 export function optCheck(S, label, hint, attr, dc, ok, fail, pre) {
   return { label, hint, chk: tx(S, 'check.attr', { 属性: ATTR_NAME[attr], 成功率: Math.round(pCheck(S, attr, dc) * 100) }), go: () => { pre?.(); const win = rollCheck(S, attr, dc); return { ok: win, text: (win ? ok : fail)() }; } };
@@ -158,16 +160,16 @@ export function optOdds(S, label, hint, p0, ok, fail, pre) {
 // ───────── 员工 ─────────
 export function genStaff(S, role, bonus = 0) {
   const A = S.founder.attrs, N = NAMES[S.co.region];
-  const skill = clamp(Math.round(rf(S, 2.2, 6.6) + S.stage * 0.55 + mod(S, 'hireSkill') + (A.net - 5) * 0.15 + S.rep / 70 + bonus), 1, 10);
-  const quirk = rnd(S) < 0.3 ? pick(S, Object.keys(STAFF_QUIRKS)) : null;
+  const skill = clamp(Math.round(rf(S, P['staff.skillMin'], P['staff.skillMax']) + S.stage * P['staff.skillStage'] + mod(S, 'hireSkill') + (A.net - 5) * P['staff.skillNet'] + S.rep / P['staff.skillRepDiv'] + bonus), 1, 10);
+  const quirk = rnd(S) < P['staff.quirkOdds'] ? pick(S, Object.keys(STAFF_QUIRKS)) : null;
   const name = S.co.region === 'sz' ? pick(S, N.a) + pick(S, N.b) : `${pick(S, N.a)} ${pick(S, N.b)}`;
-  return { uid: 'e' + S.uid++, name, role, skill, quirk, salary: +((1.2 + 0.09 * skill * skill) * ROLES[role].pay * (STAFF_QUIRKS[quirk]?.pay ?? 1)).toFixed(1), since: S.t };
+  return { uid: 'e' + S.uid++, name, role, skill, quirk, salary: +((P['staff.pay0'] + P['staff.paySkill'] * skill * skill) * ROLES[role].pay * (STAFF_QUIRKS[quirk]?.pay ?? 1)).toFixed(1), since: S.t };
 }
 export const addStaff = (S, e) => { S.staff.push(e); return e; };
 export function removeStaff(S, uid) { const i = S.staff.findIndex(e => e.uid === uid); return i >= 0 ? S.staff.splice(i, 1)[0] : null; }
 export function refreshCands(S, bonus = 0) {
   const w = S.co.route === 'model' ? ['res', 'res', 'eng', 'eng', 'ops', 'biz', 'legal'] : ['eng', 'eng', 'ops', 'ops', 'biz', 'res', 'legal'];
-  S.cands = Array.from({ length: 4 }, () => genStaff(S, pick(S, w), bonus));
+  S.cands = Array.from({ length: P['staff.cands'] }, () => genStaff(S, pick(S, w), bonus));
 }
 
 // ───────── 黑料 ─────────
@@ -176,28 +178,28 @@ export function addDirt(S, v) {
   const sev = ((typeof v === 'object' && v.sev) || D.sev) * mod(S, 'dirtGainMult');
   S.hadDirt = true;
   const old = S.dirt.find(d => d.type === type);
-  if (old) { old.sev = Math.min(45, old.sev + sev * 0.6); return old; }
+  if (old) { old.sev = Math.min(P['dirt.stackMax'], old.sev + sev * P['dirt.stackK']); return old; }
   const d = { uid: 'd' + S.uid++, type, name: (typeof v === 'object' && v.name) || D.name, sev, t: S.t };
   S.dirt.push(d);
-  if (S.dirt.length >= 6) award(S, 'dirty');
+  if (S.dirt.length >= P['ach.dirty']) award(S, 'dirty');
   return d;
 }
 export const removeDirt = (S, uid) => { S.dirt = S.dirt.filter(d => d.uid !== uid); };
 
 // ───────── 效果 DSL ─────────
-const soft = (cur, v) => (v > 0 ? v * clamp(1.25 - cur / 100, 0.3, 1) : v);            // 越高越难再涨
+const soft = (cur, v) => (v > 0 ? v * clamp(P['gauge.soft0'] - cur / 100, P['gauge.softMin'], 1) : v);            // 越高越难再涨
 const gauge = (k, sat) => (S, v) => { S[k] = clamp(S[k] + (sat ? soft(S[k], v) : v), 0, 100); };
 const FX = {
   cash: (S, v) => { S.cash += v * unit(S); },
   cashAbs: (S, v) => { S.cash += v; },
   hype: (S, v) => { S.hype = clamp(S.hype + (v > 0 ? soft(S.hype, v) * mod(S, 'hypeGainMult') : v), 0, 100); },
   rep: gauge('rep', 1), morale: gauge('morale', 1), bubble: gauge('bubble'),
-  reg: (S, v) => { S.reg = clamp(S.reg + (v > 0 ? v * mod(S, 'regMult') : v), 0, 100); },
+  reg: (S, v) => { S.reg = clamp(S.reg + (v > 0 ? v * mod(S, 'regMult') : v), 0, P['reg.max']); },
   usersPct: (S, v) => { S.users = Math.max(0, S.users * (1 + v / 100)); },
-  tech: (S, v) => { if (S.ownModel) { S.E = Math.max(0, EofCap(myCap(S) + v) - baseE(S.t)); if (S.model) { S.model.cap += v; S.model.bench += v; } } else S.quality = clamp(S.quality + v * 1.5, 0, 100); },
+  tech: (S, v) => { if (S.ownModel) { S.E = Math.max(0, EofCap(myCap(S) + v) - baseE(S.t)); if (S.model) { S.model.cap += v; S.model.bench += v; } } else S.quality = clamp(S.quality + v * P['fx.techQuality'], 0, 100); },
   bench: (S, v) => { if (S.model) { S.model.bench += v; S.model.infl += v; } },
   quality: gauge('quality'),
-  quota: (S, v) => { S.quotaAdd = Math.max(-0.6, S.quotaAdd + v / 100); },   // 加法叠加，不封顶；配额变少时已经租的卡照留，只是超出的部分按现货价算
+  quota: (S, v) => { S.quotaAdd = Math.max(P['gpu.quotaAddMin'], S.quotaAdd + v / 100); },   // 加法叠加，不封顶；配额变少时已经租的卡照留，只是超出的部分按现货价算
   equity: (S, v) => { S.equity = clamp(S.equity + v, 0, 100); },
   ap: (S, v) => { S.apNext += v; },
   attr: (S, v) => { for (const k in v) S.founder.attrs[k] = clamp(S.founder.attrs[k] + v[k], 1, 15); },
@@ -217,18 +219,18 @@ const FX = {
     else {
       const role = { gainRes: 'res', gainEng: 'eng', gainOps: 'ops', gainBiz: 'biz', gainLegal: 'legal', gainStar: 'res' }[v];
       if (!role) return;
-      const e = genStaff(S, role, v === 'gainStar' ? 9 : 2);
-      if (v === 'gainStar') { e.skill = ri(S, 9, 10); e.quirk = 'genius'; e.salary = +((1.2 + 0.09 * e.skill ** 2) * 1.25 * 1.35).toFixed(1); }
+      const e = genStaff(S, role, v === 'gainStar' ? P['staff.starBonus'] : P['staff.gainBonus']);
+      if (v === 'gainStar') { e.skill = ri(S, P['staff.starMin'], P['staff.starMax']); e.quirk = 'genius'; e.salary = +((P['staff.pay0'] + P['staff.paySkill'] * e.skill ** 2) * ROLES.res.pay * STAFF_QUIRKS.genius.pay).toFixed(1); }
       addStaff(S, e); news(S, tx(S, 'news.staffJoined', { 名字: e.name, 岗位: ROLES[role].name, 能力: e.skill }));
     }
   },
   rival: (S, v, ctx) => { const r = rivalOf(S, ctx.rival); if (!r) return; if (v.cap) { r.drift += v.cap; r.cap += v.cap; r.bench += v.cap; } if (v.hype) r.hype = clamp(r.hype + v.hype, 0, 100); if (v.rel) r.rel = clamp(r.rel + v.rel, -100, 100); },
-  temp: (S, v) => { for (const t of [].concat(v)) S.temp.push({ key: t.key, mult: t.mult, add: t.add, until: S.t + (t.months || 6) }); },
+  temp: (S, v) => { for (const t of [].concat(v)) S.temp.push({ key: t.key, mult: t.mult, add: t.add, until: S.t + (t.months || P['fx.tempMonths']) }); },
   follow: (S, v, ctx) => { S.sched.push({ id: v.id, at: S.t + (v.in || 1), ctx }); },
   perk: S => { S.q.push({ type: 'draft' }); },
   project: (S, v, ctx) => {
     if (S.projects.some(p => p.id === v.id)) return;
-    S.projects.push({ uid: 'p' + S.uid++, id: v.id, chain: v.chain || null, name: v.name, desc: v.desc || '', kind: v.kind || 'res', need: v.need || 3, done: 0, t: S.t, due: S.t + (v.months || 8), ok: v.ok || null, fail: v.fail || null, ctx });
+    S.projects.push({ uid: 'p' + S.uid++, id: v.id, chain: v.chain || null, name: v.name, desc: v.desc || '', kind: v.kind || 'res', need: v.need || P['proj.need'], done: 0, t: S.t, due: S.t + (v.months || P['proj.months']), ok: v.ok || null, fail: v.fail || null, ctx });
     news(S, tx(S, 'news.project', { 项目: v.name }));
   },
   chain: (S, v) => {
@@ -422,10 +424,10 @@ export function newGame(setup, meta) {
     founder: { name: setup.name, attrs: { ...setup.attrs }, traits: setup.traits.filter(id => TRAIT[id]), outfit: setup.outfit || 'turtleneck' },
     co: { name: setup.coName, region: setup.region, route: setup.route, track: setup.track, office: 1, modelName: setup.modelName || text('default.model'), logo: setup.logo || null, brand: setup.brand || '#ff6b4a' },
     cash: R.cash, equity: 100, stage: 0, lastRaiseT: -9, raiseBoost: 0, ap: 3, apNext: 0,
-    hype: 8, rep: 50, morale: 65, reg: 10, bubble: 35, burstT: 0, outage: 0,
-    users: setup.route === 'app' ? 2 : 0.3, fake: 0, quality: setup.route === 'app' ? 40 : 28,
+    hype: P['start.hype'], rep: P['start.rep'], morale: P['start.morale'], reg: P['start.reg'], bubble: P['start.bubble'], burstT: 0, outage: 0,
+    users: setup.route === 'app' ? P['start.usersApp'] : P['start.usersModel'], fake: 0, quality: setup.route === 'app' ? P['start.qualityApp'] : P['start.qualityModel'],
     ownModel: setup.route === 'model', model: null, E: 0, furnace: null, lastReleaseT: -9, upstream: null, apiIdx: 1,
-    gpu: 0, gpuBase: 1.5, quotaBase: R.quota, quotaAdd: 0, quotaEarn: 0,
+    gpu: 0, gpuBase: P['start.gpuPrice'], quotaBase: R.quota, quotaAdd: 0, quotaEarn: 0,
     staff: [], cands: [], uid: 1, policies: { work: '965', price: 'std', safety: 'std' },
     dirt: [], exposed: 0, exposedCrime: 0, hadDirt: false,
     perks: [], feats: [], sprint: null, projects: [], chains: {}, flags: {}, temp: [], rivals: [], sched: [], seen: {}, q: [], fxq: [], log: [], cd: {},
@@ -433,11 +435,11 @@ export function newGame(setup, meta) {
   };
   for (const id of S.founder.traits) { const a = TRAIT[id]?.attr; if (a) for (const k in a) S.founder.attrs[k] += a[k]; }
   S.rivals = RIVALS.map(r => {
-    const off = r.off + rf(S, -2, 2), cap = frontier(1) + off;
-    return { id: r.id, name: r.name, boss: r.boss, model: r.model, color: r.color, off, drift: 0, cheat: r.cheat, ver: ri(S, 3, 4), cap, bench: cap + r.cheat, hype: 40, rel: 0, next: ri(S, 2, 7) };
+    const off = r.off + rf(S, -P['start.rivalJitter'], P['start.rivalJitter']), cap = frontier(1) + off;
+    return { id: r.id, name: r.name, boss: r.boss, model: r.model, color: r.color, off, drift: 0, cheat: r.cheat, ver: ri(S, P['start.rivalVerMin'], P['start.rivalVerMax']), cap, bench: cap + r.cheat, hype: P['start.rivalHype'], rel: 0, next: ri(S, P['start.rivalNextMin'], P['start.rivalNextMax']) };
   });
   S.upstream = pick(S, setup.region === 'sz' ? ['deepsleep', 'bytejump', 'openbi'] : ['openbi', 'misan', 'goggle']);
-  if (S.ownModel) { const cap = myCap(S); S.model = { cap, bench: cap, ver: 1, name: `${S.co.modelName}-1`, infl: 0 }; S.gpu = 8; S.furnace = { on: true, data: 'open', months: 0 }; }
+  if (S.ownModel) { const cap = myCap(S); S.model = { cap, bench: cap, ver: 1, name: `${S.co.modelName}-1`, infl: 0 }; S.gpu = P['start.gpu']; S.furnace = { on: true, data: 'open', months: 0 }; }
   for (const id of S.founder.traits) {
     const st = TRAIT[id]?.start; if (!st) continue;
     if (st.cash) S.cash += st.cash;
@@ -446,23 +448,23 @@ export function newGame(setup, meta) {
     if (st.users) S.users += st.users;
     if (st.dirt) addDirt(S, st.dirt);
     if (st.equity) S.equity += st.equity;
-    if (st.reg) S.reg = clamp(S.reg + st.reg, 0, 100);
+    if (st.reg) S.reg = clamp(S.reg + st.reg, 0, P['reg.max']);
     if (st.debt) { S.flags.loaned = 1; S.sched.push({ id: 'debt_due', at: st.debt }); }
     for (const r of st.staff || []) {
       if (typeof r === 'string') { addStaff(S, genStaff(S, r, 1)); continue; }
       const e = genStaff(S, r.role, r.bonus || 0);            // 合伙人：死忠、只拿半薪
-      e.quirk = 'loyal'; e.salary = +(e.salary * 0.5).toFixed(1); addStaff(S, e);
+      e.quirk = 'loyal'; e.salary = +(e.salary * P['start.partnerPay']).toFixed(1); addStaff(S, e);
     }
   }
   const own = meta?.own || {};
-  if (own.m_cash) S.cash += 60;
-  if (own.m_gpu) S.quotaBase *= 1.4;
+  if (own.m_cash) S.cash += P['meta.cash'];
+  if (own.m_gpu) S.quotaBase *= P['meta.gpu'];
   if (own.m_revive) S.flags.revive = 1;
   S.q.push({ type: 'event', id: 'intro' });
   if (own.m_perk) S.q.push({ type: 'draft' });
-  if (setup.region === 'bay') S.sched.push({ id: 'chepole_1', at: 3 });
-  S.sched.push({ id: 'leather_rumor', at: ri(S, 9, 30) });
-  S.ideoAt = ri(S, 28, 40);                                           // 路线之争：中后期某个月，早期投资人退出，国资 / 公地资本来接盘老股
+  if (setup.region === 'bay') S.sched.push({ id: 'chepole_1', at: P['event.chepoleAt'] });
+  S.sched.push({ id: 'leather_rumor', at: ri(S, P['event.leatherFrom'], P['event.leatherTo']) });
+  S.ideoAt = ri(S, P['ideo.entry.from'], P['ideo.entry.to']);                                           // 路线之争：中后期某个月，早期投资人退出，国资 / 公地资本来接盘老股
   refreshCands(S);
   S.ap = apMax(S);
   if (setup.tutorial) S.tut = { on: true, open: {}, queue: [], dirt0: S.dirt.length };
@@ -472,20 +474,20 @@ export function newGame(setup, meta) {
 
 // ───────── 月结 ─────────
 function growUsers(S) {
-  const T = TRACKS[S.co.track], O = power(S, 'ops'), gm = T.growth * mod(S, 'growthMult') ** 0.5 * (S.reg >= 70 ? 0.8 : 1);
-  const rel = clamp((usedCap(S) - (frontier(S.t) - 18)) / 22, 0, 1.3);     // 模型相对前沿的竞争力
-  const attract = 0.005 + 0.025 * S.quality / 100 + 0.03 * S.hype / 100 + 0.025 * rel + Math.min(0.02, O / 1000);
+  const T = TRACKS[S.co.track], O = power(S, 'ops'), gm = T.growth * mod(S, 'growthMult') ** P['users.growModExp'] * (S.reg >= P['reg.high'] ? P['reg.growthMult'] : 1);
+  const rel = relCap(S);                                                  // 模型相对前沿的竞争力
+  const attract = P['users.attract0'] + P['users.attractQ'] * S.quality / 100 + P['users.attractHype'] * S.hype / 100 + P['users.attractModel'] * rel + Math.min(P['users.opsMax'], O / P['users.opsDiv']);
   const room = Math.max(0, 1 - S.users / (shareCap(S) * market(S)));
-  const churn = Math.max(0.005, 0.035 + 0.05 * (1 - S.rep / 100) + mod(S, 'churnAdd') + S.outage * 0.2);
-  const seed = (0.2 + S.hype / 40 + O / 10 + S.quality / 60) * gm * (0.5 + S.t / 36) * (1 - S.outage);
+  const churn = Math.max(P['users.churnMin'], P['users.churn0'] + P['users.churnRep'] * (1 - S.rep / 100) + mod(S, 'churnAdd') + S.outage * P['users.churnOutage']);
+  const seed = (P['users.seed0'] + S.hype / P['users.seedHype'] + O / P['users.seedOps'] + S.quality / P['users.seedQ']) * gm * (P['users.seedT0'] + S.t / P['users.seedTMonths']) * (1 - S.outage);
   S.users = Math.max(0, S.users * (1 + attract * gm * room * (1 - S.outage) - churn) + seed * room);
-  S.fake *= 0.97;
+  S.fake *= P['users.fakeDecay'];
 }
 
 function pickRandomEvent(S) {
-  const pool = ALL.filter(ev => (ev.weight ?? 1) > 0 && cond(S, ev.when) && (ev.once === false ? S.t - (S.seen[ev.id] ?? -99) >= (ev.cd ?? 10) : !S.seen[ev.id]));
+  const pool = ALL.filter(ev => (ev.weight ?? 1) > 0 && cond(S, ev.when) && (ev.once === false ? S.t - (S.seen[ev.id] ?? -99) >= (ev.cd ?? P['event.cd']) : !S.seen[ev.id]));
   if (!pool.length) return null;
-  const w = ev => (ev.weight ?? 1) * (ev.cat === S.lastCat ? 0.35 : 1);
+  const w = ev => (ev.weight ?? 1) * (ev.cat === S.lastCat ? P['event.sameCat'] : 1);
   let x = rnd(S) * pool.reduce((a, e) => a + w(e), 0);
   return pool.find(e => (x -= w(e)) < 0) || pool[0];
 }
@@ -494,8 +496,8 @@ export function queueEvent(S, id, ctx) { const ev = EV[id]; if (!ev) return; S.s
 export function projectRate(S, p) {
   if (p.kind === 'ap') return 0;
   const share = S.projects.filter(x => x.kind === p.kind).length || 1;
-  if (p.kind === 'gpu') return clamp(Math.max(0, S.gpu - inferNeed(S)) / Math.max(8, 0.25 * quota(S)), 0, 2.5) / share;
-  return clamp(power(S, p.kind) / (6 + 9 * S.stage), 0.35, 2.5) / share;
+  if (p.kind === 'gpu') return clamp(Math.max(0, S.gpu - inferNeed(S)) / Math.max(P['proj.gpuMin'], P['proj.gpuShare'] * quota(S)), 0, P['proj.max']) / share;
+  return clamp(power(S, p.kind) / (P['proj.need0'] + P['proj.needStage'] * S.stage), P['proj.min'], P['proj.max']) / share;
 }
 // 这个人（已雇佣或候选）到底能带来什么：对比「有他」和「没他」时公司的各项产出
 
@@ -504,12 +506,12 @@ export function staffImpact(S, e) {
   const probe = list => { S.staff = list; return { res: researchEff(S), eng: power(S, 'eng'), ops: power(S, 'ops'), b2b: revenue(S).b2b, legal: power(S, 'legal') }; };
   const a = probe(rest), b = probe([...rest, e]);
   S.staff = real;
-  const lines = [], dm = mod(S, 'devMult'), gm = TRACKS[S.co.track].growth * mod(S, 'growthMult') ** 0.5;
+  const lines = [], dm = mod(S, 'devMult'), gm = TRACKS[S.co.track].growth * mod(S, 'growthMult') ** P['users.growModExp'];
   if (e.role === 'res') { lines.push(tx(S, 'impact.res.eff', { 百分比: ((b.res / a.res - 1) * 100).toFixed(0) }), tx(S, 'impact.res.proj')); if (!S.ownModel) lines.push(tx(S, 'impact.res.noModel')); }
-  if (e.role === 'eng') { const d = b.eng - a.eng; lines.push(tx(S, 'impact.eng.quality', { 体验: (d * 0.08 * dm * Math.max(0, 1 - S.quality / qCeil(S))).toFixed(1) }), tx(S, 'impact.eng.dev', { 进度: (d * dm).toFixed(1) })); if (S.ownModel) lines.push(tx(S, 'impact.eng.boom', { 概率: (d / 6).toFixed(1) })); }
-  if (e.role === 'ops') { const d = b.ops - a.ops; lines.push(tx(S, 'impact.ops.users', { 用户: fmtUsers(d / 10 * gm * (0.5 + S.t / 36)) }), tx(S, 'impact.ops.growth', { 增长: ((Math.min(0.02, b.ops / 1000) - Math.min(0.02, a.ops / 1000)) * gm * 100).toFixed(2) })); }
+  if (e.role === 'eng') { const d = b.eng - a.eng; lines.push(tx(S, 'impact.eng.quality', { 体验: (d * P['quality.engK'] * dm * Math.max(0, 1 - S.quality / qCeil(S))).toFixed(1) }), tx(S, 'impact.eng.dev', { 进度: (d * dm).toFixed(1) })); if (S.ownModel) lines.push(tx(S, 'impact.eng.boom', { 概率: (d / (P['furnace.boomEngDiv'] / 100)).toFixed(1) })); }
+  if (e.role === 'ops') { const d = b.ops - a.ops; lines.push(tx(S, 'impact.ops.users', { 用户: fmtUsers(d / P['users.seedOps'] * gm * (P['users.seedT0'] + S.t / P['users.seedTMonths'])) }), tx(S, 'impact.ops.growth', { 增长: ((Math.min(P['users.opsMax'], b.ops / P['users.opsDiv']) - Math.min(P['users.opsMax'], a.ops / P['users.opsDiv'])) * gm * 100).toFixed(2) })); }
   if (e.role === 'biz') lines.push(tx(S, 'impact.biz.b2b', { 收入: money(S, b.b2b - a.b2b, true) }), tx(S, 'impact.biz.proj'));
-  if (e.role === 'legal') lines.push(tx(S, 'impact.legal.expose', { 概率: ((1 - (1 + a.legal / 12) / (1 + b.legal / 12)) * 100).toFixed(0) }), tx(S, 'impact.legal.fix'));
+  if (e.role === 'legal') lines.push(tx(S, 'impact.legal.expose', { 概率: ((1 - (1 + a.legal / P['dirt.legalDiv']) / (1 + b.legal / P['dirt.legalDiv'])) * 100).toFixed(0) }), tx(S, 'impact.legal.fix'));
   return { lines, quirk: e.quirk ? tx(S, 'staff.quirk', { 名字: STAFF_QUIRKS[e.quirk].name, 说明: STAFF_QUIRKS[e.quirk].desc }) : null, salary: e.salary * mod(S, 'salaryMult') };
 }
 // 花 1 行动点亲自推进一个特殊项目
@@ -518,7 +520,7 @@ export function pushProject(S, uid) {
   if (!p || S.ap < 1) return null;
   return measure(S, () => {
     const a = S.founder.attrs, k = { res: a.tech, eng: a.tech, gpu: a.tech, ops: a.cha, biz: a.biz, legal: a.net, ap: (a.cha + a.net) / 2 }[p.kind] ?? 5;
-    S.ap--; p.done += 1 + (k - 5) * 0.15;
+    S.ap--; p.done += 1 + (k - 5) * P['proj.pushK'];
     return { text: tx(S, p.done >= p.need ? 'project.push.ready' : 'project.push', { 项目: p.name }) };
   });
 }
@@ -545,7 +547,7 @@ export function fxLines(S, fx) {
     else if (k === 'cleanDirt') line('fx.cleanDirt', null, true);
     else if (k === 'expose') line('fx.expose', null, false);
     else if (k === 'staff') line(hasText('fx.staff.' + v) && v !== 'gain' ? 'fx.staff.' + v : 'fx.staff.gain', null, !/^lose/.test(v));
-    else if (k === 'temp') for (const t of [].concat(v)) { const up = t.mult != null ? t.mult > 1 : t.add > 0; line('fx.temp', { 修正: MOD_NAME[t.key] || t.key, 值: t.mult != null ? '×' + t.mult : sg(t.add), 月: t.months || 6 }, TEMP_INV.includes(t.key) ? !up : up); }
+    else if (k === 'temp') for (const t of [].concat(v)) { const up = t.mult != null ? t.mult > 1 : t.add > 0; line('fx.temp', { 修正: MOD_NAME[t.key] || t.key, 值: t.mult != null ? '×' + t.mult : sg(t.add), 月: t.months || P['fx.tempMonths'] }, TEMP_INV.includes(t.key) ? !up : up); }
     else if (k === 'perk') line('fx.perk', null, true);
     else if (k === 'project') line('fx.project', { 项目: v.name }, null);
     else if (k === 'end') line('fx.end', null, null);
@@ -560,17 +562,17 @@ export function endMonth(S) {
   // 1. 算力：推理优先，剩下的进丹炉
   const need = inferNeed(S), have = S.gpu + brainGpu(S), free = Math.max(0, have - need);
   S.outage = need > have ? 1 - have / need : 0;
-  if (S.outage > 0.05) news(S, tx(S, 'news.outage', { 缺口: Math.round(S.outage * 100) }));
+  if (S.outage > P['gpu.outageNews']) news(S, tx(S, 'news.outage', { 缺口: Math.round(S.outage * 100) }));
   if (S.ownModel && S.furnace?.on) {
     let gain = free * researchEff(S) * DATA_SOURCES[S.furnace.data].mult;
-    const pBoom = clamp(0.07 - power(S, 'eng') / 600, 0.015, 0.07) * mod(S, 'boomMult');
-    if (free > 0 && S.t > 3 && rnd(S) < pBoom) { gain = -S.E * 0.12; S.fxq.push(['boom']); news(S, tx(S, 'news.boom')); }
+    const pBoom = clamp(P['furnace.boom'] - power(S, 'eng') / P['furnace.boomEngDiv'], P['furnace.boomMin'], P['furnace.boom']) * mod(S, 'boomMult');
+    if (free > 0 && S.t > P['furnace.safeMonths'] && rnd(S) < pBoom) { gain = -S.E * P['furnace.boomLoss']; S.fxq.push(['boom']); news(S, tx(S, 'news.boom')); }
     S.E = Math.max(0, S.E + gain); S.furnace.months++;
-    if (S.furnace.data === 'distill') S.E = Math.min(S.E, Math.max(0, EofCap(Math.max(...S.rivals.map(r => r.cap)) - 2) - baseE(S.t)));
+    if (S.furnace.data === 'distill') S.E = Math.min(S.E, Math.max(0, EofCap(Math.max(...S.rivals.map(r => r.cap)) - P['furnace.distillGap']) - baseE(S.t)));
   }
   // 2. 产品与功能
   const E = power(S, 'eng'), dm = mod(S, 'devMult');
-  S.quality = clamp(S.quality + E * 0.08 * dm * Math.max(0, 1 - S.quality / qCeil(S)) - 0.6, 5, 100);
+  S.quality = clamp(S.quality + E * P['quality.engK'] * dm * Math.max(0, 1 - S.quality / qCeil(S)) - P['quality.decay'], P['quality.min'], 100);
   if (S.sprint) {
     S.sprint.done += E * dm;
     if (S.sprint.done >= S.sprint.need) { const f = FEAT[S.sprint.id]; S.feats.push(f.id); S.featDone = { id: f.id, t: S.t }; applyFx(S, f.fx); news(S, tx(S, 'news.feature', { 功能: f.name })); S.fxq.push(['say', { text: tx(S, 'say.feature', { 功能: f.name }) }]); S.sprint = null; }
@@ -593,62 +595,62 @@ export function endMonth(S) {
   S.last = { rev: rv.total, cost: cs.total, net: rv.total - cs.total, rv, cs };
   S.streak.profit = rv.total > cs.total ? S.streak.profit + 1 : 0;
   S.streak.x996 = String(S.policies.work) === '996' ? S.streak.x996 + 1 : 0;
-  if (S.streak.x996 && S.streak.x996 % 8 === 0) addDirt(S, 'overwork');
+  if (S.streak.x996 && S.streak.x996 % P['work.dirtMonths'] === 0) addDirt(S, 'overwork');
   S.stats.maxUsers = Math.max(S.stats.maxUsers, S.users);
   // 显卡配额跟着采购走：租满配额的老客户，供应商每月多给 7%；超租的部分有三成半转成长约；闲置过半就慢慢收回
   {
     const q = Math.max(1, quota(S)), k = Math.max(0.05, (1 + S.quotaAdd) * mod(S, 'quotaMult'));
-    if (S.gpu >= 0.85 * q) S.quotaEarn = (S.quotaEarn || 0) + (0.07 * q + 0.35 * Math.max(0, S.gpu - q)) / k;
-    else if (S.gpu < 0.5 * q) S.quotaEarn = (S.quotaEarn || 0) * 0.97;
+    if (S.gpu >= P['gpu.fullLine'] * q) S.quotaEarn = (S.quotaEarn || 0) + (P['gpu.earnFull'] * q + P['gpu.earnOver'] * Math.max(0, S.gpu - q)) / k;
+    else if (S.gpu < P['gpu.idleLine'] * q) S.quotaEarn = (S.quotaEarn || 0) * P['gpu.idleDecay'];
   }
   // 4. 仪表
   const rw = runway(S);
-  S.hype = clamp(S.hype * (1 - (0.11 + Math.max(0, S.hype - 60) * 0.002) * mod(S, 'hypeDecayMult')), 0, 100);
-  S.morale = clamp(S.morale + (60 - S.morale) * 0.1 + mod(S, 'moraleAdd') - (rw < 3 ? 2 : 0), 0, 100);
-  S.rep = clamp(S.rep + mod(S, 'repAdd') + (S.quality > 70 ? 0.3 : S.quality < 30 ? -0.3 : 0) - S.outage * 4, 0, 100);
-  const dr = 0.7 + S.hype / 90 + Math.log10(1 + S.users) / 3.5 + (S.co.track === 'companion' ? 0.3 : 0) + mod(S, 'regAdd');
-  S.reg = clamp(S.reg + (dr > 0 ? dr * mod(S, 'regMult') : dr), 0, 100);
-  S.bubble = clamp(S.bubble + (S.burstT ? rf(S, 0.1, 0.8) : rf(S, 0.4, 1.5)), 0, 100);
-  S.gpuBase = clamp(S.gpuBase + rf(S, -0.06, 0.07), 1.1, 2.1);
-  S.apiIdx = clamp(S.apiIdx * rf(S, 0.97, 1.01), 0.4, 1.6);
+  S.hype = clamp(S.hype * (1 - (P['hype.decay'] + Math.max(0, S.hype - P['hype.decayFrom']) * P['hype.decayK']) * mod(S, 'hypeDecayMult')), 0, 100);
+  S.morale = clamp(S.morale + (P['morale.home'] - S.morale) * P['morale.pull'] + mod(S, 'moraleAdd') - (rw < P['morale.brokeLine'] ? P['morale.brokeHit'] : 0), 0, 100);
+  S.rep = clamp(S.rep + mod(S, 'repAdd') + (S.quality > P['rep.qHigh'] ? P['rep.qStep'] : S.quality < P['rep.qLow'] ? -P['rep.qStep'] : 0) - S.outage * P['rep.outageHit'], 0, 100);
+  const dr = P['reg.drift'] + S.hype / P['reg.hypeDiv'] + Math.log10(1 + S.users) / P['reg.usersDiv'] + (S.co.track === 'companion' ? P['reg.companion'] : 0) + mod(S, 'regAdd');
+  S.reg = clamp(S.reg + (dr > 0 ? dr * mod(S, 'regMult') : dr), 0, P['reg.max']);
+  S.bubble = clamp(S.bubble + (S.burstT ? rf(S, P['bubble.afterMin'], P['bubble.afterMax']) : rf(S, P['bubble.riseMin'], P['bubble.riseMax'])), 0, 100);
+  S.gpuBase = clamp(S.gpuBase + rf(S, P['gpu.priceStepMin'], P['gpu.priceStepMax']), P['gpu.priceMin'], P['gpu.priceMax']);
+  S.apiIdx = clamp(S.apiIdx * rf(S, P['api.stepMin'], P['api.stepMax']), P['api.min'], P['api.max']);
   // 5. 对手
   for (const r of S.rivals) {
-    r.drift = clamp(r.drift + rf(S, -0.3, 0.3), -4, 4);
-    r.cap = Math.min(AGI_CAP - 0.5, frontier(S.t + 1) + r.off + r.drift);
-    r.hype *= 0.93;
-    if (--r.next <= 0) { r.ver++; r.bench = r.cap + r.cheat + rf(S, -1, 1.5); r.next = ri(S, 4, 8); r.hype = clamp(r.hype + 18, 0, 100); news(S, tx(S, 'news.rivalRelease', { 对手: r.name, 模型: r.model, 版本: r.ver, 跑分: r.bench.toFixed(1), 老板: r.boss })); }
+    r.drift = clamp(r.drift + rf(S, -P['rival.driftStep'], P['rival.driftStep']), -P['rival.driftMax'], P['rival.driftMax']);
+    r.cap = Math.min(AGI_CAP - P['rival.agiGap'], frontier(S.t + 1) + r.off + r.drift);
+    r.hype *= P['rival.hypeDecay'];
+    if (--r.next <= 0) { r.ver++; r.bench = r.cap + r.cheat + rf(S, P['rival.benchMin'], P['rival.benchMax']); r.next = ri(S, P['rival.releaseMin'], P['rival.releaseMax']); r.hype = clamp(r.hype + P['rival.releaseHype'], 0, 100); news(S, tx(S, 'news.rivalRelease', { 对手: r.name, 模型: r.model, 版本: r.ver, 跑分: r.bench.toFixed(1), 老板: r.boss })); }
   }
   // 6. 团队
-  if (S.morale < 25 && S.staff.length && rnd(S) < 0.3) { const e = pick(S, S.staff.filter(x => x.quirk !== 'loyal').length ? S.staff.filter(x => x.quirk !== 'loyal') : S.staff); removeStaff(S, e.uid); news(S, tx(S, 'news.quit', { 名字: e.name, 岗位: ROLES[e.role].name })); }
+  if (S.morale < P['morale.quitLine'] && S.staff.length && rnd(S) < P['morale.quitOdds']) { const e = pick(S, S.staff.filter(x => x.quirk !== 'loyal').length ? S.staff.filter(x => x.quirk !== 'loyal') : S.staff); removeStaff(S, e.uid); news(S, tx(S, 'news.quit', { 名字: e.name, 岗位: ROLES[e.role].name })); }
   ideoMonth(S, API);                                                  // 路线之争：读书会招新、末位淘汰
   // 7. 时间推进
   S.t++;
   S.temp = S.temp.filter(tm => tm.until > S.t);
   for (const k in S.cd) if (S.cd[k] <= S.t) delete S.cd[k];
   S.hist.push([Math.round(S.cash), +S.users.toFixed(1), Math.round(valuation(S))]);
-  if (S.t % 2 === 0 && NEWS.length) news(S, tx(S, 'news.paper', { 新闻: fmt(S, pick(S, NEWS)) }));
+  if (S.t % P['news.every'] === 0 && NEWS.length) news(S, tx(S, 'news.paper', { 新闻: fmt(S, pick(S, NEWS)) }));
   refreshCands(S);
-  S.ap = clamp(apMax(S) + S.apNext, 1, 7); S.apNext = 0;
+  S.ap = clamp(apMax(S) + S.apNext, P['ap.min'], P['ap.max']); S.apNext = 0;
   // 成就
-  if (S.users >= 100) award(S, 'm100');
-  if (S.users >= 10000) award(S, 'y1');
-  if (S.streak.x996 >= 24) award(S, 'x996');
-  if (S.stage === 0 && S.t >= 25) award(S, 'boot');
-  if (rank(S) === 1) { award(S, 'top1'); if (S.model.infl >= 4) award(S, 'fake1'); }
+  if (S.users >= P['ach.m100']) award(S, 'm100');
+  if (S.users >= P['ach.y1']) award(S, 'y1');
+  if (S.streak.x996 >= P['ach.x996']) award(S, 'x996');
+  if (S.stage === 0 && S.t > P['ach.boot']) award(S, 'boot');
+  if (rank(S) === 1) { award(S, 'top1'); if (S.model.infl >= P['ach.fake1']) award(S, 'fake1'); }
 
   // 8. 结局与本月事件
   if (S.t > MONTHS) {
     const val = valuation(S);
-    return endGame(S, val >= 4e6 ? 'giant' : val >= 1e5 ? 'unicorn' : S.streak.profit >= 3 ? 'small' : 'zombie');
+    return endGame(S, val >= P['end.giant'] ? 'giant' : val >= P['end.unicorn'] ? 'unicorn' : S.streak.profit >= P['end.smallProfit'] ? 'small' : 'zombie');
   }
   if (S.cash < 0) {
-    if (S.perks.includes('phoenix') && !S.flags.phoenixUsed) { S.flags.phoenixUsed = 1; S.cash = 6 * unit(S); S.fxq.push(['money']); news(S, tx(S, 'news.phoenix')); }
-    else if (S.flags.revive) { delete S.flags.revive; S.cash = 4 * unit(S); news(S, tx(S, 'news.revive')); }
+    if (S.perks.includes('phoenix') && !S.flags.phoenixUsed) { S.flags.phoenixUsed = 1; S.cash = P['perk.phoenixMonths'] * unit(S); S.fxq.push(['money']); news(S, tx(S, 'news.phoenix')); }
+    else if (S.flags.revive) { delete S.flags.revive; S.cash = P['meta.reviveMonths'] * unit(S); news(S, tx(S, 'news.revive')); }
     else S.q.push({ type: 'event', id: 'broke' });
   }
   // 黑料曝光（每月最多一张）
   for (const d of S.dirt) {
-    if (S.t - d.t >= 2 && rnd(S) < exposeP(S, d)) { S.q.push({ type: 'scandal', uid: d.uid }); break; }
+    if (S.t - d.t >= P['dirt.hideMonths'] && rnd(S) < exposeP(S, d)) { S.q.push({ type: 'scandal', uid: d.uid }); break; }
   }
   // 定时与连锁事件
   for (const s of S.sched.filter(s => s.at <= S.t)) { S.seen[s.id] = S.t; S.q.push({ type: 'event', id: s.id, ctx: s.ctx }); }
@@ -656,13 +658,13 @@ export function endMonth(S) {
   // 系统事件
   if (S.t % 12 === 1) queueEvent(S, 'year_board');
   if (S.vam && S.t >= S.vam.due) queueEvent(S, 'vam_due');
-  if (S.reg >= 100 && !S.cd.crack) { S.cd.crack = S.t + 10; queueEvent(S, 'crackdown'); }
-  if (!S.burstT && S.t > 24 && ((S.bubble >= 78 && rnd(S) < 0.14) || (S.t >= 56 && rnd(S) < 0.12))) queueEvent(S, 'bubble_burst');
-  if (S.stage >= 2 && !S.cd.coup && ((S.equity < 45 && (S.rep < 30 || S.morale < 28 || S.exposed >= 35) && rnd(S) < 0.35) || (S.equity < 25 && rnd(S) < 0.04))) { S.cd.coup = S.t + 18; queueEvent(S, 'coup'); }
-  if (S.stage >= 2 && !S.cd.acq && rnd(S) < 0.04 + (S.hype > 60 ? 0.03 : 0)) { S.cd.acq = S.t + 14; queueEvent(S, 'acq_offer', { rival: pick(S, S.flags.red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.flags.rose ? S.rivals.filter(r => r.id === 'misan') : S.rivals.slice(0, 4)).id }); }   // 红色公司：西方巨头不再来收购；「共享繁荣」的公司只剩同为公益公司的厌世智能还肯谈
+  if (S.reg >= P['reg.max'] && !S.cd.crack) { S.cd.crack = S.t + P['reg.crackCd']; queueEvent(S, 'crackdown'); }
+  if (!S.burstT && S.t > P['bubble.burstFrom'] && ((S.bubble >= P['bubble.burstLine'] && rnd(S) < P['bubble.burstOdds']) || (S.t >= P['bubble.lateFrom'] && rnd(S) < P['bubble.lateOdds']))) queueEvent(S, 'bubble_burst');
+  if (S.stage >= P['coup.stage'] && !S.cd.coup && ((S.equity < P['coup.equity'] && (S.rep < P['coup.rep'] || S.morale < P['coup.morale'] || S.exposed >= P['coup.exposed']) && rnd(S) < P['coup.odds']) || (S.equity < P['coup.equityLow'] && rnd(S) < P['coup.lowOdds']))) { S.cd.coup = S.t + P['coup.cd']; queueEvent(S, 'coup'); }
+  if (S.stage >= P['acq.stage'] && !S.cd.acq && rnd(S) < P['acq.odds'] + (S.hype > P['acq.hypeLine'] ? P['acq.hypeOdds'] : 0)) { S.cd.acq = S.t + P['acq.cd']; queueEvent(S, 'acq_offer', { rival: pick(S, S.flags.red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.flags.rose ? S.rivals.filter(r => ROSE_RIVALS.includes(r.id)) : S.rivals.slice(0, P['acq.rivals'])).id }); }   // 红色公司：西方巨头不再来收购；「共享繁荣」的公司只剩同为公益公司的厌世智能还肯谈
   for (const [id, ctx] of projEvents) queueEvent(S, id, ctx);
   // 随机事件
-  const n = S.tut?.on && S.t <= 2 ? 0 : (rnd(S) < 0.82 ? 1 : 0) + (S.t > 10 && rnd(S) < 0.18 ? 1 : 0);
+  const n = S.tut?.on && S.t <= P['event.tutQuiet'] ? 0 : (rnd(S) < P['event.odds1'] ? 1 : 0) + (S.t > P['event.odds2From'] && rnd(S) < P['event.odds2'] ? 1 : 0);
   for (let i = 0; i < n; i++) { const ev = pickRandomEvent(S); if (ev) { S.lastCat = ev.cat; queueEvent(S, ev.id); } }
 }
 
@@ -699,12 +701,12 @@ export function buyMeta(meta, id) {
 // 结算：算分、发人脉点、记图鉴。每局只调用一次。
 export function finalize(S, meta) {
   const o = S.over, E = ENDINGS[o.id];
-  const score = Math.round(E.base + Math.log10(Math.max(10, o.val * S.equity / 100)) * 6 + Math.min(S.t, MONTHS) / 4 + S.perks.length - S.exposed / 6 + (o.id === 'acquired' ? 10 : 0));
+  const score = Math.round(E.base + Math.log10(Math.max(10, o.val * S.equity / 100)) * P['score.valK'] + Math.min(S.t, MONTHS) / P['score.monthDiv'] + S.perks.length - S.exposed / P['score.exposedDiv'] + (o.id === 'acquired' ? P['score.acquired'] : 0));
   const newAch = S.ach.filter(a => !meta.ach[a]), newEnd = !meta.ends[o.id];
   for (const a of S.ach) meta.ach[a] = 1;
   meta.ends[o.id] = (meta.ends[o.id] || 0) + 1;
-  if (Object.keys(meta.ends).length >= 8 && !meta.ach.allend) { meta.ach.allend = 1; newAch.push('allend'); }
-  const points = Math.max(1, Math.round(score / 14)) + newAch.length * 2 + (newEnd ? 3 : 0);
+  if (Object.keys(meta.ends).length >= P['ach.allend'] && !meta.ach.allend) { meta.ach.allend = 1; newAch.push('allend'); }
+  const points = Math.max(1, Math.round(score / P['meta.pointDiv'])) + newAch.length * P['meta.achPoints'] + (newEnd ? P['meta.endPoints'] : 0);
   meta.points += points; meta.runs++; meta.best = Math.max(meta.best, score);
   saveMeta(meta); clearSave();
   return { score, points, newAch, newEnd, ending: E, text: fmt(S, E.text).replace('{pay}', money(S, o.pay || 0)) };

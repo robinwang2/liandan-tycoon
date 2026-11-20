@@ -1,5 +1,5 @@
 // 反过来：从 src/data/tables/*.json 重新生成 tables/*.xlsx。
-// 平时用不到。只在两种时候用：第一次把数据搬进表格；以后改了表结构（tools/tables/schema.mjs，比如加一列、调列的顺序）。
+// 平时用不到。第一次把数据搬进表格、改了表结构或生成的「#说明」时才用；只更新部分工作簿时用 --only。
 //   node tools/tables/build-xlsx.mjs --force [--only defs,events]
 // 注意：会整本覆盖。你在表里手工加的备注列、调过的列宽和颜色都会丢，先备份。
 import { readFile } from 'node:fs/promises';

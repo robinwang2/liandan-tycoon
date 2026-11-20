@@ -18,6 +18,13 @@
 // 另外支持 redMin / redMax / capMin / capMax 读两条进度条）。
 // 从第 3 级起，引擎按「玩家意图」决定每级给几张哪种类型的卡：本级 opts 优先，不够的从 IDEO_POOL 抽。
 import T from './tables/ideology_cn.json' with { type: 'json' };
+import { fillRec } from './defs.js';
+
+// 代码弹的窗口里，选项提示引用数的 {效果.xxx} {临时.xxx}：载入时填好（{价格} 这类代码算的留着）
+for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
+  if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
+}
+for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);
 
 export const {
   IDEO_CAST,          // 主要角色（正文直接写名字）
@@ -26,8 +33,8 @@ export const {
   IDEO_ENDINGS,       // 四种收场：red / cap / purge / fail
   IDEO_CHAINS,        // 红色线、资本线解锁的两条一次性事件链（格式同 events_chains.js）
   UTOPIA_EVENTS, BCI_EVENTS,
-  PLAN_TEXT,          // 「五年计划」的文字
   ACT_TEXT,           // 意识形态行动的结果文案：每个 key 2~3 句随机挑
-  YANK_TEXT,          // 「末位淘汰」确认窗
+  SYS_EVENTS,         // 代码弹出来的窗口：接盘老股、五年计划（立项 / 到期完成 / 没完成）、末位淘汰
+  VER,                // 版本设定：开局进度条、有没有反共压力、品牌色、结局换成的公司目标、标记名、两条一次性事件链的开头
   IDEO_EVENTS,        // 结局之后才会出现的随机事件（when 里用 flag: 'red' / 'capb' / 'red_cell' 限定）
 } = T;
