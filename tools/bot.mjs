@@ -10,7 +10,7 @@ export const setups = [];
 for (const region of ['bay', 'sz']) for (const route of ['model', 'app']) for (const track of ['chat', 'code', 'companion', 'video']) setups.push({ region, route, track });
 
 // 旁观口：对拍工具用它记下机器人看到的每个对话框、每次选择、每个行动
-export const tap = { dialog: null, choose: null, act: null, hints: null };
+export const tap = { dialog: null, choose: null, act: null, hints: null, month: null };
 
 export function mkSetup(s, style) {
   const attrs = { tech: 5, cha: 5, mgmt: 5, biz: 5, net: 5, luck: 5 }, keys = Object.keys(attrs);
@@ -94,6 +94,8 @@ export function playMonth(S, style) {
   }
   if (S.over) return;
   if (S.streak.profit < 3 && S.stage >= 5 && S.policies.price !== 'premium') A.setPolicy(S, 'price', 'premium');
+  tap.month?.(S, 'before');
   G.endMonth(S);
+  tap.month?.(S, 'after');
   drain(S, null, shady);
 }

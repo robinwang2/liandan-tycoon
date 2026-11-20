@@ -17,3 +17,4 @@ Thumbs.db
 # Tripo 试验里能用脚本重新生成的中间文件（tools/art/：底图、从游戏导出的 GLB、切好的四视图）
 art-src/tripo/ref/
 art-src/tripo/run2/views/
+tools/parity/trace/

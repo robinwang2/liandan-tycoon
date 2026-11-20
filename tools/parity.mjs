@@ -5,11 +5,14 @@
 //   node tools/parity.mjs check  [文件]     和基线比；不一样就报出第一处分歧在哪一局、哪个月
 //   node tools/parity.mjs dump   <对局>     把一局的完整过程打印出来（两个版本各打印一份，用 diff 找差别）
 //   加 --seeds N 改每种开局打几局（默认 3）
+//   node tools/parity.mjs trace [目录] [--seeds N] [--only 对局key]
 //
 // 以后 C# 内核也用这份记录：按同样的种子和同样的选择重放，逐月状态必须一致。
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { snapshot } from './parity/trace-codec.mjs';
 import * as G from '../src/game/engine.js';
 import * as A from '../src/game/actions.js';
 import { setups, mkSetup, drain, playMonth, tap } from './bot.mjs';
@@ -41,8 +44,9 @@ const viewMenu = S => A.ACTIONS.map(a => {
   return show ? { id: a.id, name: A.actName(S, a), desc: a.desc(S), ...A.actionState(S, a) } : { id: a.id, show };
 });
 
-function playOne(setup, style, k, log) {
-  const key = `${setup.region}/${setup.route}/${setup.track}/${style}#${k}`;
+const gameKey = (setup, style, seed) => `${setup.region}/${setup.route}/${setup.track}/${style}#${seed}`;
+function playOne(setup, style, k, log, month = null) {
+  const key = gameKey(setup, style, k);
   const realRandom = Math.random;
   Math.random = seeded(strHash(key));
   const all = createHash('sha1'), months = [], cover = { ev: new Set(), opt: new Set(), act: new Set() };
@@ -52,6 +56,7 @@ function playOne(setup, style, k, log) {
   tap.choose = (S, d, i, r) => { put('选择', [i, viewResult(r)]); if (d.id) cover.opt.add(d.id + '#' + d.options[i].label); };
   tap.act = (S, id, r) => { put('行动', [id, viewResult(r)]); cover.act.add(id); };
   tap.hints = (S, hs) => put('提示', hs);
+  tap.month = month;
   let S, err = null;
   try {
     S = G.newGame(mkSetup(setup, style), {});
@@ -65,7 +70,7 @@ function playOne(setup, style, k, log) {
       months.push(cur.digest('hex').slice(0, 6)); cur = createHash('sha1');
     }
   } catch (e) { err = String(e.stack || e).split('\n').slice(0, 3).join(' | '); }
-  finally { Math.random = realRandom; tap.dialog = tap.choose = tap.act = tap.hints = null; }
+  finally { Math.random = realRandom; tap.dialog = tap.choose = tap.act = tap.hints = tap.month = null; }
   return { key, end: S?.over?.id || null, t: S?.t, hash: all.digest('hex').slice(0, 16), months: months.join(''), err, cover };
 }
 
@@ -107,10 +112,32 @@ if (cmd === 'record') {
   }
   if (diff) { console.log(`对拍失败：${n} 局里有 ${diff} 局和基线不一样。用 node tools/parity.mjs dump <对局> 看细节。`); process.exitCode = 1; }
   else console.log(`对拍通过：${n} 局的每个月、每个对话框、每段文字都和基线一模一样。`);
+} else if (cmd === 'trace') {
+  const dir = args[1] && !args[1].startsWith('--') ? args[1] : path.join(import.meta.dirname, 'parity', 'trace');
+  const only = flag('--only', null), games = [];
+  if (!Number.isSafeInteger(SEEDS) || SEEDS < 1 || only === undefined) throw Error('请检查 --seeds N / --only 对局key');
+  await mkdir(dir, { recursive: true });
+  for (const style of STYLES) for (const setup of setups) for (let seed = 0; seed < SEEDS; seed++) {
+    const key = gameKey(setup, style, seed);
+    if (only !== null && key !== only) continue;
+    const lines = [];
+    let before, t;
+    const result = playOne(setup, style, seed, null, (state, phase) => {
+      if (phase === 'before') { t = state.t; before = snapshot(state); }
+      else lines.push(`{"t":${t},"before":${before},"after":${snapshot(state)}}\n`);
+    });
+    if (result.err) throw Error(`${key}: ${result.err}`);
+    const file = key.replaceAll('/', '_') + '.jsonl.gz';
+    await writeFile(path.join(dir, file), gzipSync(lines.join('')));
+    games.push({ key, file, months: lines.length, end: result.end });
+  }
+  if (!games.length) throw Error(`没有匹配的对局：${only}`);
+  await writeFile(path.join(dir, 'index.json'), JSON.stringify({ games }, null, 2) + '\n');
+  console.log(`月度快照：${games.length} 局 → ${dir}`);
 } else if (cmd === 'dump') {
   const key = args[1], m = /^(\w+)\/(\w+)\/(\w+)\/(\w+)#(\d+)$/.exec(key || '');
   if (!m) { console.log('用法：node tools/parity.mjs dump bay/model/chat/clean#0'); process.exit(1); }
   const s = setups.find(x => x.region === m[1] && x.route === m[2] && x.track === m[3]);
   const r = playOne(s, m[4], +m[5], line => process.stdout.write(line));
   console.error(r.key, r.end, 't=' + r.t, r.hash, r.err || '');
-} else { console.log('用法：node tools/parity.mjs record|check|dump'); process.exit(1); }
+} else { console.log('用法：node tools/parity.mjs record|check|dump|trace'); process.exit(1); }
