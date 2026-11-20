@@ -444,7 +444,9 @@
   {"key":"ui.hintMax","value":4,"desc":"顶部的行动提示最多同时显示几条（多出来的折叠起来）","use":"界面"},
   {"key":"ui.gpuStep","value":0.1,"desc":"「经营」页显卡的 ＋ − 一次加减配额的几成","use":"界面"},
   {"key":"ui.gpuStepMin","value":5,"unit":"张","desc":"一次最少加减几张","use":"界面"},
-  {"key":"ui.nextSug","value":2,"desc":"点「下个月」时还有行动点：最多列出几件参谋建议的事","use":"界面"}
+  {"key":"ui.nextSug","value":2,"desc":"点「下个月」时还有行动点：最多列出几件参谋建议的事","use":"界面"},
+  {"key":"ideo.yank.minDept","value":2,"unit":"人","desc":"部门至少有几人时才参加每月末位淘汰","use":"路线之争：末位淘汰"},
+  {"key":"reg.max","value":100,"unit":"点","desc":"监管压力的上限；达到满值时触发监管重锤（受冷却限制）","use":"监管压力、系统事件"}
  ],
  "P":{
   "MONTHS":72,
@@ -885,6 +887,8 @@
   "ui.hintMax":4,
   "ui.gpuStep":0.1,
   "ui.gpuStepMin":5,
-  "ui.nextSug":2
+  "ui.nextSug":2,
+  "ideo.yank.minDept":2,
+  "reg.max":100
  }
 }

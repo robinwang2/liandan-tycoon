@@ -89,6 +89,7 @@ export function missingRefs(text, { known = [], P, ...ctx } = {}) {
 
 // 设定.xlsx 里引用了数的说明：哪张表、哪个字段、这张表自己的数字列叫什么（{产出} = 员工怪癖的 out 列）
 export const DEF_FIELDS = {
+  ROUTES: { field: 'desc' },
   PERKS: { field: 'desc' }, FEATURES: { field: 'desc' }, GOALS: { field: 'desc' }, POLICIES: { field: 'desc' }, REGIONS: { field: 'desc' }, TRAITS: { field: 'desc' },
   STAFF_QUIRKS: { field: 'desc', fields: { 产出: ['out'], 工资: ['pay'] } }, DATA_SOURCES: { field: 'desc', fields: { 效率: ['mult', 'mult'] } },
   META_SHOP: { field: 'name' }, ACHIEVEMENTS: { field: 'desc' }, ATTRS: { field: 'desc' },
@@ -102,6 +103,7 @@ export function defTexts(D) {
   });
   rows('PERKS', D.PERKS.map(p => [p.id, p])); rows('FEATURES', D.FEATURES.map(p => [p.id, p])); rows('GOALS', Object.entries(D.GOALS));
   rows('POLICIES', Object.entries(D.POLICIES).flatMap(([k, pol]) => Object.entries(pol.opts).map(([v, o]) => [`${k}.${v}`, o])));
+  rows('ROUTES', Object.entries(D.ROUTES));
   rows('REGIONS', Object.entries(D.REGIONS)); rows('TRAITS', Object.values(D.TRAITS).flat().map(t => [t.id, t]));
   rows('STAFF_QUIRKS', Object.entries(D.STAFF_QUIRKS)); rows('DATA_SOURCES', Object.entries(D.DATA_SOURCES));
   rows('META_SHOP', D.META_SHOP.map(m => [m.id, m])); rows('ACHIEVEMENTS', Object.entries(D.ACHIEVEMENTS)); rows('ATTRS', D.ATTRS.map(a => [a.id, a]));

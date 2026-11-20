@@ -318,7 +318,7 @@ function yankMonth(S, G) {
   let n = 0;
   for (const role of Object.keys(ROLES)) {
     const team = S.staff.filter(e => e.role === role);
-    if (team.length < 2) continue;
+    if (team.length < P['ideo.yank.minDept']) continue;
     const worst = team.slice().sort((a, b) => out(a) - out(b) || a.skill - b.skill)[0];
     G.removeStaff(S, worst.uid);
     const e = G.genStaff(S, role, 1); e.rc = 1;

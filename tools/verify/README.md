@@ -63,4 +63,6 @@ node tools/verify/built-smoke.mjs 炼丹大亨-3A.html 40
 | `gen-ui-text.mjs`、`add-ui-text.mjs` | 界面文字（`gen-ui-text.mjs` 里的每一处替换都核对过：字里固定的部分必须原样出现在被替换的旧代码里） |
 | `seed-art-audio.mjs` | 音频.xlsx（美术.xlsx 由 `tools/art/inventory.mjs` 生成） |
 | `conv-refs.mjs` | 说明里写死的数改成 {变量}（自动认记录自己的数；参数和平衡参数按清单手工指定；每一处填回去都必须和原文一字不差） |
+| `conv-refs-2.mjs` | 已跑过，不要再跑：替换路线、留人和离职补偿文案六格，追加部门人数门槛和监管满值两个参数 |
+| `readme-inplace.mjs` | 已跑过，不要再跑：只替换设定、行动、事件三本表的「#说明」（加 {变量} 写法），其余表一格不动 |
 | `rep.mjs`、`eol.mjs` | 上面几个用的小工具：按原文替换（原文必须恰好出现一次）、统一成 CRLF |

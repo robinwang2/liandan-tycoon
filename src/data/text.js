@@ -2,8 +2,12 @@
 // 用法：text('news.boom') 或 text('why.cash', { 现金: '$12万' })；第三个参数为真时用「湾区文本」（有的话）。
 import T from './tables/text.json' with { type: 'json' };
 
+import params from './tables/params.json' with { type: 'json' };
+import { fillRefs } from './refs.js';
+
 export const TEXT = T.TEXT;                      // 键 → { text, bay? }
-export const fill = (s, v) => String(s).replace(/\{([^{}\s]+)\}/g, (m, k) => (v && k in v ? v[k] : m));
+export const fill = (s, v) => String(s).replace(/\{([^{}\s]+)\}/g, (match, key) =>
+  v && key in v ? v[key] : key.split(/[:：]/)[0].includes('.') ? fillRefs(match, { P: params.P }) : match);
 export const hasText = key => key in TEXT;
 export function text(key, vars, bay = false) {
   const e = TEXT[key];

@@ -2,6 +2,8 @@ import { access } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { checkTexts } from './textcheck.mjs';
+import { readFileSync } from 'node:fs';
+import { DEF_FIELDS, defTexts, missingRefs, refMaps } from '../src/data/refs.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const DEFS = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(root, 'src/data/tables/defs.json'), 'utf8'));
@@ -623,6 +625,53 @@ function locate(where) {
   const stale = [...propIds.filter(id => !have.has(id)), ...files.filter(id => !arts.has(id))];
   if (stale.length) console.log(`⚠ 美术.xlsx 的清单没跟上代码（${stale.slice(0, 8).join('、')}${stale.length > 8 ? '……' : ''}）：跑一下 node tools/art/inventory.mjs`);
 }
+// 只读原始导出：游戏模块已就地填过部分说明，不能用来检查模板。
+const rawTable = name => JSON.parse(readFileSync(path.join(root, `src/data/tables/${name}.json`), 'utf8'));
+const actions = rawTable('actions'), events = rawTable('events'), texts = rawTable('text'), { P } = rawTable('params');
+const maps = refMaps(DEFS), byAction = Object.fromEntries(actions.ACTIONS.map(row => [row.id, row]));
+const byEvent = Object.fromEntries(events.EVENTS_CORE.map(row => [row.id, row]));
+const opt = (id, label) => byEvent[id]?.options.find(row => row.label === label);
+function assertNumber(where, text, pattern, value, source) {
+  const match = pattern.exec(text ?? '');
+  if (!match || Number(match[1]) !== value) problem(where, `文案写的是${match ? ' ' + match[1] : '（未找到数字）'}，${source}是 ${value}；请核对并修改文案或对应参数`);
+}
+assertNumber('设定.xlsx › 成就（winter）', DEFS.ACHIEVEMENTS.winter.desc, /不够烧\s*(\d+)\s*个月/, byEvent.bubble_burst.p.裸泳线, '系统事件 bubble_burst 的裸泳线');
+assertNumber('事件.xlsx › 系统选项（broke › 借过桥贷款）', opt('broke', '借过桥贷款')?.hint, /半年后要还\s*(\d+)\s*个月/, -opt('debt_due', '连本带利还清')?.fx?.cash, 'debt_due 实际扣款月数（-fx.cash）');
+for (const [kind, size] of [['tune', '小'], ['leak', '大']]) {
+  const key = `release.${kind}.hint`, params = byAction.release.p;
+  const mid = Math.round((params[size + '注水下限'] + params[size + '注水上限']) / 2);
+  for (const row of actions.TEXT[key]) for (const field of ['text', 'bay']) if (field === 'text' || row[field] != null)
+    assertNumber(`行动.xlsx › 行动文本（${key}.${field}）`, row[field], /跑分\s*\+([\d.]+)\s*左右/, mid, `release 的${size}注水区间中值（四舍五入）`);
+}
+for (const field of ['desc', 'descBay', 'us']) if (field === 'desc' || /人以上/.test(byAction.yank[field]))
+  assertNumber(`行动.xlsx › 行动（yank.${field}）`, byAction.yank[field], /部门[（(]\s*(\d+)\s*人以上/, P['ideo.yank.minDept'], '平衡参数 ideo.yank.minDept');
+for (const key of ['ui.gauge.reg.tip', 'advice.reg.text', 'tut.policy.text']) for (const field of ['text', 'bay']) {
+  if (field === 'text' || texts.TEXT[key][field] != null) assertNumber(`文本.xlsx › ${texts.SHEET[key]}（${key}.${field}）`, texts.TEXT[key][field], /到\s*(\d+)\s*(?:吃|会吃一记|会被)重锤/, P['reg.max'], '平衡参数 reg.max');
+}
+
+const defSheets = { ROUTES: '路线', PERKS: '董事会卡', FEATURES: '功能', GOALS: '公司目标', POLICIES: '政策', REGIONS: '地区', TRAITS: '特质', STAFF_QUIRKS: '员工怪癖', DATA_SOURCES: '数据源', META_SHOP: '局外商店', ACHIEVEMENTS: '成就', ATTRS: '属性' };
+for (const [name, id, rec, field, host] of defTexts(DEFS)) {
+  for (const error of missingRefs(host[field], { P, rec, ...maps, fields: DEF_FIELDS[name].fields, bare: true })) problem(`设定.xlsx › ${defSheets[name]}（${id}）`, error);
+}
+function checkRefs(where, row, fields, rec = row) {
+  for (const field of fields) {
+    const text = row[field];
+    if (!text?.includes('{')) continue;
+    const known = Array.from(text.matchAll(/\{([^{}\s:：.]+)(?=[:：}])/g), match => match[1]);
+    for (const error of missingRefs(text, { P, rec, ...maps, known })) problem(where, `${field}：${error}`);
+  }
+}
+for (const row of actions.ACTIONS) checkRefs(`行动.xlsx › 行动（${row.id}）`, row, ['desc', 'descBay']);
+for (const [key, rows] of Object.entries(actions.TEXT)) for (const row of rows) checkRefs(`行动.xlsx › 行动文本（${key}）`, row, ['text', 'bay'], byAction[key.split('.')[0]] || {});
+for (const row of actions.OFFERS) checkRefs(`行动.xlsx › 融资报价（${row.label}）`, row, ['note']);
+for (const [sheet, list] of [['系统选项', events.EVENTS_CORE], ['随机选项', events.EVENTS_PACK]]) for (const event of list) for (const row of event.options || [])
+  checkRefs(`事件.xlsx › ${sheet}（${event.id} › ${row.label}）`, row, ['label', 'hint']);
+for (const [name, city] of [['ideology_cn', '深圳'], ['ideology_us', '湾区']]) {
+  const data = rawTable(name);
+  for (const event of data.SYS_EVENTS) for (const row of event.options) checkRefs(`路线之争-${city}.xlsx › 系统选项（${event.id} › ${row.fn}）`, row, ['hint']);
+  for (const [id, ending] of Object.entries(data.IDEO_ENDINGS)) for (const row of ending.options || []) checkRefs(`路线之争-${city}.xlsx › 结局选项（${id} › ${row.act}）`, row, ['hint', 'text']);
+}
+
 // 文本.xlsx 和代码对不对得上（tools/textcheck.mjs）
 const txt = checkTexts(root);
 for (const e of txt.errors) problems.push(['文本', e]);

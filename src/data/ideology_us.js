@@ -13,6 +13,9 @@
 import T from './tables/ideology_us.json' with { type: 'json' };
 import { fillRec } from './defs.js';
 
+for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
+  if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
+}
 for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);   // 同深圳版
 
 export const {

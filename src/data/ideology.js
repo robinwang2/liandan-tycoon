@@ -21,6 +21,9 @@ import T from './tables/ideology_cn.json' with { type: 'json' };
 import { fillRec } from './defs.js';
 
 // 代码弹的窗口里，选项提示引用数的 {效果.xxx} {临时.xxx}：载入时填好（{价格} 这类代码算的留着）
+for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
+  if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
+}
 for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);
 
 export const {

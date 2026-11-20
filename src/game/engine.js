@@ -194,7 +194,7 @@ const FX = {
   cashAbs: (S, v) => { S.cash += v; },
   hype: (S, v) => { S.hype = clamp(S.hype + (v > 0 ? soft(S.hype, v) * mod(S, 'hypeGainMult') : v), 0, 100); },
   rep: gauge('rep', 1), morale: gauge('morale', 1), bubble: gauge('bubble'),
-  reg: (S, v) => { S.reg = clamp(S.reg + (v > 0 ? v * mod(S, 'regMult') : v), 0, 100); },
+  reg: (S, v) => { S.reg = clamp(S.reg + (v > 0 ? v * mod(S, 'regMult') : v), 0, P['reg.max']); },
   usersPct: (S, v) => { S.users = Math.max(0, S.users * (1 + v / 100)); },
   tech: (S, v) => { if (S.ownModel) { S.E = Math.max(0, EofCap(myCap(S) + v) - baseE(S.t)); if (S.model) { S.model.cap += v; S.model.bench += v; } } else S.quality = clamp(S.quality + v * P['fx.techQuality'], 0, 100); },
   bench: (S, v) => { if (S.model) { S.model.bench += v; S.model.infl += v; } },
@@ -448,7 +448,7 @@ export function newGame(setup, meta) {
     if (st.users) S.users += st.users;
     if (st.dirt) addDirt(S, st.dirt);
     if (st.equity) S.equity += st.equity;
-    if (st.reg) S.reg = clamp(S.reg + st.reg, 0, 100);
+    if (st.reg) S.reg = clamp(S.reg + st.reg, 0, P['reg.max']);
     if (st.debt) { S.flags.loaned = 1; S.sched.push({ id: 'debt_due', at: st.debt }); }
     for (const r of st.staff || []) {
       if (typeof r === 'string') { addStaff(S, genStaff(S, r, 1)); continue; }
@@ -609,7 +609,7 @@ export function endMonth(S) {
   S.morale = clamp(S.morale + (P['morale.home'] - S.morale) * P['morale.pull'] + mod(S, 'moraleAdd') - (rw < P['morale.brokeLine'] ? P['morale.brokeHit'] : 0), 0, 100);
   S.rep = clamp(S.rep + mod(S, 'repAdd') + (S.quality > P['rep.qHigh'] ? P['rep.qStep'] : S.quality < P['rep.qLow'] ? -P['rep.qStep'] : 0) - S.outage * P['rep.outageHit'], 0, 100);
   const dr = P['reg.drift'] + S.hype / P['reg.hypeDiv'] + Math.log10(1 + S.users) / P['reg.usersDiv'] + (S.co.track === 'companion' ? P['reg.companion'] : 0) + mod(S, 'regAdd');
-  S.reg = clamp(S.reg + (dr > 0 ? dr * mod(S, 'regMult') : dr), 0, 100);
+  S.reg = clamp(S.reg + (dr > 0 ? dr * mod(S, 'regMult') : dr), 0, P['reg.max']);
   S.bubble = clamp(S.bubble + (S.burstT ? rf(S, P['bubble.afterMin'], P['bubble.afterMax']) : rf(S, P['bubble.riseMin'], P['bubble.riseMax'])), 0, 100);
   S.gpuBase = clamp(S.gpuBase + rf(S, P['gpu.priceStepMin'], P['gpu.priceStepMax']), P['gpu.priceMin'], P['gpu.priceMax']);
   S.apiIdx = clamp(S.apiIdx * rf(S, P['api.stepMin'], P['api.stepMax']), P['api.min'], P['api.max']);
@@ -658,7 +658,7 @@ export function endMonth(S) {
   // 系统事件
   if (S.t % 12 === 1) queueEvent(S, 'year_board');
   if (S.vam && S.t >= S.vam.due) queueEvent(S, 'vam_due');
-  if (S.reg >= 100 && !S.cd.crack) { S.cd.crack = S.t + P['reg.crackCd']; queueEvent(S, 'crackdown'); }
+  if (S.reg >= P['reg.max'] && !S.cd.crack) { S.cd.crack = S.t + P['reg.crackCd']; queueEvent(S, 'crackdown'); }
   if (!S.burstT && S.t > P['bubble.burstFrom'] && ((S.bubble >= P['bubble.burstLine'] && rnd(S) < P['bubble.burstOdds']) || (S.t >= P['bubble.lateFrom'] && rnd(S) < P['bubble.lateOdds']))) queueEvent(S, 'bubble_burst');
   if (S.stage >= P['coup.stage'] && !S.cd.coup && ((S.equity < P['coup.equity'] && (S.rep < P['coup.rep'] || S.morale < P['coup.morale'] || S.exposed >= P['coup.exposed']) && rnd(S) < P['coup.odds']) || (S.equity < P['coup.equityLow'] && rnd(S) < P['coup.lowOdds']))) { S.cd.coup = S.t + P['coup.cd']; queueEvent(S, 'coup'); }
   if (S.stage >= P['acq.stage'] && !S.cd.acq && rnd(S) < P['acq.odds'] + (S.hype > P['acq.hypeLine'] ? P['acq.hypeOdds'] : 0)) { S.cd.acq = S.t + P['acq.cd']; queueEvent(S, 'acq_offer', { rival: pick(S, S.flags.red ? S.rivals.filter(r => EAST_RIVALS.includes(r.id)) : S.flags.rose ? S.rivals.filter(r => ROSE_RIVALS.includes(r.id)) : S.rivals.slice(0, P['acq.rivals'])).id }); }   // 红色公司：西方巨头不再来收购；「共享繁荣」的公司只剩同为公益公司的厌世智能还肯谈

@@ -5,6 +5,7 @@
 // 做法：在源码里找「取文字」的调用（每个文件用的函数名不一样，见 FILES），读出键和后面那个 { 变量: … } 里的变量名。
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fillRefs } from '../src/data/refs.js';
 import { pathToFileURL } from 'node:url';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -56,6 +57,8 @@ const lineOf = (s, i) => s.slice(0, i).split('\n').length;
 
 export function checkTexts(root = ROOT) {
   const T = JSON.parse(readFileSync(path.join(root, 'src/data/tables/text.json'), 'utf8'));
+  const { P } = JSON.parse(readFileSync(path.join(root, 'src/data/tables/params.json'), 'utf8'));
+  const param = token => token.split(/[:：]/)[0].includes('.');
   const where = key => `文本.xlsx › ${T.SHEET[key] || '?'} › ${key}`;
   const errors = [], warnings = [], used = new Set(), literal = new Set();
   const phs = e => [...new Set([e.text, e.bay].filter(x => x != null).flatMap(s => [...s.matchAll(/\{([^{}\s]+)\}/g)].map(m => m[1])))];
@@ -79,12 +82,16 @@ export function checkTexts(root = ROOT) {
         else if (!src.startsWith('null', j) && src[j] !== ')') known = false;               // 变量是另外拼好的对象，看不出来
       }
       if (!known) continue;
-      for (const p of phs(T.TEXT[key])) if (!vars.includes(p)) errors.push(`${where(key)}：「{${p}}」代码不会填（${at} 只给了 ${vars.length ? vars.map(v => `{${v}}`).join(' ') : '没有变量'}）`);
+      for (const p of phs(T.TEXT[key])) if (!param(p) && !vars.includes(p)) errors.push(`${where(key)}：「{${p}}」代码不会填（${at} 只给了 ${vars.length ? vars.map(v => `{${v}}`).join(' ') : '没有变量'}）`);
     }
   }
   for (const [key, e] of Object.entries(T.TEXT)) {
+    for (const token of phs(e).filter(param)) {
+      const ref = `{${token}}`;
+      if (fillRefs(ref, { P }) === ref) errors.push(`${where(key)}：${ref} 找不到平衡参数或格式不正确`);
+    }
     const pre = Object.keys(DYNAMIC).find(p => key.startsWith(p));
-    if (pre && !literal.has(key)) { used.add(key); for (const p of phs(e)) if (!DYNAMIC[pre].includes(p)) errors.push(`${where(key)}：「{${p}}」代码不会填（这一类键只认 ${DYNAMIC[pre].map(v => `{${v}}`).join(' ') || '没有变量'}）`); }
+    if (pre && !literal.has(key)) { used.add(key); for (const p of phs(e)) if (!param(p) && !DYNAMIC[pre].includes(p)) errors.push(`${where(key)}：「{${p}}」代码不会填（这一类键只认 ${DYNAMIC[pre].map(v => `{${v}}`).join(' ') || '没有变量'}）`); }
     if (!used.has(key)) warnings.push(`${where(key)}：代码里没有用到这个键`);
   }
   return { errors, warnings, calls, keys: Object.keys(T.TEXT).length };
