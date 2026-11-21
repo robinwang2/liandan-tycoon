@@ -80,3 +80,63 @@ npm run parity
 | C# 机器人整局重放 | 分离外层选局随机数与内层 rs，逐月定位首次分歧，比较最终指纹 | 2–4 |
 
 合计约 **13–23 人日**，未计 Unity 界面和资源接入。
+
+## 第 2 段结果
+
+在同一套 144 局基线上，机器人共调用引擎 459,215 次。JS 从快照重放所有操作；C# 执行已移植的操作，比较完整状态和玩家可见返回值。后续里程碑仍需用 C# 生成机器人的选择并独立跑完整局。
+
+### 复跑
+
+在仓库根目录执行。完整逐操作快照约占 1.36 GiB，已加入 `.gitignore`。试跑单局可用 `node tools/parity.mjs ops tools/parity/ops/sample --only 'bay/model/chat/clean#0'`，自检和 CLI 都接受这个子目录。
+
+```powershell
+$env:PATH = "C:\Program Files\dotnet;" + $env:PATH
+node tools/parity.mjs ops
+node tools/parity/ops-selfcheck.mjs
+dotnet build unity/Kernel.sln -c Release
+dotnet run --no-build -c Release --project unity/KernelCli -- ops tools/parity/ops
+dotnet run --no-build -c Release --project unity/KernelCli -- trace tools/parity/trace
+npm run parity
+```
+
+`ops` 和 `trace` 共用 `--tables`、`--only` 与 `--max`，在 ops 模式下上限按操作计。CLI 报出每个有差异的对局的第一处差异，含从 1 开始的步号、操作和字段路径。退出码 0 表示本次参与比较的操作都一致，1 表示有差异，2 表示输入或运行环境出错。跳过量单列。
+
+### 快照与对话框重建
+
+- 每局一个 gzip JSONL，索引记录局名、文件、步数和 JS 整局指纹。生成时核对已有的基线指纹。每行的 `op` 和 `args` 表示引擎调用，`before`、`after` 均在调用边界用里程碑 1 的 codec 立即编码并验证无损往返。开局前为 null。返回视图省去函数和不可见的 undefined 字段；开局状态只在 after 存一份，空返回视图用 null。
+- `viewMenu` 合并记录一次全菜单的显示条件、名称、描述与行动状态；机器人单独查询的 `show`、`actionState`、`runway` 等仍逐次记录。外层 `mathRandom` 是参数求值完毕、调用开始前的有符号 mulberry32 状态。开局另记实际抽到的 `initialRs`。两端自检从外层状态抽取并比较初始种子；生成对手和候选后，after.rs 已经推进。
+- `choose.args` 是事件 ID（匿名窗口为 null）与从 0 开始的选项下标。`source` 指向本局产生该窗口的操作步号，可以是 `nextDialog`、`perform` 或上一个 `choose`。JS 自检从来源步的 before 重新执行，保存活的对话框与同一个 S，在选择前比较 S 和本步 before；选择后比较完整 after 和 ret。C# 同样保留来源步生成的回调和状态。已经实现的操作连续执行；跳过的操作从该行 JS after 接回。
+- `nextDialog` 会出队、抽卡、执行入场脚本并写特效队列。`scripted.js` 的每事件 WeakMap 按 ctx 身份缓存变量。收购报价、裁员前的月支出、对赌到期时的目标和现状，都在生成窗口时冻结。C# 让选项捕获这组值。行动窗口另捕获融资条款、冲刺候选、洗白费用等；发布窗口的第二层沿用第一层的真实能力和注水量，首次选择扣费和行动点一次。
+- 核查了 engine、actions、scripted、ideology 与机器人模块。事件索引、行动表、两地路线表与文本索引在初始化完成后只读。随局变化而影响结果的状态在 S、外层发生器和活窗口内。`tap`、`HINT_N`、`hintMonths` 和指纹覆盖集合属于观测端，机器人决策不读取累计统计。局间无需恢复这些计数。
+
+### 验收统计
+
+| 操作 | C# 一致 | 不一致 | 跳过 |
+|---|---:|---:|---:|
+| newGame | 144 | 0 | 0 |
+| nextDialog | 36,831 | 0 | 1,450 |
+| choose | 18,612 | 0 | 1,470 |
+| endMonth | 8,127 | 0 | 0 |
+| perform | 5,417 | 0 | 11,171 |
+| gpuPrice | 6,649 | 0 | 0 |
+| inferNeed | 6,649 | 0 | 0 |
+| quota | 6,649 | 0 | 0 |
+| runway | 41,607 | 0 | 0 |
+| teamCap | 74,976 | 0 | 0 |
+| viewMenu | 0 | 0 | 8,203 |
+| actionState | 0 | 0 | 123,401 |
+| show | 0 | 0 | 85,203 |
+| advise | 0 | 0 | 8,203 |
+| hire | 0 | 0 | 7,612 |
+| setGpu | 0 | 0 | 6,649 |
+| setPolicy | 0 | 0 | 61 |
+| pushProject | 0 | 0 | 131 |
+| **合计** | **205,661** | **0** | **253,554** |
+
+C# 实现开局、系统事件脚本、随机事件、事件链、丑闻、抽卡，以及为重建选择所需的六个行动入口：融资、发布、冲刺、换料、洗白、挖对手黑料。普通事件的条件、检定、效果预览、状态变化和结果标签均参与比较。路线表中的静态事件也走同一数据路径。第 5 段接动态剧情窗口（入股、阶段、路线结局、清洗、计划到期）及路线专属行动窗口。首个跳过的动态窗口是 `bay/model/chat/clean#1` 第 1,855 步的 `ideo_entry`。当前已比较部分无首差。
+
+跳过的 1,470 次选择可回溯到来源：1,450 次来自上述动态事件，另有 10 次来自 `plan`、10 次来自 `yank`。CLI 按来源名称打印明细。
+
+Node 24.18.1、.NET SDK 8.0.428：Debug 与 Release 均为 0 警告、0 错误；JS 逐操作自检通过 459,215/459,215，`npm run parity` 通过 144/144。里程碑 1 的 JS 月度自检和 C# trace 都通过 8,127/8,127。
+
+额外用临时快照覆盖两地带传承和教程的开局，以及收购成交、对赌、董事会、丑闻等主动指定的选项。2 次开局、192 次弹窗、192 次选择全部一致，未计入上表。故意改动收购选项的结果文案，CLI 定位到该用例第 2 步 `choose $.ret.text` 并返回 1。

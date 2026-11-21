@@ -22,3 +22,4 @@ tools/parity/trace/
 # C# 内核的编译产物
 unity/**/bin/
 unity/**/obj/
+tools/parity/ops/

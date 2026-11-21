@@ -53,6 +53,14 @@ namespace Liandan.Kernel
                     foreach (var o in Children(e["options"])) Fill(o, "hint", false);
             }
         }
+        internal string FillRuntime(string text, JsonNode? row, params (string key, object value)[] vars)
+        {
+            return Regex.Replace(text, @"\{([^{}\s]+)\}", m =>
+            {
+                foreach (var v in vars) if (m.Groups[1].Value == v.key) return Convert.ToString(v.value, CultureInfo.InvariantCulture)!;
+                return FillRef(m.Value, row, false);
+            });
+        }
         private string FillRef(string token, JsonNode? record, bool bare, JsonNode? vars = null)
         {
             var parts = token.Substring(1, token.Length - 2).Split(':', '：');

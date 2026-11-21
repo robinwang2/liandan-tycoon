@@ -17,8 +17,8 @@ catch (Exception error)
 
 static int Run(string[] args)
 {
-    const string usage = "用法：trace <快照目录> [--tables 表目录] [--only 对局key] [--max 月份总数]";
-    if (args.Length < 2 || args[0] != "trace") throw new ArgumentException(usage);
+    const string usage = "用法：trace|ops <快照目录> [--tables 表目录] [--only 对局key] [--max 月份总数]";
+    if (args.Length < 2 || (args[0] != "trace" && args[0] != "ops")) throw new ArgumentException(usage);
     string dir = args[1], tablesPath = "src/data/tables";
     string? only = null;
     int max = int.MaxValue;
@@ -35,6 +35,7 @@ static int Run(string[] args)
     }
     var tables = new Tables(tablesPath);
     var games = JsonNode.Parse(File.ReadAllText(Path.Combine(dir, "index.json")))!["games"]!.AsArray();
+    if (args[0] == "ops") return Operations.Run(tables, games, dir, only, max, Compare);
     int passed = 0, checkedGames = 0, matched = 0, total = 0, reports = 0, partial = 0;
     foreach (var entry in games)
     {

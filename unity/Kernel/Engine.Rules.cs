@@ -9,17 +9,30 @@ namespace Liandan.Kernel
 {
     public sealed partial class GameState
     {
-        private double Random()
+        public static double NextRandom(ref int state)
         {
             unchecked
             {
-                uint bits = (uint)(int)rs + 0x6D2B79F5u;
-                rs = (int)bits;
+                uint bits = (uint)state + 0x6D2B79F5u;
+                state = (int)bits;
                 bits = (bits ^ (bits >> 15)) * (bits | 1u);
                 bits ^= bits + (bits ^ (bits >> 7)) * (bits | 61u);
                 return (bits ^ (bits >> 14)) / 4294967296.0;
             }
         }
+        private double Random()
+        {
+            int state = (int)rs;
+            double sample = NextRandom(ref state);
+            rs = state;
+            return sample;
+        }
+        public double ReadBotValue(string key) => key switch
+        {
+            "runway" => Runway(), "gpuPrice" => gpuBase * Mod("gpuPriceMult"),
+            "teamCap" => D("OFFICES")[(int)Company.Office].N("cap") + Max(0, A.N("mgmt") - 5) + Mod("teamCapAdd"),
+            "quota" => Quota, "inferNeed" => InferNeed, _ => throw new ArgumentException(key)
+        };
         private double Between(double a, double b) => a + Random() * (b - a);
         private double Integer(double a, double b) => a + Floor(Random() * (b - a + 1));
         private T Pick<T>(IReadOnlyList<T> list) => list[(int)Floor(Random() * list.Count)];
@@ -120,15 +133,20 @@ namespace Liandan.Kernel
             double net = Revenue().N("total") - Costs().N("total");
             return net >= 0 ? 99 : Max(0, cash) / -net;
         }
-        private double Valuation()
+        private double Performance()
         {
             var stages = (JsonArray)D("STAGES");
             var tg = stages[Min(stages.Count - 1, (int)stage + 1)];
             var scores = new[] { Js.Clamp((users+fake)/tg.N("users"),0,P("perf.max")), Js.Clamp(Revenue().N("total")/tg.N("rev"),0,P("perf.max")),
                 Model == null ? 0 : RankFactor("perf.techByRank","perf.techElse") * (Company.Route == "model" ? 1 : P("perf.appTech")) }.OrderByDescending(v => v).ToArray();
             var weights = tables.Parameters["perf.w"]!;
-            double perf = P("perf.base") + (double)weights[0]! * scores[0] + (double)weights[1]! * scores[1] + (double)weights[2]! * scores[2];
-            return tg.N("base") * perf * (P("val.bubble0") + bubble / 100) * (1 + hype / P("val.hypeDiv")) * (1 + P("val.chaK") * (A.N("cha") - 5)) * Mod("raiseMult") * (1 + raiseBoost);
+            return P("perf.base") + (double)weights[0]! * scores[0] + (double)weights[1]! * scores[1] + (double)weights[2]! * scores[2];
+        }
+        private double Valuation()
+        {
+            var stages = (JsonArray)D("STAGES");
+            var tg = stages[Min(stages.Count - 1, (int)stage + 1)];
+            return tg.N("base") * Performance() * (P("val.bubble0") + bubble / 100) * (1 + hype / P("val.hypeDiv")) * (1 + P("val.chaK") * (A.N("cha") - 5)) * Mod("raiseMult") * (1 + raiseBoost);
         }
     }
 }

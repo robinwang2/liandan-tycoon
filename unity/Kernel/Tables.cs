@@ -13,20 +13,25 @@ namespace Liandan.Kernel
         internal JsonNode Definitions { get; }
         internal JsonNode Parameters { get; }
         internal JsonNode Texts { get; }
+        internal JsonNode Actions { get; }
+        internal JsonNode SystemTexts { get; }
         internal JsonArray News { get; }
         internal Dictionary<string, JsonNode> Traits, Perks, Features;
         internal readonly Dictionary<string, JsonNode> Books = new Dictionary<string, JsonNode>();
         internal readonly List<JsonNode> Pool = new List<JsonNode>();
         internal readonly Dictionary<string, JsonNode> Events = new Dictionary<string, JsonNode>();
         internal readonly HashSet<string> RivalContext = new HashSet<string>();
+        internal readonly HashSet<string> StoryDialogs = new HashSet<string>();
 
         public Tables(string directory)
         {
             JsonNode Load(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(directory, name + ".json")))!;
+            Actions = Load("actions");
             Definitions = Load("defs");
             Parameters = Load("params")["P"]!;
             Texts = Load("text")["TEXT"]!;
             var events = Load("events");
+            SystemTexts = events["TEXT"]!;
             News = (JsonArray)events["NEWS"]!;
             Dictionary<string, JsonNode> Index(IEnumerable<JsonNode?> rows) => rows.ToDictionary(r => r!.Str("id"), r => r!);
             Traits = Index(Definitions["TRAITS"].Entries().SelectMany(p => (JsonArray)p.Value!));
@@ -59,7 +64,11 @@ namespace Liandan.Kernel
                 foreach (var key in new[] { "IDEO_EVENTS", "UTOPIA_EVENTS", "BCI_EVENTS", "SCARE_EVENTS" }) Register(book[key]);
             var dynamicIds = Enumerable.Range(1, ((JsonArray)Books["cn"]["IDEO_STAGES"]!).Count).Select(i => "ideo_" + i)
                 .Concat(new[] { "ideo_end_red", "ideo_end_cap", "ideo_end_fail", "ideo_purge", "ideo_plan_due", "ideo_entry" });
-            foreach (var id in dynamicIds) Events[id] = Js.Obj(("id", id));
+            foreach (var id in dynamicIds)
+            {
+                StoryDialogs.Add(id);
+                Events[id] = Js.Obj(("id", id));
+            }
         }
         internal string Text(string key, bool bay, params (string key, object value)[] vars)
         {
