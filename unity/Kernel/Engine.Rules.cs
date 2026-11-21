@@ -100,12 +100,16 @@ namespace Liandan.Kernel
             users = Max(0, users * (1 + attract * gm * room * (1 - outage) - churn) + seed * room);
             fake *= P("users.fakeDecay");
         }
+        private double GpuRent(double n)
+        {
+            double q = Max(1, Quota), price = ReadBotValue("gpuPrice"), x = Max(0, n - q);
+            return (n - x) * price + x * price * (P("gpu.over0") + x / (P("gpu.overDiv") * q));
+        }
         private JsonObject Costs()
         {
             double salary = Staff.Sum(e => e.Salary) * Mod("salaryMult");
             double rent = D("OFFICES")[(int)Company.Office].N("rent") * Mod("rentMult");
-            double q = Max(1, Quota), price = gpuBase * Mod("gpuPriceMult"), x = Max(0, gpu - q);
-            double g = (gpu - x) * price + x * price * (P("gpu.over0") + x / (P("gpu.overDiv") * q));
+            double g = GpuRent(gpu);
             var furnace = Snapshot["furnace"];
             if (furnace.On("on") && furnace.Str("data") == "buy") g *= P("furnace.buyMult");
             double api = UsesOwn ? 0 : users * Track.N("infer") * P("cost.apiPerUser") * apiIdx * Mod("apiCostMult") * (Flag("bci_ok") ? P("bci.apiMult") : 1);
@@ -150,4 +154,3 @@ namespace Liandan.Kernel
         }
     }
 }
-

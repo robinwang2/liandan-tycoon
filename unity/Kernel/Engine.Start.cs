@@ -15,12 +15,13 @@ namespace Liandan.Kernel
             return state;
         }
 
-        private string OfficeName()
+        private string OfficeName(int? level = null)
         {
-            var name = D("OFFICES")[(int)Company.Office]!["name"]!;
+            int index = level ?? (int)Company.Office;
+            var name = D("OFFICES")[index]!["name"]!;
             if (name is JsonValue) return name.ToString();
             foreach (var id in Founder.Traits.Select(n => n!.ToString()))
-                if (Company.Office == 1 && D("START_OFFICE").On(id) && tables.Traits[id].Str("region") == Region)
+                if (index == 1 && D("START_OFFICE").On(id) && tables.Traits[id].Str("region") == Region)
                     return D("START_OFFICE").Str(id);
             return name.Str(Region);
         }

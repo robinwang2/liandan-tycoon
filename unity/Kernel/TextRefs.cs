@@ -58,7 +58,7 @@ namespace Liandan.Kernel
             return Regex.Replace(text, @"\{([^{}\s]+)\}", m =>
             {
                 foreach (var v in vars) if (m.Groups[1].Value == v.key) return Convert.ToString(v.value, CultureInfo.InvariantCulture)!;
-                return FillRef(m.Value, row, false);
+                return FillRef(m.Value, row, false, row?["p"]);
             });
         }
         private string FillRef(string token, JsonNode? record, bool bare, JsonNode? vars = null)

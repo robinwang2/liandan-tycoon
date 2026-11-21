@@ -14,6 +14,10 @@ namespace Liandan.Kernel
         internal JsonNode Parameters { get; }
         internal JsonNode Texts { get; }
         internal JsonNode Actions { get; }
+        internal readonly Dictionary<string, JsonNode> ActionRows;
+        // 返回副本，界面可以按表中顺序读取按钮与页签，不会修改内核共用的数据。
+        public JsonArray GetActionRows() => (JsonArray)Actions["ACTIONS"]!.DeepClone();
+        public JsonArray GetActionTabs() => (JsonArray)Actions["TABS"]!.DeepClone();
         internal JsonNode SystemTexts { get; }
         internal JsonArray News { get; }
         internal Dictionary<string, JsonNode> Traits, Perks, Features;
@@ -34,6 +38,7 @@ namespace Liandan.Kernel
             SystemTexts = events["TEXT"]!;
             News = (JsonArray)events["NEWS"]!;
             Dictionary<string, JsonNode> Index(IEnumerable<JsonNode?> rows) => rows.ToDictionary(r => r!.Str("id"), r => r!);
+            ActionRows = Index((JsonArray)Actions["ACTIONS"]!);
             Traits = Index(Definitions["TRAITS"].Entries().SelectMany(p => (JsonArray)p.Value!));
             Perks = Index((JsonArray)Definitions["PERKS"]!);
             Features = Index((JsonArray)Definitions["FEATURES"]!);

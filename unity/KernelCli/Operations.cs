@@ -69,17 +69,15 @@ internal static class Operations
                         case "perform":
                             source = step; dialog = null; skipSource = null;
                             string id = args[0].GetString()!;
-                            if (!GameState.IsDialogAction(id)) { skip = skipSource = "行动 " + id; break; }
-                            state = Resume(); ret = state.PerformDialogAction(id, out dialog); break;
-                        case "hire":
-                        case "setGpu":
-                        case "setPolicy":
-                        case "pushProject":
-                        case "actionState":
-                        case "viewMenu":
-                        case "show":
-                        case "advise":
-                            skip = "行动与参谋"; break;
+                            state = Resume(); ret = state.Perform(id, out dialog); break;
+                        case "hire": state = Resume(); ret = state.Hire(args[0].GetString()!); break;
+                        case "setGpu": state = Resume(); state.SetGpu(args[0].GetDouble()); break;
+                        case "setPolicy": state = Resume(); state.SetPolicy(args[0].GetString()!, JsonNode.Parse(args[1].GetRawText())!); break;
+                        case "pushProject": state = Resume(); ret = state.PushProject(args[0].GetString()!); break;
+                        case "actionState": state = Resume(); ret = state.ActionState(args[0].GetString()!); break;
+                        case "viewMenu": state = Resume(); ret = state.ViewMenu(); break;
+                        case "show": state = Resume(); ret = state.Show(args[0].GetString()!); break;
+                        case "advise": state = Resume(); ret = state.Advise(); break;
                         case "runway":
                         case "teamCap":
                         case "quota":

@@ -76,15 +76,19 @@ namespace Liandan.Kernel
             }
         }
 
+        private double ProjectRate(string kind)
+        {
+            if (kind == "ap") return 0;
+            double rate = kind == "gpu" ? Js.Clamp(Max(0, gpu - InferNeed) / Max(P("proj.gpuMin"), P("proj.gpuShare") * Quota), 0, P("proj.max"))
+                : Js.Clamp(Power(kind) / (P("proj.need0") + P("proj.needStage") * stage), P("proj.min"), P("proj.max"));
+            return rate / Max(1, Rows("projects").Count(p => p.Str("kind") == kind));
+        }
         private List<(string id, JsonNode? ctx)> AdvanceProjects()
         {
             var completed = new List<(string id, JsonNode? ctx)>();
             foreach (var project in Projects.ToArray())
             {
-                string kind = project.Kind;
-                double rate = kind == "ap" ? 0 : kind == "gpu" ? Js.Clamp(Max(0, gpu - InferNeed) / Max(P("proj.gpuMin"), P("proj.gpuShare") * Quota), 0, P("proj.max"))
-                    : Js.Clamp(Power(kind) / (P("proj.need0") + P("proj.needStage") * stage), P("proj.min"), P("proj.max"));
-                project.Done += rate / Rows("projects").Count(p => p.Str("kind") == kind);
+                project.Done += ProjectRate(project.Kind);
                 bool finished = project.Done >= project.Need;
                 if (!finished && t + 1 < project.Due) continue;
                 List("projects").Remove(project.Record);

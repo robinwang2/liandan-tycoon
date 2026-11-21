@@ -58,11 +58,11 @@ namespace Liandan.Kernel
             double salary = FixedNumber((P("staff.pay0") + P("staff.paySkill") * skill * skill) * D("ROLES")[role].N("pay") * D("STAFF_QUIRKS")[quirk ?? ""].N("pay", 1), 1);
             return Obj(("uid", "e" + uid++), ("name", name), ("role", role), ("skill", skill), ("quirk", quirk), ("salary", salary), ("since", t));
         }
-        private void RefreshCandidates()
+        private void RefreshCandidates(double bonus = 0)
         {
             string[] roles = Company.Route == "model" ? new[] { "res", "res", "eng", "eng", "ops", "biz", "legal" } : new[] { "eng", "eng", "ops", "ops", "biz", "res", "legal" };
             var cands = new JsonArray();
-            for (int i = 0; i < P("staff.cands"); i++) cands.Add(GenStaff(Pick(roles)));
+            for (int i = 0; i < P("staff.cands"); i++) cands.Add(GenStaff(Pick(roles), bonus));
             Snapshot["cands"] = cands;
         }
         private bool HasHeat => tables.Books.TryGetValue(Ideo.Str("v"), out var book) && book["VER"]!["heat"].On("on");

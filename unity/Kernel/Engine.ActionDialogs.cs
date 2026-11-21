@@ -9,11 +9,14 @@ namespace Liandan.Kernel
 {
     public sealed partial class GameState
     {
-        private string ActionText(string key, params (string, object)[] vars)
+        private string ButtonText(string key, params (string, object)[] vars) => ReadActionText(key, false, vars);
+        private string ActionText(string key, params (string, object)[] vars) => ReadActionText(key, true, vars);
+        private string ReadActionText(string key, bool random, (string, object)[] vars)
         {
             var rows = (JsonArray)tables.Actions["TEXT"]![key]!;
-            var row = rows.Count > 1 ? Pick(rows.ToArray()) : rows[0];
-            return tables.FillRuntime(Region == "bay" ? row.Str("bay", row.Str("text")) : row.Str("text"), null, vars);
+            var row = random && rows.Count > 1 ? Pick(rows.ToArray()) : rows[0];
+            tables.ActionRows.TryGetValue(key.Split('.')[0], out var action);
+            return tables.FillRuntime(Region == "bay" ? row.Str("bay", row.Str("text")) : row.Str("text"), action, vars);
         }
         private Dialog ActionWindow(string prefix, string cat, string text, string? title = null, bool cards = false)
         {
@@ -22,19 +25,17 @@ namespace Liandan.Kernel
             return new Dialog(view);
         }
         private static JsonObject Said(string text) => Obj(("text", text));
-        public static bool IsDialogAction(string id) => new[] { "release", "sprint", "raise", "wash", "digdirt", "furnace" }.Contains(id);
-        // 仅移植本段 choose 所需的行动入口，费用和冷却随首层选项一起提交。
-        public JsonObject? PerformDialogAction(string id, out Dialog? dialog)
+        // 保留第 2 段公开的入口，支持依赖窗口重建接口的调用者。
+        public static bool IsDialogAction(string id) => id is "release" or "sprint" or "raise" or "wash" or "digdirt" or "furnace" or "plan" or "yank";
+        public JsonObject? PerformDialogAction(string id, out Dialog? dialog) => Perform(id, out dialog);
+        // 直接行动在执行完毕时结算，窗口行动在首次选择非免费选项时结算。
+        public JsonObject? Perform(string id, out Dialog? dialog)
         {
             dialog = null;
-            var a = ((JsonArray)tables.Actions["ACTIONS"]!).First(r => r.Str("id") == id)!;
+            var a = tables.ActionRows[id];
             var p = a["p"];
-            double cost = id == "digdirt" ? p.N("月数") * Unit : 0;
-            if (ap < a.N("ap") || Map("cd").On(id) || cost > cash) return null;
-            if (id == "release" && Cap(BaseE + E) - Model.N("cap") < p.N("火候门槛") ||
-               id == "sprint" && (Snapshot.On("sprint") || List("feats").Count == tables.Features.Count) ||
-               id == "raise" && (stage >= ((JsonArray)D("STAGES")).Count - 2 || t - Snapshot.N("lastRaiseT") < p.N("间隔")) ||
-               id == "wash" && List("dirt").Count == 0) return null;
+            double cost = ActionCost(id);
+            if (ActionWhy(id, cost) != null) return null;
             var before = ChipValues();
             bool paid = false;
             void Commit()
@@ -66,12 +67,16 @@ namespace Liandan.Kernel
                     }
                     break;
                 case "wash": case "digdirt": dialog = Investigate(a); break;
-                default: throw new ArgumentException(id);
+                case "yank": case "plan": dialog = RouteDialog(id); break;
+                default:
+                    var result = RunAction(a);
+                    Commit(); result["chips"] = Chips(before); return result;
             }
             dialog.View["closable"] = true;
             for (int i = 0; i < dialog.Options.Count; i++)
             {
-                var go = dialog.Options[i]; dialog.Options[i] = () => { Commit(); return go(); };
+                var go = dialog.Options[i];
+                if (!dialog.View["options"]![i].On("free")) dialog.Options[i] = () => { Commit(); return go(); };
             }
             return Obj(("dialog", dialog.View));
         }
