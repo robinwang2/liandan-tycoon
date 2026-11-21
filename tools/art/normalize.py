@@ -190,6 +190,9 @@ def textures(mat, stem):
     sockets = shader.inputs
     info = {'name': mat.name, 'baseColor': list(sockets['Base Color'].default_value),
             'metallic': sockets['Metallic'].default_value, 'smoothness': 1-sockets['Roughness'].default_value}
+    strength = sockets['Emission Strength'].default_value
+    if strength and any(sockets['Emission Color'].default_value[:3]):
+        info['emission'] = [value*strength for value in sockets['Emission Color'].default_value[:3]]
     for key, role in [('Base Color','BaseColor'), ('Normal','Normal')]:
         image, _ = image_source(sockets[key])
         if image:
@@ -230,6 +233,82 @@ def reduce(obj, ratio):
         mod.ratio = ratio
         mod.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
+
+
+def flatten_rack_sides(shell):
+    # 两块外侧钢板本来接近平面。只校正外侧 4 mm 的板面，不抹掉门框、倒角和原 UV。
+    mesh = shell.data
+    low, high = bounds([shell])
+    normals = [corner.vector.copy() for corner in mesh.corner_normals]
+    for face in mesh.polygons:
+        sign = 1 if face.normal.x > 0 else -1
+        plane = high[0] if sign == 1 else low[0]
+        if abs(face.normal.x) < .94 or any(abs(mesh.vertices[index].co.x-plane)>.004 for index in face.vertices):
+            continue
+        for index in face.vertices:
+            mesh.vertices[index].co.x = plane
+        for index in face.loop_indices:
+            normals[index] = (sign,0,0)
+    mesh.update()
+    mesh.normals_split_custom_set(normals)
+
+
+def cluster_shell(shell, limit):
+    # 远级不能让数百个 UV 岛各自折叠。相同空间格共享位置而不共享 UV，剔除折叠和重合的三角面。
+    source = shell.data
+    source.calc_loop_triangles()
+    coords = np.array([vertex.co[:] for vertex in source.vertices])
+    faces = np.array([face.vertices[:] for face in source.loop_triangles])
+    low, high = coords.min(axis=0), coords.max(axis=0)
+    for step in np.geomspace(.025, .5, 64):
+        cells = np.rint((coords-low)/step).astype(int)
+        _, mapping = np.unique(cells, axis=0, return_inverse=True)
+        mapping = mapping.ravel()
+        indices = mapping[faces]
+        keys = np.sort(indices,axis=1)
+        valid = np.where((keys[:,0]!=keys[:,1]) & (keys[:,1]!=keys[:,2]))[0]
+        _, unique = np.unique(keys[valid],axis=0,return_index=True)
+        keep = valid[unique]
+        if 0 < len(keep) <= limit:
+            break
+    else:
+        raise ValueError('外壳聚类未达到远级预算')
+    counts = np.bincount(mapping)
+    centers = np.stack([np.bincount(mapping,weights=axis)/counts for axis in coords.T],axis=1)
+    # 落在外侧钢板和底面的格子沿用原外壁位置，不让内部夹层拉弯外表面。
+    for axis in range(3):
+        for edge in [low[axis],high[axis]]:
+            centers[mapping[np.abs(coords[:,axis]-edge)<.002],axis] = edge
+    points = centers[indices[keep]]
+    intact = np.linalg.norm(np.cross(points[:,1]-points[:,0],points[:,2]-points[:,0]),axis=1)>1e-8
+    keep = keep[intact]
+    target = bpy.data.meshes.new(shell.name+'_远壳')
+    target.from_pydata(centers.tolist(), [], indices[keep].tolist())
+    for mat in source.materials: target.materials.append(mat)
+    uv = target.uv_layers.new(name=source.uv_layers.active.name)
+    for face, index in zip(target.polygons, keep):
+        original = source.loop_triangles[int(index)]
+        face.material_index = original.material_index
+        for dst, src in zip(face.loop_indices, original.loops):
+            uv.uv[dst].vector = source.uv_layers.active.uv[src].vector
+    target.update()
+    # 夹层与外壁可能落入同一格；只在这些分叉处拆边，平板仍为连通网格。
+    topology = bmesh.new()
+    topology.from_mesh(target)
+    bmesh.ops.split_edges(topology, edges=[edge for edge in topology.edges if len(edge.link_faces)>2])
+    bmesh.ops.delete(topology, geom=[vertex for vertex in topology.verts if not vertex.link_faces], context='VERTS')
+    topology.to_mesh(target)
+    topology.free()
+    shell.data = target
+
+
+def panel_signature(front):
+    # 回读 FBX 后按三角形和材质比对，而不是只数面；包括灯、槽和它们相对机身的位置。
+    mesh = front.data
+    mesh.calc_loop_triangles()
+    points = [tuple(round(axis,6) for axis in front.matrix_world @ vertex.co) for vertex in mesh.vertices]
+    return sorted((mesh.materials[face.material_index].name, sorted(points[index] for index in face.vertices))
+                  for face in mesh.loop_triangles)
 
 
 parser = argparse.ArgumentParser()
@@ -300,10 +379,18 @@ materials = sorted({mat for obj in objects for mat in obj.data.materials if mat}
 records = []
 for index, mat in enumerate(materials):
     stem = args.name + (f'_{index+1:02}' if index else '')
-    mat.name = 'M_' + stem
+    if mat.name.startswith('M_'+args.name+'_'):
+        stem = mat.name[2:]
+    else:
+        mat.name = 'M_' + stem
     records.append(textures(mat, stem))
 initial = sum(map(triangles,objects))
 part_names = [obj.name for obj in objects]
+repair_rack = args.name == 'server_rack' and args.source.name == 'repaired.glb'
+if repair_rack:
+    if set(part_names) != {'Front','Shell'} or initial > args.budget:
+        raise ValueError('修补机柜须交付预算内的 Front 和 Shell，不能对面板整体减面')
+    front_count = triangles(objects[part_names.index('Front')])
 for obj in objects:
     reduce(obj,min(1,args.budget/initial))
 # 多零件的边界和取整可能使第一次减面稍超预算，不应导出超标的 LOD0。
@@ -323,8 +410,20 @@ for level, ratio in enumerate([1,.4,.12]):
             obj = original.copy()
             obj.data = original.data.copy()
             bpy.context.collection.objects.link(obj)
-            reduce(obj,ratio)
-        suffix = '' if len(objects)==1 else ('_'+part_names[index] if part_names[index] in ('Upper','Lower') else f'_Part{index+1:02}')
+            if repair_rack and part_names[index] == 'Shell':
+                # 以交付预算而非当前面数分配远级额度；先预留整块面板，再简化机身。
+                shell_limit = int(args.budget*ratio)-front_count
+                if shell_limit < 1:
+                    raise ValueError(f'LOD{level} 没有剩余外壳预算')
+                if level == 2:
+                    cluster_shell(obj, shell_limit)
+                else:
+                    reduce(obj, shell_limit/triangles(obj))
+            elif not repair_rack and part_names[index] != 'Screen':
+                reduce(obj,ratio)
+        if repair_rack and part_names[index] == 'Shell':
+            flatten_rack_sides(obj)
+        suffix = '' if len(objects)==1 else ('_'+part_names[index] if repair_rack or part_names[index] in ('Upper','Lower') else f'_Part{index+1:02}')
         obj.name = f'SM_{args.name}{suffix}_LOD{level}'
         obj.data.name = obj.name
         group.append(obj)
@@ -340,13 +439,23 @@ for level, ratio in enumerate([1,.4,.12]):
         if not np.isfinite(ratios).all() or np.max(np.abs(1-ratios)) > .2:
             raise ValueError(f'LOD{level} 减面后尺寸变化过大，请人工复核')
         fit = Matrix.Diagonal(Vector([*ratios,1]))
-    for obj in group:
+    # 机柜的长宽高由外壳决定。远级只校正外壳，面板继承已落地的 LOD0 坐标。
+    movable = [group[part_names.index('Shell')]] if repair_rack and level else group
+    for obj in movable:
         obj.data.transform(fit)
-    shift = Matrix.Translation(-anchor(*bounds(group)))
-    for obj in group:
+    shift = Matrix.Translation(-anchor(*bounds(movable)))
+    for obj in movable:
         obj.data.transform(shift)
+    if repair_rack:
+        sys.dont_write_bytecode = True
+        sys.path.insert(0,str(Path(__file__).resolve().parent))
+        from rack_clearance import trim
+        trimmed = trim(group)
+        count = sum(map(triangles,group))
     floor, ceiling = bounds(group)
     lods.append(dict(level=level, triangles=count, size=dimensions(floor,ceiling), origin=list(anchor(floor,ceiling)), parts=[obj.name for obj in group]))
+    if repair_rack:
+        lods[-1]['trimmedShellTriangles'] = trimmed
     exported.extend(group)
 # 各级减面结束后再还原活动件枢轴，避免 LOD1/2 重复变换。
 if len(objects)>1:
@@ -369,6 +478,14 @@ for lod in lods:
     if not all(abs(value) <= .0001 for value in measured):
         raise ValueError(f"FBX 回读 LOD{lod['level']} 表面锚点偏移：{measured} m")
     lod['fbxSurfaceAnchorMeters'] = measured
+    if repair_rack:
+        front = next(obj for obj in group if '_Front_LOD' in obj.name)
+        signature = panel_signature(front)
+        if lod['level'] == 0:
+            reference_panel = signature
+        if len(signature) != front_count or signature != reference_panel:
+            raise ValueError(f"FBX 回读 LOD{lod['level']} 的面板几何或材质与 LOD0 不一致")
+        lod.update(frontTriangles=front_count, shellTriangles=lod['triangles']-front_count, frontMatchesLOD0=True)
 report = dict(source=args.source.name, model=model, budget=args.budget, targetHeight=height, scale=factor, rotateZ=args.rotate_z, mirrorDepth=args.mirror_depth,
               sourceSize=dimensions(low,high), normals='按连通面统一绕序；开口壳片按源拐角法线面积投票校正朝向，保留 UV 接缝与硬边', weldToleranceMeters=1e-6,
               mergedVertices=merged, lods=lods, materials=records, seconds=round(time.monotonic()-start,2),

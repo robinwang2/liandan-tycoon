@@ -24,12 +24,14 @@ const batch = read(path.join(root,'unity/Game/Assets/Shell/Resources/PropPolicy.
 const views = ['front','left','right','back'];
 const ledgerFile = path.join(local,'ledger.json'), ledger=read(ledgerFile)??{};
 const shots = path.join(root,'unity/Game/Build/art-batch1');
-function paths(id) {
+function paths(id,repaired=false) {
   const dir=path.join(local,id), ref=path.join(dir,'ref'), dest=path.join(assets,id,'Resources/Batch1',id);
-  return {dir,ref,dest,game:path.join(dir,'game.glb'),source:path.join(dir,'tripo.glb'),qc:path.join(dir,'qc'),report:path.join(dest,'report.json')};
+  return {dir,ref,dest,game:path.join(dir,'game.glb'),source:path.join(dir,repaired?'repaired.glb':'tripo.glb'),qc:path.join(dir,repaired?'repair-qc':'qc'),report:path.join(dest,'report.json')};
 }
 function tool(script,...params) {
   const result=spawnSync(process.execPath,[path.join(import.meta.dirname,script+'.mjs'),...params.map(String)],{cwd:root,stdio:'inherit',windowsHide:true});
+  // 质检已出具不合格报告，让调用处记录具体面号，不当作 Blender 启动失败。
+  if(script==='qc' && result.status===2) return;
   if(result.error || result.status!==0) throw result.error??Error(script+' 未完成');
 }
 function chosen(id) { const item=batch.find(prop=>prop.id===id); if(!item) throw Error('不是第 1 批 ID：'+id); return item; }
@@ -39,25 +41,27 @@ function manifest() {
     views:Object.fromEntries(views.map(view=>[view,path.join(paths(id).ref,view+'.png')])),tripoSlots:{正面:'front.png',左侧:'right.png',右侧:'left.png',背面:'back.png'},settings:'按 tripoSlots 填网页格子，不按文件名同名上传。私有；H3.1 四视图，正面 +Z；先审轮廓，再生成微缩玩具风底色，普通 1K / 大件最多 2K；下载 GLB。不要烘焙文字或灯光。'})));
 }
 function state(item) {
-  const p=paths(item.id), stamp=read(path.join(p.dir,'download.json')), qc=read(path.join(p.qc,'report.json')), report=read(p.report);
-  const downloaded=fs.existsSync(p.source), current=downloaded && stamp?.sha===hash(p.source);
+  const original=paths(item.id), report=read(original.report), repaired=report?.source==='repaired.glb', p=paths(item.id,repaired);
+  const download=read(path.join(p.dir,'download.json')), stamp=repaired?report:download, qc=read(path.join(p.qc,'report.json'));
+  const downloaded=fs.existsSync(original.source), current=downloaded && download?.sha===hash(original.source) && (!repaired || report.originalSha===download.sha) && fs.existsSync(p.source) && stamp?.sha===hash(p.source);
   const inspected=current && fs.existsSync(p.game) && qc?.sha===stamp.sha && qc.refSha===hash(p.game);
   const normal=inspected && qc.pass && report?.sha===stamp.sha && report.refSha===qc.refSha && !!qc.mirrorDepth===!!report.mirrorDepth && fs.existsSync(path.join(p.dest,report.model));
   const receipt=normal && read(path.join(shots,item.id+'.json'));
   return {prep:prepared(p),downloaded, qc:inspected?qc:null,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png'))};
 }
 async function ingest(item,file,mirrorDepth) {
-  const p=paths(item.id); if(!prepared(p)) throw Error('请先 prep '+item.id);
+  const repaired=path.basename(file)==='repaired.glb', p=paths(item.id,repaired); if(!prepared(p)) throw Error('请先 prep '+item.id);
   const incoming=path.resolve(file); if(path.extname(incoming).toLowerCase()!=='.glb' || !fs.statSync(incoming).isFile()) throw Error('需要下载的 GLB 文件');
   const sha=hash(incoming), refSha=hash(p.game);
+  if(repaired && (incoming!==p.source || read(path.join(p.dir,'download.json'))?.sha!==hash(paths(item.id).source))) throw Error('修补件须与已登记的原件同目录；不能替换下载件');
   if(incoming!==p.source) {
     if(incoming===p.game) throw Error('不能把游戏原模当下载件');
     if(fs.existsSync(p.source)) fs.renameSync(p.source,path.join(p.dir,'previous-'+randomUUID()+'.glb'));
     fs.copyFileSync(incoming,p.source,fs.constants.COPYFILE_EXCL);
     if(hash(p.source)!==sha) throw Error('下载件复制校验失败，保留原件'); fs.unlinkSync(incoming);
   }
-  save(path.join(p.dir,'download.json'),{sha,refSha});
-  try { tool('qc',p.source,'--out',p.qc,'--ref',p.ref,'--height',item.h,'--silhouette',...(mirrorDepth?['--mirror-depth']:[])); }
+  if(!repaired) save(path.join(p.dir,'download.json'),{sha,refSha});
+  try { tool('qc',p.source,'--out',p.qc,'--ref',p.ref,'--height',item.h,'--silhouette',...(repaired?['--budget',item.budget]:[]),...(repaired&&item.id==='server_rack'?['--rack-clearance']:[]),...(mirrorDepth?['--mirror-depth']:[])); }
   catch(error) {save(path.join(p.qc,'report.json'),{sha,refSha,pass:false,problems:['模型读取或四视图渲染失败：'+error.message]});throw error;}
   const result=read(path.join(p.qc,'report.json')), reference=read(path.join(p.ref,'report.json'));
   // Tripo 原件未定标，按高比较原模的宽深比；LOD0 预算在减面后硬验。
@@ -83,6 +87,7 @@ function deliver(item,p,mirrorDepth,sha,refSha) {
     report.verifiedSilhouetteIoU=actual.silhouetteIoU;
   }
   if(!report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
+  if(report.source==='repaired.glb') Object.assign(report,{originalSha:hash(paths(item.id).source),repairMethod:'AI 外壳 + 程序化修补',repairCredits:0});
   Object.assign(report,{sha,refSha}); save(path.join(stage,'report.json'),report);
   fs.mkdirSync(p.dest,{recursive:true});
   // 不替换文件夹和已有 .meta，保留已有 Unity 引用；FBX 最后复制。
@@ -108,7 +113,7 @@ try {
       if(!args.length && !fs.existsSync(p.report) && !fs.existsSync(p.source)) continue;
       const {report}=state(item);
       if(!report) throw Error(item.id+'：原件、参考图或交付报告不匹配，请先 ingest');
-      deliver(item,p,report.mirrorDepth,report.sha,report.refSha);
+      deliver(item,paths(item.id,report.source==='repaired.glb'),report.mirrorDepth,report.sha,report.refSha);
     }
   }
   else if(command==='credit' && args.join(' ')==='--from-notes') {
@@ -123,12 +128,19 @@ try {
     const {id}=chosen(args[0]), points=Number(args[1]); if(!/^\d+$/.test(args[1])||!Number.isSafeInteger(points)) throw Error('积分须为非负整数（累计实耗）');
     ledger[id]={reworks:0,...ledger[id],credits:points,...(args.length>2?{note:args.slice(2).join(' ')}:{})}; save(ledgerFile,ledger);
   } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry)};}));
-  else if(command==='ledger' && !args.length) {
-    const rows=batch.map(item=>{const {id,name}=item,s=state(item),e=ledger[id]??{};return {id:'batch1_'+id,name,source:e.source,method:[e.method,e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note].filter(Boolean).join('；')||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,file:s.downloaded?'art-src/tripo/batch1/'+id+'/tripo.glb':undefined,qc:s.qc?(s.qc.size?`下载件 ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e)};});
+  else if(command==='ledger') {
+    const rows=(args.length?args.map(chosen):batch).map(item=>{
+      const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
+      const method=[e.method,e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?'AI 外壳 + 程序化修补；本地追加 0 积分':null].filter(Boolean).join('；');
+      return {id:'batch1_'+id,name,source:e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
+        file:s.downloaded?`art-src/tripo/batch1/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,
+        qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e)};
+    });
     await writeSources(path.join(root,'tables/美术.xlsx'),rows);
-  } else throw Error('用法：batch.mjs prep [id... | --manifest-only] | ingest <id> <下载.glb> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger');
+  } else throw Error('用法：batch.mjs prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
 function deliveryStatus(s,entry) {
+  if(s.report?.source==='repaired.glb') return '本地修补及三级回读通过；待 Unity 人工验收';
   return entry?.status ?? (s.accepted?'Unity 已生成截图；待人工验收':s.report?'FBX 回读通过；待 Unity 验收':s.qc?.pass?'下载件通过；尚无匹配的正式 FBX':s.downloaded?'已下载':s.prep?'已备上传图':'计划中');
 }

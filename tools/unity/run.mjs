@@ -13,6 +13,7 @@ const methods = new Map([
   ['compile', 'ConfigureUrp'],
   ['art-furnace', 'Capture'],
   ['art-batch1', 'Capture'],
+  ['art-repair', 'CaptureRepair'],
   ['build-game-art','BuildArtProbe'],
   ['editor-parity', 'RunEditor'],
   ['build-probe', 'BuildIl2cppProbe'],
@@ -108,9 +109,9 @@ function run() {
   const log = join(logs, mode + '.log');
   const result = join(logs, mode === 'run-probe' ? 'parity-il2cpp.txt' : 'parity-editor.txt');
   const args = ['-batchmode', ...(mode.startsWith('art-') ? [] : ['-nographics']), '-logFile', log];
-  if(mode==='art-batch1') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
+  if(mode==='art-batch1' || mode==='art-repair') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
   if (methods.has(mode))
-    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='art-batch1'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
+    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='art-batch1'||mode==='art-repair'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
   if (checking) {
     const bits = input ? resolve(input) : join(logs, 'math-bits.bin');
     if (!input && (mode === 'editor-parity' || !existsSync(bits))) {
@@ -137,6 +138,7 @@ function run() {
   }
   if (proc.status !== 0 || errors.length || !contents ||
       (mode==='art-batch1' && !contents.includes('Liandan batch1 shots OK:')) ||
+      (mode==='art-repair' && !contents.includes('Liandan repair shots OK:')) ||
       (mode === 'art-furnace' && (!contents.includes('Liandan furnace shots OK:') || ['original','tripo','tripo-close','tripo-front','tripo-back-high'].some(name=>!existsSync(join(project,'Build/art-furnace',name+'.png'))))) ||
       (checking && !report.trimEnd().endsWith('对拍通过')) ||
       (mode === 'setup-ui' && !contents.includes('Liandan UI setup OK')) ||

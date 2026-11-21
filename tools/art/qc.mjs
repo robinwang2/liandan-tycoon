@@ -9,7 +9,7 @@ import sharp from 'sharp';
 const BLENDER = process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe';
 const args = process.argv.slice(2), model = args[0];
 if (!model) { console.log('用法：node tools/art/qc.mjs <模型> [--out 目录] [--budget N] [--height 米] [--ref 目录或图片] [--flat]'); process.exit(1); }
-const opt = {}; for (let i = 1; i < args.length; i++) { if (['--flat','--silhouette','--mirror-depth'].includes(args[i])) opt[args[i].slice(2)] = true; else opt[args[i].slice(2)] = args[++i]; }
+const opt = {}; for (let i = 1; i < args.length; i++) { if (['--flat','--silhouette','--mirror-depth','--rack-clearance'].includes(args[i])) opt[args[i].slice(2)] = true; else opt[args[i].slice(2)] = args[++i]; }
 if(opt['mirror-depth']) opt.silhouette=true;
 if (opt.silhouette) {
   if(!opt.ref || !fs.statSync(opt.ref).isDirectory()) throw Error('轮廓检查需要 --ref 四视图目录');
@@ -21,6 +21,7 @@ const pyArgs = ['--', path.resolve(model), '--out', out, '--views', views.join('
 const t0 = Date.now();
 if (opt.lod !== undefined) pyArgs.push('--lod', opt.lod);
 if (opt.bg !== undefined) pyArgs.push('--bg', opt.bg);
+if (opt['rack-clearance']) pyArgs.push('--rack-clearance');
 const r = spawnSync(BLENDER, ['-b', '--factory-startup', '-P', path.resolve(import.meta.dirname, 'qc.py'), ...pyArgs], { encoding: 'utf8', maxBuffer: 64 << 20 });
 const line = (r.stdout || '').split('\n').find(l => l.startsWith('QC_REPORT '));
 if (!line) { console.log('Blender 没跑通：\n' + (r.stderr || '').slice(-2000) + '\n' + (r.stdout || '').slice(-2000)); process.exit(1); }
@@ -74,3 +75,5 @@ console.log(`  材质 ${rep.materials.length} 个 · 贴图 ${Object.entries(rep
 for (const p of rep.problems) console.log('  ✗ ' + p);
 for (const n of rep.notes || []) console.log('  ⚠ ' + n);
 console.log(`  对照图：${path.join(out, 'sheet.png')}`);
+if (rep.rackFrontClearance) console.log(`  行板前方 5 cm：${rep.rackFrontClearance.intersectingTriangles} 个外壳三角面`);
+if (opt['rack-clearance'] && !rep.pass) process.exitCode=2;

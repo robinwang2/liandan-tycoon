@@ -12,7 +12,7 @@ src = argv[0]
 opt = {}
 i = 1
 while i < len(argv):
-    if argv[i] == '--flat': opt['flat'] = True; i += 1; continue
+    if argv[i] in ('--flat','--rack-clearance'): opt[argv[i][2:]] = True; i += 1; continue
     opt[argv[i].lstrip('-')] = argv[i + 1]; i += 2
 out = opt.get('out', os.path.splitext(src)[0] + '_qc')
 os.makedirs(out, exist_ok=True)
@@ -98,6 +98,16 @@ report = {
     'origin': {'bottomZ': round(lo.z, 4), 'centerX': round(center.x, 4), 'centerY': round(center.y, 4)},
 }
 problems = []
+if opt.get('rack-clearance'):
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from rack_clearance import measure
+    try:
+        clearance = report['rackFrontClearance'] = measure(meshes)
+        if clearance['intersectingTriangles']:
+            problems.append(f"机柜行板前方 5 cm 内有 {clearance['intersectingTriangles']} 个外壳三角面：{clearance['polygonExamples']}")
+    except ValueError as error:
+        problems.append(str(error))
 if budget and tris > budget: problems.append(f'三角面 {tris} 超过预算 {budget}')
 if non_manifold: problems.append(f'有 {non_manifold} 条边连着 3 个以上的面（破面）')
 if target_h and size.z: report['scaleToTarget'] = round(target_h / size.z, 4)

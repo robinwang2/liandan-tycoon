@@ -13,7 +13,8 @@ namespace Liandan.EditorTools
         const string Folder = "Assets/Art/Props/Furnace/Resources/Furnaces/";
         bool Furnace => assetPath.StartsWith(Folder, StringComparison.Ordinal);
         bool Batch => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Resources/Batch1/");
-        bool InPackage => Furnace || Batch;
+        bool Reference => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Editor/RepairReference/");
+        bool InPackage => Furnace || Batch || Reference;
         string Sibling(string file) => assetPath.Substring(0, assetPath.LastIndexOf('/')+1) + file;
 
         [Serializable] class Finish
@@ -21,6 +22,7 @@ namespace Liandan.EditorTools
             public string name = "", BaseColor = "", Normal = "", LitMask = "";
             public float metallic = 0, smoothness = 0;
             public float[] baseColor = Array.Empty<float>();
+            public float[] emission = Array.Empty<float>();
         }
         [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); }
         // 独立于模型实测值的验收配置；屏占比比世界距离更适合正交相机。
@@ -33,7 +35,7 @@ namespace Liandan.EditorTools
             public float widthDepthTolerance = 0, heightTolerance = 0;
         }
 
-        public override uint GetVersion() => 6;
+        public override uint GetVersion() => 7;
         void OnPreprocessTexture()
         {
             if (!InPackage) return;
@@ -83,6 +85,11 @@ namespace Liandan.EditorTools
                 return tex!;
             }
             if (finish.baseColor.Length == 4) material.SetColor("_BaseColor", new Color(finish.baseColor[0],finish.baseColor[1],finish.baseColor[2],1).gamma);
+            if (finish.emission.Length==3 && finish.emission.Any(value=>value>0))
+            {
+                material.SetColor("_EmissionColor",new Color(finish.emission[0],finish.emission[1],finish.emission[2]).gamma);
+                material.EnableKeyword("_EMISSION");
+            }
             bool bronze = tripo && string.IsNullOrEmpty(finish.LitMask);
             material.SetFloat("_Metallic",bronze ? .25f : finish.metallic);
             material.SetFloat("_Smoothness",bronze ? .32f : finish.smoothness);
@@ -97,7 +104,7 @@ namespace Liandan.EditorTools
         }
         void OnPostprocessModel(GameObject root)
         {
-            if (!InPackage) return;
+            if (!InPackage || Reference) return;
             foreach (var child in root.GetComponentsInChildren<LODGroup>(true))
                 if (child.gameObject != root) UnityEngine.Object.DestroyImmediate(child);
             var group = root.GetComponent<LODGroup>() ?? root.AddComponent<LODGroup>();

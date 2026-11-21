@@ -21,7 +21,8 @@ if (qc) for (const [index, lod] of report.lods.entries()) {
   const out = path.join(qc, 'LOD'+index);
   const spec = values.width && values.depth ? {w:Number(values.width),d:Number(values.depth),h:report.targetHeight,origin:report.origin,budget:report.budget} : null;
   const budget = spec ? budgetFor(spec.budget,index) : report.budget;
-  run(process.execPath,[path.join(import.meta.dirname,'qc.mjs'),path.join(values.out,report.model),'--lod',String(index),'--out',out,'--budget',String(budget),'--height',String(report.targetHeight), ...(ref ? ['--ref',ref] : []), ...(res ? ['--res',res] : [])]);
+  const rack=values.name==='server_rack' && report.source==='repaired.glb';
+  run(process.execPath,[path.join(import.meta.dirname,'qc.mjs'),path.join(values.out,report.model),'--lod',String(index),'--out',out,'--budget',String(budget),'--height',String(report.targetHeight), ...(rack?['--rack-clearance']:[]), ...(ref ? ['--ref',ref] : []), ...(res ? ['--res',res] : [])]);
   const check = JSON.parse(fs.readFileSync(path.join(out,'report.json'),'utf8'));
   const pos = check.origin;
   const anchor = [pos.centerX, pos.centerY+(values.origin==='wall'?check.size.depth/2:0), pos.bottomZ+(values.origin==='ceiling'?check.size.height:0)];
