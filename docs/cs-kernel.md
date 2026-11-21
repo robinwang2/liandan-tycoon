@@ -258,7 +258,7 @@ dotnet run --no-build -c Release --project unity/KernelCli -- math-bits $bits
 ```powershell
 $env:PATH = "C:\Program Files\dotnet;" + $env:PATH
 dotnet build unity/Kernel.sln -c Release
-$cli = 'unity/KernelCli/bin/Release/net8.0/KernelCli.dll'
+$cli = 'unity/.build/KernelCli/bin/Release/net8.0/KernelCli.dll'
 dotnet $cli parity
 npm run parity
 dotnet $cli parity tools/verify/baseline-768.json --seeds 16
@@ -269,7 +269,7 @@ CLI 最多打印 12 局首差，月份从 1 起算。以下命令在 Windows 下
 
 ```powershell
 cmd /c "node tools/parity.mjs dump bay/model/chat/clean#0 > js.dump"
-cmd /c "dotnet unity/KernelCli/bin/Release/net8.0/KernelCli.dll dump bay/model/chat/clean#0 > cs.dump"
+cmd /c "dotnet unity/.build/KernelCli/bin/Release/net8.0/KernelCli.dll dump bay/model/chat/clean#0 > cs.dump"
 fc.exe /b js.dump cs.dump
 ```
 
@@ -278,3 +278,31 @@ fc.exe /b js.dump cs.dump
 C# 类库已覆盖这批对局经过的开局、月结、经营行动、融资发布、团队、建议、两地路线剧情、弹窗选择和结局。第 5 段验证了 459,215 个操作的前后状态与可见返回值，第 6 段进一步验证三种机器人能从种子自行走出默认基线的整局过程。扩展后的 16 个种子也通过了完整的 768 局指纹对拍。
 
 Unity 接入还需让工程加载内核及其 JSON 依赖和规则表，把玩家输入接到行动与选项入口，绑定菜单、弹窗、月末状态和场景表现，并实现存档读写。在目标 Mono 或 IL2CPP 环境复跑相同基线，才能验证该运行时的浮点结果。
+
+## Unity 里的对拍
+
+在 Windows x64 上关闭已打开的 `unity/Game` 工程，然后从仓库根目录依次运行。默认编辑器是 `D:\Unity edititor\6000.5.2f1\Editor\Unity.exe`，其他安装位置可通过 PowerShell 的 `$env:UNITY_EXE` 指定完整可执行文件路径。
+
+```powershell
+node tools/unity/run.mjs compile
+node tools/unity/run.mjs editor-parity
+node tools/unity/run.mjs build-probe
+node tools/unity/run.mjs run-probe
+```
+
+1. `compile` 让 Unity 解析两个本地 UPM 包和内置 URP 17.5.0，编译工程，并在 `Assets/Settings` 创建默认渲染器和管线资源，设置 Graphics 的默认管线。交互打开工程时也可用菜单「炼丹大亨 → 设置 URP」。首次导入后 Unity 会刷新包锁文件。
+2. `editor-parity` 用本机 Node 生成数学输入 `unity/Game/Logs/math-bits.bin`，在编辑器 Mono 里读取仓库的 `src/data/tables` 和 `tools/parity/baseline.json`，对比 144 局逐月指纹、整局摘要和八项数学结果。数学样本生成参照上节的 Node 版本。
+3. `build-probe` 生成只有探针组件的场景 `Assets/Parity/ParityProbe.unity`，使用 IL2CPP 构建 `unity/Game/Build/ParityProbe/ParityProbe.exe`。构建结束后恢复原有脚本后端。探针的 `link.xml` 保留 JSON 及内核所需的类型。
+4. `run-probe` 以无图形批处理模式运行播放器，传入同一仓库和数学样本。编辑器和播放器都支持在对应子命令末尾追加自定义样本路径，例如 `node tools/unity/run.mjs run-probe "$env:TEMP\liandan-math-bits.bin"`。
+
+每一步的 Unity 日志保存在 `unity/Game/Logs/<子命令>.log`，脚本会摘出编译错误并传回失败退出码。两份对拍报告分别为 `parity-editor.txt` 与 `parity-il2cpp.txt`。成功时应有「整局一致 144/144」、八项「真正的数值不同 0/样本数」和末行「对拍通过」。遇到差异请保留报告中的对局、首差月份或数学输入位型。
+
+数学报告逐项分三类：按位一致（含位型相同的 NaN）；「NaN 位型不同，JS 观察不到」（两边都是 NaN，仅符号或负载不同，每项列前 3 例）；真正的数值不同（含仅一边是 NaN、`+0` 对 `-0` 等）。仅第三类导致数学检查失败。这里的“观察不到”指游戏使用的 JS Number 数值语义，不包括读取原始字节；正负零可用 `Object.is` 或倒数区分，不能合并。
+
+修改前 Windows x64 IL2CPP 的 `Math.pow` 与 `**` 各有 38,612/616,961 项按位不同，已见例子均为 JS `fff8000000000000`、C# `7ff8000000000000`；其余六项按位一致，整局仍为 144/144。相同样本在编辑器 Mono 和 .NET 8 上八项均按位一致。默认 V8 样本中，通用幂的有限负底数、有限非整数指数分支（不含单独处理的 `0.5`）正好有 38,612 项，两种写法均返回 `fff8000000000000`。`JsMath.Pow` 因此只在此分支显式返回该位型，不统一其他路径的 NaN。需重新 `build-probe` 再 `run-probe`，以新播放器报告确认按位结果。
+
+`unity/KernelChecks` 是 CLI、编辑器和探针共用的机器人、指纹及数学检查程序集。Unity 使用 BCLExtensions 自带的 System.Text.Json 8，.NET 工程继续使用原 NuGet 引用。MSBuild 的输出统一放在 `unity/.build/<项目名>/`。独立检查工程 `unity/GameCheck/GameCheck.csproj` 直接用本机 Unity 托管 DLL 编译脚本，可在不开编辑器时运行：
+
+```powershell
+& 'C:\Program Files\dotnet\dotnet.exe' build unity/GameCheck/GameCheck.csproj -c Release
+```

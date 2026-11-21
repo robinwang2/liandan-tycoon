@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- 只做编辑器及播放器脚本的静态编译检查，生成物在 unity/.build。 -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <UnityExe Condition="'$(UnityExe)' == ''">$(UNITY_EXE)</UnityExe>
+    <UnityExe Condition="'$(UnityExe)' == ''">D:\Unity edititor\6000.5.2f1\Editor\Unity.exe</UnityExe>
+    <UnityData>$([System.IO.Path]::GetDirectoryName('$(UnityExe)'))/Data</UnityData>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Game/Assets/Parity/**/*.cs;../Kernel/*.cs;../KernelChecks/*.cs" />
+    <Reference Include="$(UnityData)/Managed/UnityEngine/*.dll;$(UnityData)/BCLExtensions/runtime/netstandard2.1/*.dll" Private="false" />
+  </ItemGroup>
+</Project>

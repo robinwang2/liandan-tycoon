@@ -1,3 +1,4 @@
+using Liandan.Verification;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
@@ -17,8 +18,12 @@ catch (Exception error)
 
 static int Run(string[] args)
 {
-    if (args.Length == 2 && args[0] == "math-bits") return MathBits.Run(args[1]);
-    if (args.FirstOrDefault() is "dump" or "parity") return Parity.Run(args);
+    if (args.Length == 2 && args[0] == "math-bits") return MathBits.Run(args[1], Console.Out);
+    if (args.FirstOrDefault() is "dump" or "parity")
+    {
+        Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+        return Parity.Run(args, "src/data/tables", Console.Out, Console.Error);
+    }
     const string usage = "用法：math-bits <样本文件>、parity [baseline.json] [--seeds N]、dump <对局key> 或 trace|ops <快照目录> [--tables 表目录] [--only 对局key] [--max N]";
     if (args.Length < 2 || (args[0] != "trace" && args[0] != "ops")) throw new ArgumentException(usage);
     string dir = args[1], tablesPath = "src/data/tables";
