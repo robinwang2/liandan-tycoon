@@ -15,9 +15,10 @@ namespace Liandan.Shell
         readonly List<Action<bool>> changes=new List<Action<bool>>();
         public void Switch(bool atlas){foreach(var change in changes)change(atlas);}
 
-        public PropAtlas()
+        public PropAtlas(string resource="Batch1")
         {
-            var layout=Resources.Load<TextAsset>("BatchAtlas/layout");if(!layout)throw new InvalidOperationException("请先运行 atlas.mjs");
+            var atlasFolder=resource=="Batch1"?"BatchAtlas":resource+"Atlas";
+            var layout=Resources.Load<TextAsset>(atlasFolder+"/layout");if(!layout)throw new InvalidOperationException("请先运行 atlas.mjs");
             var tiles=JsonUtility.FromJson<Layout>(layout.text).tiles.ToDictionary(tile=>tile.name);
             var pages=new Dictionary<int,Material>();var singles=new Dictionary<Material,Material>();var meshes=new Dictionary<Mesh,Mesh>();
             var checkedIds=new HashSet<string>();
@@ -35,11 +36,11 @@ namespace Liandan.Shell
                     foreach(var tile in mapped)
                     {
                         if(checkedIds.Add(tile.id)){
-                            var report=Resources.Load<TextAsset>($"Batch1/{tile.id}/report");using var sha=SHA256.Create();
+                            var report=Resources.Load<TextAsset>($"{resource}/{tile.id}/report");using var sha=SHA256.Create();
                             if(!report || BitConverter.ToString(sha.ComputeHash(report.bytes)).Replace("-","").ToLowerInvariant()!=tile.fingerprint)throw new InvalidOperationException("图集过期："+tile.id);
                         }
                         if(!pages.ContainsKey(tile.page)){
-                            var texture=Resources.Load<Texture2D>("BatchAtlas/page"+tile.page+"_BaseColor");if(!texture)throw new InvalidOperationException("缺图集页 "+tile.page);pages.Add(tile.page,Finish(texture,Color.white));
+                            var texture=Resources.Load<Texture2D>(atlasFolder+"/page"+tile.page+"_BaseColor");if(!texture)throw new InvalidOperationException("缺图集页 "+tile.page);pages.Add(tile.page,Finish(texture,Color.white));
                         }
                     }
                     foreach(var material in materials)if(!singles.ContainsKey(material))singles.Add(material,Finish(material.GetTexture("_BaseMap"),material.GetColor("_BaseColor")));

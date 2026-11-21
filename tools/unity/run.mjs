@@ -13,6 +13,7 @@ const methods = new Map([
   ['compile', 'ConfigureUrp'],
   ['art-furnace', 'Capture'],
   ['art-batch1', 'Capture'],
+  ['art-batch2', 'CaptureBatch2'],
   ['art-repair', 'CaptureRepair'],
   ['build-game-art','BuildArtProbe'],
   ['editor-parity', 'RunEditor'],
@@ -23,6 +24,7 @@ const methods = new Map([
   ['build-game-il2cpp', 'BuildGameIl2cpp'],
 ]);
 const [mode, input, ...extra] = process.argv.slice(2);
+const shotBatch = /^art-(batch[12])$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
 function run() {
@@ -102,16 +104,16 @@ function run() {
     checkMix(shots); return;
   }
   if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
-    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
+    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | art-batch1 | art-batch2 | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
   mkdirSync(logs, { recursive: true });
   const log = join(logs, mode + '.log');
   const result = join(logs, mode === 'run-probe' ? 'parity-il2cpp.txt' : 'parity-editor.txt');
   const args = ['-batchmode', ...(mode.startsWith('art-') ? [] : ['-nographics']), '-logFile', log];
-  if(mode==='art-batch1' || mode==='art-repair') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
+  if(shotBatch || mode==='art-repair') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
   if (methods.has(mode))
-    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='art-batch1'||mode==='art-repair'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
+    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (shotBatch||mode==='art-repair'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
   if (checking) {
     const bits = input ? resolve(input) : join(logs, 'math-bits.bin');
     if (!input && (mode === 'editor-parity' || !existsSync(bits))) {
@@ -128,7 +130,7 @@ function run() {
   const proc = spawnSync(exe, args, { cwd: project, stdio: 'inherit', windowsHide: true, env: { ...process.env, LIANDAN_REPO: root } });
   if (proc.error) throw proc.error;
   const contents = existsSync(log) ? readFileSync(log, 'utf8') : '';
-  if(mode==='art-batch1')for(const line of contents.split(/\r?\n/).filter(line=>/^Liandan batch1 (shots:|FAIL:)/.test(line)))console.log(line);
+  if(shotBatch)for(const line of contents.split(/\r?\n/).filter(line=>line.startsWith('Liandan '+shotBatch+' shots:') || line.startsWith('Liandan '+shotBatch+' FAIL:')))console.log(line);
   const errors = contents.split(/\r?\n/).filter(line => /\berror (?:CS|BC|IL)\d+|compilation failed|executeMethod.*(?:exception|failed)|unable to resolve packages/i.test(line));
   if (errors.length) console.error([...new Set(errors)].join('\n'));
   let report = '';
@@ -137,7 +139,7 @@ function run() {
     console.log(result + '\n' + report);
   }
   if (proc.status !== 0 || errors.length || !contents ||
-      (mode==='art-batch1' && !contents.includes('Liandan batch1 shots OK:')) ||
+      (shotBatch && !contents.includes('Liandan '+shotBatch+' shots OK:')) ||
       (mode==='art-repair' && !contents.includes('Liandan repair shots OK:')) ||
       (mode === 'art-furnace' && (!contents.includes('Liandan furnace shots OK:') || ['original','tripo','tripo-close','tripo-front','tripo-back-high'].some(name=>!existsSync(join(project,'Build/art-furnace',name+'.png'))))) ||
       (checking && !report.trimEnd().endsWith('对拍通过')) ||

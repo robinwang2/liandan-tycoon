@@ -8,6 +8,9 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from seam_weld import stitch_boundaries
+
 
 def load(file, size, wall):
     bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -30,6 +33,7 @@ def load(file, size, wall):
 def cut(shell, planes, remove, budget):
     mesh = bmesh.new()
     mesh.from_mesh(shell.data)
+    stitch_boundaries(mesh)
     for axis, value in planes:
         normal = Vector((0, 0, 0)); normal[axis] = 1
         bmesh.ops.bisect_plane(mesh, geom=[*mesh.verts, *mesh.edges, *mesh.faces],

@@ -1,0 +1,22 @@
+{
+  "props": [
+    {"id":"water_tank","name":"不锈钢水箱","origin":"bottom","x":-5.0,"y":0.06,"z":-4.0},
+    {"id":"water_tower_wood","name":"木制水塔","origin":"bottom","x":-2.6,"y":0.06,"z":-4.0},
+    {"id":"bollard","name":"隔离桩","origin":"bottom","x":-0.2,"y":0.06,"z":-4.0},
+    {"id":"parcels","name":"快递包裹","origin":"bottom","x":2.2,"y":0.06,"z":-4.0},
+    {"id":"trash_public","name":"分类垃圾桶","origin":"bottom","x":4.6,"y":0.06,"z":-4.0},
+    {"id":"power_box","name":"配电箱","origin":"bottom","x":-5.0,"y":0.06,"z":-1.5},
+    {"id":"planter_box","name":"街边花箱","origin":"bottom","x":-2.6,"y":0.06,"z":-1.5},
+    {"id":"bench","name":"长椅","origin":"bottom","x":-0.2,"y":0.06,"z":-1.5},
+    {"id":"fire_hydrant","name":"消火栓","origin":"bottom","x":2.2,"y":0.06,"z":-1.5},
+    {"id":"traffic_cone","name":"路锥","origin":"bottom","x":4.6,"y":0.06,"z":-1.5},
+    {"id":"mailbox","name":"信箱","origin":"bottom","x":-5.0,"y":0.06,"z":1.0},
+    {"id":"fire_extinguisher","name":"灭火器","origin":"bottom","x":-2.6,"y":0.06,"z":1.0},
+    {"id":"ac_split","name":"分体空调","origin":"wall","x":-0.2,"y":1.5,"z":1.0},
+    {"id":"sofa","name":"沙发","origin":"bottom","x":2.2,"y":0.06,"z":1.0},
+    {"id":"bean_bag","name":"懒人沙发","origin":"bottom","x":4.6,"y":0.06,"z":1.0},
+    {"id":"sat_dish","name":"卫星碟","origin":"bottom","x":-5.0,"y":0.06,"z":3.5},
+    {"id":"boxes","name":"搬家纸箱","origin":"bottom","x":-2.6,"y":0.06,"z":3.5},
+    {"id":"roof_vent","name":"屋顶风帽","origin":"bottom","x":-0.2,"y":0.06,"z":3.5}
+  ]
+}

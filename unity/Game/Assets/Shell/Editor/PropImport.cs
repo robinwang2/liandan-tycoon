@@ -12,7 +12,7 @@ namespace Liandan.EditorTools
     {
         const string Folder = "Assets/Art/Props/Furnace/Resources/Furnaces/";
         bool Furnace => assetPath.StartsWith(Folder, StringComparison.Ordinal);
-        bool Batch => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Resources/Batch1/");
+        bool Batch => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && (assetPath.Contains("/Resources/Batch1/") || assetPath.Contains("/Resources/Batch2/"));
         bool Reference => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Editor/RepairReference/");
         bool InPackage => Furnace || Batch || Reference;
         string Sibling(string file) => assetPath.Substring(0, assetPath.LastIndexOf('/')+1) + file;
@@ -113,7 +113,10 @@ namespace Liandan.EditorTools
             {
                 context.DependsOnSourceAsset(PropBatch.PolicyPath);
                 config=JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(PropBatch.PolicyPath));
-                var item=config.props.Single(prop=>prop.id==assetPath.Split('/')[3]); origin=item.origin;
+                string selectionPath=PropBatch.SelectionPath(assetPath.Split('/')[5]);
+                context.DependsOnSourceAsset(selectionPath);
+                var selection=selectionPath==PropBatch.PolicyPath ? config : JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(selectionPath));
+                var item=selection.props.Single(prop=>prop.id==assetPath.Split('/')[3]); origin=item.origin;
                 if(item.budget==0)
                 {
                     const string art="Assets/StreamingAssets/tables/art.json";

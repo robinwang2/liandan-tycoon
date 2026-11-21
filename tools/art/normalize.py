@@ -14,6 +14,10 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from seam_weld import stitch_boundaries
+
 
 def import_glb(file):
     # Blender 会忽略网页合批用的 _ARM。借用这些无 UV 网格的第一套 UV 传入两个归一化通道。
@@ -68,31 +72,13 @@ def dimensions(low, high):
 
 
 def clean(mesh):
-    # 只在拥有同一组 UV、拐角法线及材质的顶点之间焊接。避免把硬边或 UV 岛焊穿。
-    signatures = [set() for vertex in mesh.vertices]
-    for face in mesh.polygons:
-        for index in face.loop_indices:
-            signatures[mesh.loops[index].vertex_index].add((face.material_index, tuple(mesh.corner_normals[index].vector),
-                tuple(tuple(layer.uv[index].vector) for layer in mesh.uv_layers)))
     # 源拐角法线提供局部朝向参考。单靠 recalc 会把不封闭且被 UV 切开的壳片整片翻反。
     references = [sum((mesh.corner_normals[index].vector for index in face.loop_indices), Vector()).normalized()
                   for face in mesh.polygons]
-    groups = {}
     bm = bmesh.new()
     bm.from_mesh(mesh)
-    before = len(bm.verts)
-    for vertex in bm.verts:
-        groups.setdefault(frozenset(signatures[vertex.index]), []).append(vertex)
-    for vertices in groups.values():
-        if len(vertices) > 1:
-            bmesh.ops.remove_doubles(bm, verts=vertices, dist=1e-6)
-    # 原模型可能有重合但独立的装饰件，焊接不能以引入非流形边为代价。
-    if any(len(edge.link_faces) > 2 for edge in bm.edges):
-        bm.free()
-        bm = bmesh.new()
-        bm.from_mesh(mesh)
-    merged = before - len(bm.verts)
     source_normals = {face: references[face.index] for face in bm.faces if face.index >= 0}
+    merged = stitch_boundaries(bm)
     bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
     bm.normal_update()
     remaining = set(bm.faces)
@@ -233,6 +219,8 @@ def reduce(obj, ratio):
         mod.ratio = ratio
         mod.use_collapse_triangulate = True
         bpy.ops.object.modifier_apply(modifier=mod.name)
+        # 微小连通件折到最后可能剩下一对重复的三角面，FBX 导入器会删掉其中一面。
+        obj.data.validate(clean_customdata=False)
 
 
 def flatten_rack_sides(shell):
@@ -253,53 +241,44 @@ def flatten_rack_sides(shell):
     mesh.normals_split_custom_set(normals)
 
 
-def cluster_shell(shell, limit):
-    # 远级不能让数百个 UV 岛各自折叠。相同空间格共享位置而不共享 UV，剔除折叠和重合的三角面。
-    source = shell.data
+def simplify_rack_shell(shell, limit):
+    # 开过 12 行面板的薄外壳和内夹层在远级不能一起直接塌边。先向内加厚，再取等值面。
+    from mathutils.bvhtree import BVHTree
+    from mathutils.geometry import barycentric_transform, closest_point_on_tri
+
+    source = shell.data.copy()
     source.calc_loop_triangles()
-    coords = np.array([vertex.co[:] for vertex in source.vertices])
-    faces = np.array([face.vertices[:] for face in source.loop_triangles])
-    low, high = coords.min(axis=0), coords.max(axis=0)
-    for step in np.geomspace(.025, .5, 64):
-        cells = np.rint((coords-low)/step).astype(int)
-        _, mapping = np.unique(cells, axis=0, return_inverse=True)
-        mapping = mapping.ravel()
-        indices = mapping[faces]
-        keys = np.sort(indices,axis=1)
-        valid = np.where((keys[:,0]!=keys[:,1]) & (keys[:,1]!=keys[:,2]))[0]
-        _, unique = np.unique(keys[valid],axis=0,return_index=True)
-        keep = valid[unique]
-        if 0 < len(keep) <= limit:
-            break
-    else:
-        raise ValueError('外壳聚类未达到远级预算')
-    counts = np.bincount(mapping)
-    centers = np.stack([np.bincount(mapping,weights=axis)/counts for axis in coords.T],axis=1)
-    # 落在外侧钢板和底面的格子沿用原外壁位置，不让内部夹层拉弯外表面。
-    for axis in range(3):
-        for edge in [low[axis],high[axis]]:
-            centers[mapping[np.abs(coords[:,axis]-edge)<.002],axis] = edge
-    points = centers[indices[keep]]
-    intact = np.linalg.norm(np.cross(points[:,1]-points[:,0],points[:,2]-points[:,0]),axis=1)>1e-8
-    keep = keep[intact]
-    target = bpy.data.meshes.new(shell.name+'_远壳')
-    target.from_pydata(centers.tolist(), [], indices[keep].tolist())
-    for mat in source.materials: target.materials.append(mat)
-    uv = target.uv_layers.new(name=source.uv_layers.active.name)
-    for face, index in zip(target.polygons, keep):
-        original = source.loop_triangles[int(index)]
-        face.material_index = original.material_index
-        for dst, src in zip(face.loop_indices, original.loops):
-            uv.uv[dst].vector = source.uv_layers.active.uv[src].vector
-    target.update()
-    # 夹层与外壁可能落入同一格；只在这些分叉处拆边，平板仍为连通网格。
-    topology = bmesh.new()
-    topology.from_mesh(target)
-    bmesh.ops.split_edges(topology, edges=[edge for edge in topology.edges if len(edge.link_faces)>2])
-    bmesh.ops.delete(topology, geom=[vertex for vertex in topology.verts if not vertex.link_faces], context='VERTS')
-    topology.to_mesh(target)
-    topology.free()
-    shell.data = target
+    coords = [v.co.copy() for v in source.vertices]
+    tree = BVHTree.FromPolygons(coords, [tri.vertices[:] for tri in source.loop_triangles], all_triangles=True)
+    bpy.context.view_layer.objects.active = shell
+    solid = shell.modifiers.new('机柜薄板内壁', 'SOLIDIFY')
+    solid.thickness = .018
+    solid.offset = -1
+    bpy.ops.object.modifier_apply(modifier=solid.name)
+    voxel = shell.modifiers.new('远级机柜外壳', 'REMESH')
+    voxel.mode = 'VOXEL'
+    voxel.voxel_size = .014
+    bpy.ops.object.modifier_apply(modifier=voxel.name)
+    reduce(shell, min(1, limit / triangles(shell)))
+
+    # 为远级三角面在原外壳上取色。三个角投到同一个源三角形内，防止插值穿过图集的其他 UV 岛。
+    mesh = shell.data
+    mesh.materials.clear()
+    for mat in source.materials:
+        mesh.materials.append(mat)
+    source_uv = source.uv_layers.active
+    uv = mesh.uv_layers.active or mesh.uv_layers.new(name=source_uv.name)
+    for face in mesh.polygons:
+        _, _, index, _ = tree.find_nearest(face.center)
+        tri = source.loop_triangles[index]
+        face.material_index = tri.material_index
+        xyz = [coords[i] for i in tri.vertices]
+        tex = [source_uv.uv[i].vector.to_3d() for i in tri.loops]
+        for i in face.loop_indices:
+            point = closest_point_on_tri(mesh.vertices[mesh.loops[i].vertex_index].co, *xyz)
+            uv.uv[i].vector = barycentric_transform(point, *xyz, *tex).xy
+    bpy.data.meshes.remove(source)
+    mesh.update()
 
 
 def panel_signature(front):
@@ -307,7 +286,9 @@ def panel_signature(front):
     mesh = front.data
     mesh.calc_loop_triangles()
     points = [tuple(round(axis,6) for axis in front.matrix_world @ vertex.co) for vertex in mesh.vertices]
-    return sorted((mesh.materials[face.material_index].name, sorted(points[index] for index in face.vertices))
+    uv = mesh.uv_layers.active
+    return sorted((mesh.materials[face.material_index].name,
+                   sorted((points[v], tuple(uv.uv[i].vector) if uv else ()) for v, i in zip(face.vertices, face.loops)))
                   for face in mesh.loop_triangles)
 
 
@@ -387,6 +368,9 @@ for index, mat in enumerate(materials):
 initial = sum(map(triangles,objects))
 part_names = [obj.name for obj in objects]
 repair_rack = args.name == 'server_rack' and args.source.name == 'repaired.glb'
+repair_tv = args.name == 'tv_wall' and args.source.name == 'repaired.glb'
+if repair_tv and (set(part_names) != {'Screen', 'Bezel', 'Shell'} or initial > args.budget):
+    raise ValueError('修补电视须交付预算内的 Screen、Bezel、Shell')
 if repair_rack:
     if set(part_names) != {'Front','Shell'} or initial > args.budget:
         raise ValueError('修补机柜须交付预算内的 Front 和 Shell，不能对面板整体减面')
@@ -412,14 +396,14 @@ for level, ratio in enumerate([1,.4,.12]):
             bpy.context.collection.objects.link(obj)
             if repair_rack and part_names[index] == 'Shell':
                 # 以交付预算而非当前面数分配远级额度；先预留整块面板，再简化机身。
-                shell_limit = int(args.budget*ratio)-front_count
+                shell_limit = int(args.budget*(.138 if level == 2 else ratio))-front_count
                 if shell_limit < 1:
                     raise ValueError(f'LOD{level} 没有剩余外壳预算')
                 if level == 2:
-                    cluster_shell(obj, shell_limit)
+                    simplify_rack_shell(obj, shell_limit)
                 else:
                     reduce(obj, shell_limit/triangles(obj))
-            elif not repair_rack and part_names[index] != 'Screen':
+            elif not repair_rack and part_names[index] != 'Screen' and not (repair_tv and part_names[index] == 'Bezel'):
                 reduce(obj,ratio)
         if repair_rack and part_names[index] == 'Shell':
             flatten_rack_sides(obj)
@@ -431,19 +415,25 @@ for level, ratio in enumerate([1,.4,.12]):
     if count > args.budget or not count:
         raise ValueError(f'LOD{level} 面数不合格：{count}')
     # 减面可能让脚底穿地（试验中 LOD2 低了约 1 cm）；整组平移，不单独移动耳、足或盖。
-    floor, ceiling = bounds(group)
+    movable = [group[part_names.index('Shell')]] if (repair_rack or repair_tv) and level else group
+    floor, ceiling = bounds(movable)
     fit = Matrix.Identity(4)
+    target_anchor = Vector((0, 0, 0))
     if args.width and args.depth:
         # 边折叠可能把顶点推出原包围盒，按整组校正，不单独拉伸零件。
-        ratios = np.array([args.width,args.depth,height]) / (ceiling-floor)
+        extent = np.array([args.width,args.depth,height])
+        if repair_tv and level:
+            # 屏幕和边框保持 LOD0 的世界坐标，只把后壳拟合到它自己的原包围盒。
+            low0, high0 = bounds([objects[part_names.index('Shell')]])
+            extent, target_anchor = high0-low0, anchor(low0, high0)
+        ratios = extent / (ceiling-floor)
         if not np.isfinite(ratios).all() or np.max(np.abs(1-ratios)) > .2:
             raise ValueError(f'LOD{level} 减面后尺寸变化过大，请人工复核')
         fit = Matrix.Diagonal(Vector([*ratios,1]))
     # 机柜的长宽高由外壳决定。远级只校正外壳，面板继承已落地的 LOD0 坐标。
-    movable = [group[part_names.index('Shell')]] if repair_rack and level else group
     for obj in movable:
         obj.data.transform(fit)
-    shift = Matrix.Translation(-anchor(*bounds(movable)))
+    shift = Matrix.Translation(target_anchor-anchor(*bounds(movable)))
     for obj in movable:
         obj.data.transform(shift)
     if repair_rack:
@@ -486,8 +476,16 @@ for lod in lods:
         if len(signature) != front_count or signature != reference_panel:
             raise ValueError(f"FBX 回读 LOD{lod['level']} 的面板几何或材质与 LOD0 不一致")
         lod.update(frontTriangles=front_count, shellTriangles=lod['triangles']-front_count, frontMatchesLOD0=True)
+    if repair_tv:
+        screen = next(obj for obj in group if obj.name == lod['parts'][part_names.index('Screen')])
+        signature = panel_signature(screen)
+        if lod['level'] == 0:
+            reference_screen = signature
+        if len(signature) != 2 or signature != reference_screen:
+            raise ValueError(f"FBX 回读 LOD{lod['level']} 的屏幕几何、材质或 UV 不一致")
+        lod.update(screenTriangles=2, screenMatchesLOD0=True)
 report = dict(source=args.source.name, model=model, budget=args.budget, targetHeight=height, scale=factor, rotateZ=args.rotate_z, mirrorDepth=args.mirror_depth,
-              sourceSize=dimensions(low,high), normals='按连通面统一绕序；开口壳片按源拐角法线面积投票校正朝向，保留 UV 接缝与硬边', weldToleranceMeters=1e-6,
+              sourceSize=dimensions(low,high), normals='缝合反向同位对边，保留面角 UV；按连通面统一绕序，开口壳片按源法线校正朝向', weldToleranceMeters=0,
               mergedVertices=merged, lods=lods, materials=records, seconds=round(time.monotonic()-start,2),
               origin=args.origin, axisScales=factors, movingParts='保留分件；单网格不自动推断活动边界。')
 (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')

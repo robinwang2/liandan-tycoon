@@ -1,11 +1,15 @@
+import { batchOptions } from './batch-options.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import sharp from 'sharp';
 
-const [id,...extra]=process.argv.slice(2);
+const { args:[id,...extra], batchName, policy }=batchOptions(process.argv.slice(2));
+const root=path.resolve(import.meta.dirname,'../..');
+const selection=JSON.parse(fs.readFileSync(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json'),'utf8'));
+if (!selection.props.some(item=>item.id===id)) throw Error(batchName+' 未收录：'+id);
 if(!['server_rack','tv_wall'].includes(id) || extra.length) throw Error('用法：node tools/art/repair.mjs server_rack | tv_wall');
-const root=path.resolve(import.meta.dirname,'../..'), folder=path.join(root,'art-src/tripo/batch1',id);
+const folder=path.join(root,'art-src/tripo',batchName,id);
 const reference=path.join(root,'unity/Game/Assets/Art/Props',id,'Editor/RepairReference');
 for(const [script,...args] of [[id,folder],['compare',folder,reference]]){
   const run=spawnSync(process.env.BLENDER||'D:/SteamLibrary/steamapps/common/Blender/blender.exe',['-b','--factory-startup','--python-exit-code','1','-P',path.join(import.meta.dirname,'repair',script+'.py'),'--',...args],{stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});

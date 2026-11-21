@@ -13,18 +13,23 @@ namespace Liandan.Shell
         [Serializable] public class Table { public Item[] PROPS=Array.Empty<Item>(); }
         public static Config Policy => JsonUtility.FromJson<Config>(Resources.Load<TextAsset>("PropPolicy").text);
 
-        public static Dictionary<string,GameObject> Place()
+        public static string SelectionPath(string resource) =>
+            resource=="Batch1" ? PolicyPath : $"Assets/Shell/Resources/PropPolicy{resource}.json";
+        public static Config Selection(string resource) => resource=="Batch1" ? Policy :
+            JsonUtility.FromJson<Config>(Resources.Load<TextAsset>("PropPolicy"+resource).text);
+
+        public static Dictionary<string,GameObject> Place(string resource="Batch1")
         {
             var first=new Dictionary<string,GameObject>();
-            foreach(var item in Policy.props)
+            foreach(var item in Selection(resource).props)
             {
-                var placed=PlaceItem(item);if(placed)first.Add(item.id,placed);
+                var placed=PlaceItem(item,resource);if(placed)first.Add(item.id,placed);
             }
             return first;
         }
-        public static GameObject PlaceItem(Item item)
+        public static GameObject PlaceItem(Item item,string resource="Batch1")
         {
-            var asset=Resources.Load<GameObject>($"Batch1/{item.id}/SM_{item.id}"); if(!asset)return null!;
+            var asset=Resources.Load<GameObject>($"{resource}/{item.id}/SM_{item.id}"); if(!asset)return null!;
             GameObject first=null!;
             int count=item.id=="desk_set" || item.id=="office_chair" ?20:item.id=="server_rack"?4:1;
             for(int index=0; index<count;index++)

@@ -107,25 +107,31 @@ namespace Liandan.EditorTools
             Debug.Log("Liandan repair shots OK: "+folder);
         }
 
-        public static void Capture()
+        public static void Capture() => CaptureBatch("Batch1");
+        public static void CaptureBatch2() => CaptureBatch("Batch2");
+
+        static void CaptureBatch(string resource)
         {
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var camera=Whitebox.Create(false,true);
-            var folder=Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-batch1"));
+            var batch=resource.ToLowerInvariant();
+            var folder=Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-"+batch));
             Directory.CreateDirectory(folder);
             var failures=new List<string>();var skipped=new List<string>();int passed=0;
-            foreach(var item in PropBatch.Policy.props)
+            foreach(var item in PropBatch.Selection(resource).props)
             {
-                string id=item.id, source=$"Assets/Art/Props/{id}/Resources/Batch1/{id}/SM_{id}.fbx";
+                string id=item.id, source=$"Assets/Art/Props/{id}/Resources/{resource}/{id}/SM_{id}.fbx";
                 GameObject copy=null!;
                 try
                 {
                     File.Delete(Path.Combine(folder,id+".json"));File.Delete(Path.Combine(folder,id+".png"));
+                    for (int level = 1; level <= 2; level++)
+                        File.Delete(Path.Combine(folder, $"{id}-lod{level}.png"));
                     if(!File.Exists(source)){skipped.Add(id);continue;}
                     var log=AssetImporter.GetImportLog(source);
                     if(log!=null){var errors=log.logEntries.Where(entry=>(entry.flags & ImportLogFlags.Error)!=0).Select(entry=>entry.message).ToArray();
                         if(errors.Length>0)throw new InvalidDataException(string.Join("；",errors));}
-                    var placed=PropBatch.PlaceItem(item);
+                    var placed=PropBatch.PlaceItem(item,resource);
                     if(!placed)throw new InvalidDataException("FBX 已安装，但无法加载："+source);
                     copy=UnityEngine.Object.Instantiate(placed,new Vector3(100,0,100),Quaternion.identity);
                     var group=copy.GetComponent<LODGroup>();var box=copy.GetComponent<BoxCollider>();
@@ -137,6 +143,11 @@ namespace Liandan.EditorTools
                     group.ForceLOD(0);var bounds=box.bounds;camera.transform.position=bounds.center+new Vector3(.65f,.5f,1)*bounds.size.magnitude*2;camera.transform.LookAt(bounds.center);camera.orthographicSize=bounds.extents.magnitude*1.08f;
                     using var sha=SHA256.Create();var digest=BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(source)!,"report.json")))).Replace("-","").ToLowerInvariant();
                     FurnaceShots.WriteShot(camera,folder,id);
+                    for (int level = 1; level < group.lodCount; level++)
+                    {
+                        group.ForceLOD(level);
+                        FurnaceShots.WriteShot(camera, folder, $"{id}-lod{level}");
+                    }
                     File.WriteAllText(Path.Combine(folder,id+".json"),"{\"reportSha\":\""+digest+"\"}");passed++;
                 }
                 catch(Exception error){failures.Add(id+"："+error.Message);}
@@ -145,10 +156,10 @@ namespace Liandan.EditorTools
             try {PropBatch.Overview(camera);FurnaceShots.WriteShot(camera,folder,"office");}
             catch(Exception error){failures.Add("office："+error.Message);}
             var summary=$"通过 {passed} 件，未安装 {skipped.Count} 件 [{string.Join(", ",skipped)}]，失败 {failures.Count} 项";
-            Debug.Log("Liandan batch1 shots: "+summary);
-            foreach(var reason in failures)Debug.LogError("Liandan batch1 FAIL: "+reason);
+            Debug.Log($"Liandan {batch} shots: "+summary);
+            foreach(var reason in failures)Debug.LogError($"Liandan {batch} FAIL: "+reason);
             if(failures.Count>0)throw new InvalidDataException(summary);
-            Debug.Log("Liandan batch1 shots OK: "+folder);
+            Debug.Log($"Liandan {batch} shots OK: "+folder);
         }
     }
 }

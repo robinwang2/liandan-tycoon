@@ -1,14 +1,18 @@
 // 为所有已交付道具的材质分格。每格独立缩放，边缘扩张防 mip 串色；UV 矩形从左下起算。
 import fs from 'node:fs';
 import path from 'node:path';
+import { batchOptions } from './batch-options.mjs';
 import sharp from 'sharp';
 import {createHash} from 'node:crypto';
 const root=path.resolve(import.meta.dirname,'../..'), assets=path.join(root,'unity/Game/Assets/Art/Props');
-const out=path.join(assets,'BatchAtlas/Resources/BatchAtlas');
+const { args, batchName, resource, policy } = batchOptions(process.argv.slice(2));
+if (args.length) throw Error('用法：atlas.mjs [--batch batch1|batch2]');
+const atlas = batchName==='batch1' ? 'BatchAtlas' : resource+'Atlas';
+const out=path.join(assets,atlas,'Resources',atlas);
 const read=file=>JSON.parse(fs.readFileSync(file,'utf8'));
 const entries=[];
-for(const {id} of read(path.join(root,'unity/Game/Assets/Shell/Resources/PropPolicy.json')).props){
-  const dir=path.join(assets,id,'Resources/Batch1',id), report=path.join(dir,'report.json'); if(!fs.existsSync(report))continue;
+for(const {id} of read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json')).props){
+  const dir=path.join(assets,id,'Resources',resource,id), report=path.join(dir,'report.json'); if(!fs.existsSync(report))continue;
   const fingerprint=createHash('sha256').update(fs.readFileSync(report)).digest('hex');
   for(const mat of read(report).materials)entries.push({id,name:mat.name,file:mat.BaseColor && path.join(dir,mat.BaseColor),color:mat.baseColor,fingerprint});
 }

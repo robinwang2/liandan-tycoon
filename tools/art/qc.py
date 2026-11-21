@@ -40,6 +40,7 @@ dg = bpy.context.evaluated_depsgraph_get()
 # ── 统计 ──
 tris = verts = 0
 non_manifold = boundary = 0
+degenerate = inconsistent = 0
 islands = 0
 inward_faces = outward_faces = unresolved_faces = 0
 lo = Vector((1e9, 1e9, 1e9)); hi = Vector((-1e9, -1e9, -1e9))
@@ -51,6 +52,7 @@ for o in meshes:
     bm.normal_update()
     tree = BVHTree.FromBMesh(bm)
     for face in bm.faces:
+        degenerate += face.calc_area() < 1e-12
         center = face.calc_center_median()
         normal = face.normal
         def escapes(direction):
@@ -66,6 +68,7 @@ for o in meshes:
     tris += sum(len(f.verts) - 2 for f in bm.faces)
     for e in bm.edges:
         n = len(e.link_faces)
+        inconsistent += e.is_manifold and not e.is_contiguous
         if n == 1: boundary += 1
         elif n > 2: non_manifold += 1
     # 连通的零件数
@@ -93,11 +96,26 @@ report = {
         'unresolved': unresolved_faces, 'inwardFractionOfAllFaces': inward_faces/max(1,inward_faces+outward_faces+unresolved_faces)},
     'file': os.path.abspath(src), 'objects': len(meshes), 'materials': sorted(mats), 'textures': images,
     'triangles': tris, 'vertices': verts, 'parts': islands, 'boundaryEdges': boundary, 'nonManifoldEdges': non_manifold,
+    'degenerateFacesBelow1eMinus12M2': degenerate, 'inconsistentWindingEdges': inconsistent,
     'size': {'width': round(size.x, 4), 'depth': round(size.y, 4), 'height': round(size.z, 4)},
     'ratio': {'width/height': round(size.x / size.z, 3) if size.z else None, 'depth/height': round(size.y / size.z, 3) if size.z else None},
     'origin': {'bottomZ': round(lo.z, 4), 'centerX': round(center.x, 4), 'centerY': round(center.y, 4)},
 }
 problems = []
+if opt.get('lod') in ('1', '2'):
+    sys.dont_write_bytecode = True
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from lod_integrity import compare
+    base = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH' and obj.name.endswith('_LOD0')]
+    if not base:
+        problems.append('缺少用于比较覆盖率的 LOD0')
+    else:
+        integrity = report['lodIntegrity'] = compare(base, meshes)
+        for view, metrics in integrity['views'].items():
+            if metrics['interiorLoss'] > integrity['maxInteriorLoss']:
+                problems.append(f"{view} 内部漏像素 {metrics['interiorLoss']:.2%} 超过 {integrity['maxInteriorLoss']:.2%}")
+            if metrics['iou'] < integrity['minIoU']:
+                problems.append(f"{view} 与 LOD0 的轮廓 IoU {metrics['iou']:.3f} 低于 {integrity['minIoU']:.2f}")
 if opt.get('rack-clearance'):
     sys.dont_write_bytecode = True
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -137,11 +155,27 @@ span = max(size.x, size.y, size.z) or 1
 dist = span * 4
 DIRS = {'front': Vector((0, -1, 0)), 'back': Vector((0, 1, 0)), 'left': Vector((-1, 0, 0)), 'right': Vector((1, 0, 0)), 'top': Vector((0, 0, 1)), 'persp': Vector((0.75, -1, 0.65))}
 renders = {}
-for v in views:
-    d = DIRS[v].normalized()
+for v in sorted(views, key=lambda view: view == 'color'):
+    # 彩图用 glTF 原材质节点（含顶点色与底色纹理），灰模仍走工作台。
+    if 'color' in views:
+        sc.render.image_settings.color_mode = 'BW' if opt.get('flat') and v != 'color' else 'RGB'
+    if v == 'color':
+        sc.view_settings.view_transform = 'AgX'
+        sc.render.engine = 'CYCLES'
+        sc.cycles.samples = 12
+        sc.cycles.use_denoising = True
+        world.use_nodes = True
+        world.node_tree.nodes.get('Background').inputs['Color'].default_value = (0.85, 0.85, 0.85, 1)
+        light = bpy.data.lights.new('柔光', 'AREA')
+        light.energy, light.shape, light.size = 55 * span**2, 'DISK', 2 * span
+        lamp = bpy.data.objects.new('柔光', light)
+        sc.collection.objects.link(lamp)
+        lamp.location = center + Vector((-1.2, -2, 2)) * span
+        lamp.rotation_euler = (center-lamp.location).to_track_quat('-Z','Y').to_euler()
+    d = DIRS['persp' if v == 'color' else v].normalized()
     cam.location = center + d * dist
     cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
-    if v == 'persp':
+    if v in ('persp','color'):
         cam_data.type = 'PERSP'; cam_data.lens = 70; cam.location = center + d * span * 3.2
         cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
     else:

@@ -1,4 +1,5 @@
-// 第 1 批：政策只存选件与场景例外，库道具的尺寸和预算始终读表。
+// 各批次：政策只存选件与场景例外，库道具的尺寸和预算始终读表。
+import { batchOptions } from './batch-options.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -6,8 +7,9 @@ import { spawnSync } from 'node:child_process';
 import { writeSources } from './batch-ledger.mjs';
 
 const root = path.resolve(import.meta.dirname,'../..');
-const inputArgs = process.argv.slice(2), [command,...args] = inputArgs;
-const local = path.join(root,'art-src/tripo/batch1'), assets = path.join(root,'unity/Game/Assets/Art/Props');
+const { args: [command,...args], batchName, resource, policy } = batchOptions(process.argv.slice(2));
+const withColor = batchName !== 'batch1';
+const local = path.join(root,'art-src/tripo',batchName), assets = path.join(root,'unity/Game/Assets/Art/Props');
 const read = file => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,'utf8')) : null;
 function save(file,value) {
   fs.mkdirSync(path.dirname(file),{recursive:true});
@@ -16,16 +18,16 @@ function save(file,value) {
 }
 const hash = file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const specs = read(path.join(root,'src/data/tables/art.json')).PROPS;
-const batch = read(path.join(root,'unity/Game/Assets/Shell/Resources/PropPolicy.json')).props.map(entry=>{
+const batch = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json')).props.map(entry=>{
   const spec = {...entry,...specs.find(row=>row.id===entry.id)};
   if (![spec.w,spec.d,spec.h,spec.budget].every(num=>num>0)) throw Error('缺少道具规格：'+entry.id);
   return spec;
 });
 const views = ['front','left','right','back'];
 const ledgerFile = path.join(local,'ledger.json'), ledger=read(ledgerFile)??{};
-const shots = path.join(root,'unity/Game/Build/art-batch1');
+const shots = path.join(root,'unity/Game/Build/art-'+batchName);
 function paths(id,repaired=false) {
-  const dir=path.join(local,id), ref=path.join(dir,'ref'), dest=path.join(assets,id,'Resources/Batch1',id);
+  const dir=path.join(local,id), ref=path.join(dir,'ref'), dest=path.join(assets,id,'Resources',resource,id);
   return {dir,ref,dest,game:path.join(dir,'game.glb'),source:path.join(dir,repaired?'repaired.glb':'tripo.glb'),qc:path.join(dir,repaired?'repair-qc':'qc'),report:path.join(dest,'report.json')};
 }
 function tool(script,...params) {
@@ -34,11 +36,24 @@ function tool(script,...params) {
   if(script==='qc' && result.status===2) return;
   if(result.error || result.status!==0) throw result.error??Error(script+' 未完成');
 }
-function chosen(id) { const item=batch.find(prop=>prop.id===id); if(!item) throw Error('不是第 1 批 ID：'+id); return item; }
-function prepared(p) { return fs.existsSync(p.game) && views.every(view=>fs.existsSync(path.join(p.ref,view+'.png'))) && read(path.join(p.ref,'report.json'))?.sha===hash(p.game); }
+function chosen(id) { const item=batch.find(prop=>prop.id===id); if(!item) throw Error(batchName+' 未收录：'+id); return item; }
+function prepared(p) { return fs.existsSync(p.game) && views.every(view=>fs.existsSync(path.join(p.ref,view+'.png'))) && (!withColor || fs.existsSync(path.join(p.ref,'color.png'))) && read(path.join(p.ref,'report.json'))?.sha===hash(p.game); }
 function manifest() {
-  save(path.join(local,'upload.json'),batch.filter(item=>prepared(paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
-    views:Object.fromEntries(views.map(view=>[view,path.join(paths(id).ref,view+'.png')])),tripoSlots:{正面:'front.png',左侧:'right.png',右侧:'left.png',背面:'back.png'},settings:'按 tripoSlots 填网页格子，不按文件名同名上传。私有；H3.1 四视图，正面 +Z；先审轮廓，再生成微缩玩具风底色，普通 1K / 大件最多 2K；下载 GLB。不要烘焙文字或灯光。'})));
+  const entries=batch.filter(item=>prepared(paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
+    views:Object.fromEntries(views.map(view=>[view,path.join(paths(id).ref,view+'.png')])),tripoSlots:{正面:'front.png',左侧:'right.png',右侧:'left.png',背面:'back.png'},settings:'按 tripoSlots 填网页格子，不按文件名同名上传。私有；H3.1 四视图，正面 +Z；先审轮廓，再生成微缩玩具风底色，普通 1K / 大件最多 2K；下载 GLB。不要烘焙文字或灯光。'}));
+  if (withColor) {
+    const lines = ['# '+batchName+' 网页上传清单', '', '私有 · H3.1 多视图。先核对几何正反与轮廓，再选图片贴图，上传彩色参考。'];
+    for (const entry of entries) {
+      entry.color = path.join(paths(entry.id).ref,'color.png');
+      lines.push('', '## '+entry.name+'（'+entry.id+'）','');
+      for (const [slot,file] of Object.entries(entry.tripoSlots)) lines.push('- '+slot+'　`'+path.join(paths(entry.id).ref,file)+'`');
+      lines.push('- 图片贴图　`'+entry.color+'`');
+      entry.settings='按 tripoSlots 上传四向灰模，审几何后用 color 路径做图片贴图。';
+    }
+    fs.mkdirSync(local,{recursive:true});
+    fs.writeFileSync(path.join(local,'upload.md'),lines.join('\n')+'\n');
+  }
+  save(path.join(local,'upload.json'),entries);
 }
 function state(item) {
   const original=paths(item.id), report=read(original.report), repaired=report?.source==='repaired.glb', p=paths(item.id,repaired);
@@ -100,10 +115,10 @@ try {
     if(!fs.existsSync(ledgerFile)) save(ledgerFile,{});
     for(const item of args.length?args.map(chosen):batch) {
       const p=paths(item.id); tool('export-scene-glb',item.id,p.game);
-      tool('qc',p.game,'--out',p.ref,'--flat','--bg',1,'--views',views.join(','));
+      tool('qc',p.game,'--out',p.ref,'--flat','--bg',1,'--views',(withColor?[...views,'color']:views).join(','));
       const reportFile=path.join(p.ref,'report.json');save(reportFile,{...read(reportFile),sha:hash(p.game)});manifest();
     }
-    console.log('上传清单：'+path.join(local,'upload.json'));
+    console.log('上传清单：'+path.join(local,withColor?'upload.md':'upload.json'));
   } else if(command==='ingest' && (args.length===2 || (args.length===3 && args.includes('--mirror-depth')))) {
     const [id,file]=args.filter(arg=>arg!=='--mirror-depth'); await ingest(chosen(id),file,args.includes('--mirror-depth'));
   }
@@ -132,12 +147,12 @@ try {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
       const method=[e.method,e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?'AI 外壳 + 程序化修补；本地追加 0 积分':null].filter(Boolean).join('；');
-      return {id:'batch1_'+id,name,source:e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
-        file:s.downloaded?`art-src/tripo/batch1/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,
+      return {id:batchName+'_'+id,name,source:e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
+        file:s.downloaded?`art-src/tripo/${batchName}/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,
         qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e)};
     });
     await writeSources(path.join(root,'tables/美术.xlsx'),rows);
-  } else throw Error('用法：batch.mjs prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
+  } else throw Error('用法：batch.mjs [--batch batch1|batch2] prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
 function deliveryStatus(s,entry) {

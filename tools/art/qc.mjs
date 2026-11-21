@@ -76,4 +76,4 @@ for (const p of rep.problems) console.log('  ✗ ' + p);
 for (const n of rep.notes || []) console.log('  ⚠ ' + n);
 console.log(`  对照图：${path.join(out, 'sheet.png')}`);
 if (rep.rackFrontClearance) console.log(`  行板前方 5 cm：${rep.rackFrontClearance.intersectingTriangles} 个外壳三角面`);
-if (opt['rack-clearance'] && !rep.pass) process.exitCode=2;
+if ((opt['rack-clearance'] || opt.lod !== undefined) && !rep.pass) process.exitCode=2;

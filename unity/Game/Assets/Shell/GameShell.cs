@@ -48,7 +48,12 @@ namespace Liandan.Shell
                 Tables = new Tables(Path.Combine(Application.streamingAssetsPath, "tables"));
                 Rows = Tables.GetActionRows().ToDictionary(row => row!["id"]!.ToString(), row => row!);
                 Store = new GameStore(driver?.SaveDirectory ?? Application.persistentDataPath, Tables); Meta = Store.LoadMeta();
-                if(args.Contains("-art-batch1")){Whitebox.Create(false,true);PropBatch.Place();} else Whitebox.Create();
+                if(args.Contains("-art-batch1") || args.Contains("-art-batch2"))
+                {
+                    Whitebox.Create(false,true);
+                    PropBatch.Place(args.Contains("-art-batch2") ? "Batch2" : "Batch1");
+                }
+                else Whitebox.Create();
                 var panel = Required<PanelSettings>("ShellPanel");
                 var ui = new GameObject("Shell UI");
                 ui.SetActive(false);
