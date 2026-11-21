@@ -1,5 +1,24 @@
 # Unity 可玩界面（阶段 2 / 界面 A、B）
 
+## 丹炉 A/B 图形验收
+
+近景复查：除原来的三张外，截图命令现在还生成 `tripo-front.png`（正面平视）和 `tripo-back-high.png`（背面俯视）。位置、实例缩放和灯光不变。Tripo 源文件指定双面、无透明模式，只有底色图；Unity 对开口壳片使用不透明双面、关闭裁剪和底色 alpha，金属度 0.25、光滑度 0.32。原炉则从网页合批属性 `_ARM` 还原金属度和反相后的光滑度，不套铜材质预设。Blender QC 报告的 `normalOrientationEstimate` 用正反向射线估算疑似朝内面占全部面的比例，并单列无法判断数；它不是水密性证明。双面能解决剔除，不能替缺失的几何补面。
+
+仓库根目录依次运行，最后一步由有显卡的本机执行；先关闭占用同一工程的 Unity。模型包已生成时可以跳过第一行。普通白盒缺少所选模型时仍保留原四桌小场景，不抛错；专门的截图任务缺任何一版都会报错，不拿空背景当通过。
+
+```powershell
+node tools/art/furnace.mjs
+dotnet build unity/GameCheck -c Release
+node tools/unity/run.mjs art-furnace
+```
+
+- **输入与交付**：私有源 `art-src/tripo/run3/` 需从授权存储另取；可用 `BLENDER` 指定无界面 Blender。两个包位于 `unity/Game/Assets/Art/Props/Furnace/Resources/Furnaces/{Tripo,Original}/`，各含一个 FBX（三级网格）、外置 PNG、`report.json`。选 FBX 是因为本工程直接使用 Unity 的 `ModelImporter`，无需为 glTF 安装额外包。分目录但材质/资源名不冲突。六张对照页在 `art-src/tripo/run3/normalized-qc/{Tripo,Original}/LOD{0,1,2}/sheet.png`，上行为原炉灰模，下行为交付 FBX 的实际回读。
+- **美术参数**：`node tools/art/normalize.mjs 输入.glb --out 输出目录 --name Furnace --height 2.511 --budget 40000 --rotate-z 0`。也支持 FBX；用 `--reference 参考模型.glb` 替代 `--height` 可按其包围盒高度等比匹配，不拉伸宽深。`--qc 输出目录 --ref 参考四视图目录` 对每个 LOD 单独回读。米制、底面中心、Blender 正面 −Y；不跨 UV/硬边合点。静态网格保留为独立零件，不输出骨骼、动画或原始枢轴。
+- **Unity 导入**：`FurnaceImport.cs` 只处理丹炉目录，用文件单位、比例 1、导入法线和 URP/Lit；底色用 sRGB，法线按 Normal Map，ORM 是线性数据，另外打包 LitMask（R 金属、G 遮蔽、A 光滑度）。这只 Tripo 炉只有 BaseColor，原炉的平涂顶点色转成 UV 调色板。根节点只加一个 LOD0 的盒碰撞，切 LOD 不换碰撞。`FurnacePolicy.json` 配高度 2.511、宽深 2.8 m、分级预算和容差；异常记导入警告。切换以屏幕相对高度为准：≥38% 用 LOD0，16–38% 用 LOD1，3.5–16% 用 LOD2，再小剔除（实际还受质量设置的 LOD Bias 影响）。
+- **摆位与切换**：网页 `ui.js` 的标题页使用 3 档。`scene3a/office.js` 取 `x=W/2-rz/2`、`y=0.06`、`z=clamp(-D/2+5.9,-D/2+4.2,D/2-2.2)`。白盒沿用这组房间局部坐标 **(5.9, 0.06, 0.15)** 和实例比例 **1.3**，因此炉高约 **3.264 m**；不是把 1.3 烘进资产。默认 Tripo；已重建的播放器加 `-furnace-original` 启动即显示原炉。白盒地板扩到相应楼层尺寸，未移植网页其他楼层逻辑。
+- **截图**：`art-furnace` 是带图形设备的编辑器批处理，不运行经营模拟，也不保存临时场景。`unity/Game/Build/art-furnace/{original,tripo,tripo-close}.png` 应各为 1280×720；前两张机位、灯光、LOD0、场景尺寸固定，近景看炉耳、足和贴图。若出现洋红/白贴图或尺寸警告，检查 `unity/Game/Logs/art-furnace.log`；截图生成并不等于美术通过。
+- **版本管理**：本轮新增源码和配置不附 `.meta`；私有原模、Unity 本地模型包及其 `.meta`、QC 和截图均不入 Git，未配置 LFS。正式入库前先核对授权与私有远端权限，再将源 `.blend`/GLB、交付 FBX、PNG 纳入 Git LFS，同时正常跟踪对应 Unity `.meta` 以稳定 GUID；LFS 不是访问控制。
+
 ## Windows 验收顺序
 
 在仓库根目录，关闭占用同一工程的 Unity 编辑器。下列前五行不启动 Unity；最后三行才分别构建、运行图形播放器、构建 IL2CPP。

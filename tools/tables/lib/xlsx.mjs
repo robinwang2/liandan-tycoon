@@ -79,7 +79,13 @@ export async function writeBook(file, sheets, { readme } = {}) {
       cell.alignment = { vertical: 'top', wrapText: true };
     }
   }
-  for (const sh of sheets) {
+  for (const sh of sheets) addSheet(wb, sh);
+  await mkdir(path.dirname(file), { recursive: true });
+  await wb.xlsx.writeFile(file);
+}
+
+// 迁移已有工作簿时也复用同一套三行表头和样式。
+export function addSheet(wb, sh) {
     const ws = wb.addWorksheet(sh.name, { views: [{ state: 'frozen', xSplit: sh.freeze ?? 1, ySplit: HEAD }] });
     const cols = sh.cols;
     ws.columns = cols.map(c => {
@@ -110,7 +116,5 @@ export async function writeBook(file, sheets, { readme } = {}) {
       ws.dataValidations.add(`${L}${HEAD + 1}:${L}${last}`, { type: 'list', allowBlank: true, formulae: [`"${list.join(',')}"`], showErrorMessage: false });
     });
     ws.autoFilter = { from: { row: HEAD, column: 1 }, to: { row: HEAD, column: cols.length } };
-  }
-  await mkdir(path.dirname(file), { recursive: true });
-  await wb.xlsx.writeFile(file);
+    return ws;
 }

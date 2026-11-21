@@ -14,6 +14,7 @@ const out = path.resolve(opt.out || model.replace(/\.[^.]+$/, '') + '_qc');
 const views = (opt.views || 'front,left,right,back,persp').split(',');
 const pyArgs = ['--', path.resolve(model), '--out', out, '--views', views.join(','), ...(opt.budget ? ['--budget', opt.budget] : []), ...(opt.height ? ['--height', opt.height] : []), ...(opt.res ? ['--res', opt.res] : []), ...(opt.flat ? ['--flat'] : [])];
 const t0 = Date.now();
+if (opt.lod !== undefined) pyArgs.push('--lod', opt.lod);
 const r = spawnSync(BLENDER, ['-b', '--factory-startup', '-P', path.resolve(import.meta.dirname, 'qc.py'), ...pyArgs], { encoding: 'utf8', maxBuffer: 64 << 20 });
 const line = (r.stdout || '').split('\n').find(l => l.startsWith('QC_REPORT '));
 if (!line) { console.log('Blender 没跑通：\n' + (r.stderr || '').slice(-2000) + '\n' + (r.stdout || '').slice(-2000)); process.exit(1); }
@@ -30,6 +31,8 @@ for (const [ri, list] of (refs.length ? [refs, views.map(v => rep.renders[v])] :
   for (const [ci, f] of list.entries()) if (f) tiles.push({ input: await sharp(f).resize(S, S, { fit: 'contain', background: '#dbdbdb' }).png().toBuffer(), left: ci * S, top: ri * S });
 await sharp({ create: { width: views.length * S, height: rows * S, channels: 3, background: '#f2f2f2' } }).composite(tiles).png().toFile(path.join(out, 'sheet.png'));
 const sz = rep.size;
+const orientation = rep.normalOrientationEstimate;
+console.log(`  射线估计疑似朝内 ${orientation.suspectedInward} 面，占全部面的 ${(100*orientation.inwardFractionOfAllFaces).toFixed(2)}%；另有 ${orientation.unresolved} 面无法判断（不作为硬性判废依据）`);
 console.log(`${rep.pass ? '✓ 合格' : '✗ 不合格'}  ${path.basename(model)}（${((Date.now() - t0) / 1000).toFixed(1)} 秒）`);
 console.log(`  三角面 ${rep.triangles}${opt.budget ? ` / 预算 ${opt.budget}` : ''} · 顶点 ${rep.vertices} · 物体 ${rep.objects} 个 · 连通零件 ${rep.parts} 个 · 开口边 ${rep.boundaryEdges} · 破面边 ${rep.nonManifoldEdges}`);
 console.log(`  尺寸 宽 ${sz.width} × 深 ${sz.depth} × 高 ${sz.height}（宽/高 ${rep.ratio['width/height']}）${rep.scaleToTarget ? ` · 缩放到目标高度要 ×${rep.scaleToTarget}` : ''}`);
