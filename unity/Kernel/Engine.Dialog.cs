@@ -23,10 +23,6 @@ namespace Liandan.Kernel
                 Options.Add(go);
             }
         }
-        public sealed class PendingStory : Exception
-        {
-            internal PendingStory(string id) : base("路线之争剧情：" + id) { }
-        }
         public Dialog? NextDialog()
         {
             var q = List("q");
@@ -38,8 +34,8 @@ namespace Liandan.Kernel
                 {
                     case "event":
                         if (!tables.Events.TryGetValue(it.Str("id"), out var ev)) continue;
-                        if (tables.StoryDialogs.Contains(it.Str("id"))) throw new PendingStory(it.Str("id"));
-                        return EventDialog(ev, it.On("ctx") ? (JsonObject)it["ctx"]! : new JsonObject());
+                        var ctx = it.On("ctx") ? (JsonObject)it["ctx"]! : new JsonObject();
+                        return tables.StoryDialogs.Contains(it.Str("id")) ? StoryDialog(it.Str("id"), ctx) : EventDialog(ev, ctx);
                     case "draft":
                         var draft = Draft();
                         if (draft != null) return draft;
@@ -72,7 +68,7 @@ namespace Liandan.Kernel
             foreach (var a in req["attr"].Entries()) if (A.N(a.Key) < (double)a.Value!) return Tx("why.attr", ("属性", AttrName(a.Key)), ("数值", a.Value!));
             return Tx("why.other");
         }
-        private Dialog EventDialog(JsonNode ev, JsonObject ctx)
+        private Dialog EventDialog(JsonNode ev, JsonObject ctx, Func<JsonNode, bool, string?>? afterEffect = null)
         {
             string id = ev.Str("id");
             var ep = ev["p"];
@@ -101,7 +97,7 @@ namespace Liandan.Kernel
             foreach (var item in (JsonArray)ev["options"]!)
             {
                 var o = item!;
-                string fn = o.Str("fn");
+                string fn = afterEffect == null ? o.Str("fn") : "";
                 var p = o["p"];
                 if (!Condition(o["when"]) || !ShowOption(id, fn, p, ctx)) continue;
                 var option = Obj(("label", Format(o.Str("label"))), ("hint", Format(o.Str("hint"))));
@@ -120,8 +116,10 @@ namespace Liandan.Kernel
                 {
                     bool win = roll && Random() < Probability();
                     var branch = roll ? o[win ? "ok" : "fail"]! : o;
-                    RunOption(id, fn, win, branch["fx"], ctx, p, ep, vars);
-                    var result = Obj(("text", Format(branch.Str("text"))));
+                    string? extra = null;
+                    if (afterEffect == null) RunOption(id, fn, win, branch["fx"], ctx, p, ep, vars);
+                    else { ApplyEffects(branch["fx"], ctx); extra = afterEffect(o, win); }
+                    var result = Obj(("text", Format(extra ?? branch.Str("text"))));
                     if (roll) result["ok"] = win;
                     return result;
                 });

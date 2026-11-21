@@ -102,25 +102,15 @@ namespace Liandan.Kernel
                     else { o["hint"] = opt["hint"]?.DeepClone(); dialog.Add(o, () => { Map("flags")["yank"] = 1; News(StoryText("ideo.yank.start")); return Said(opt.Str("text")); }); }
                     continue;
                 }
-                double start = kind == "users" ? users : kind == "model" ? MyCap : Revenue().N("total");
+                double start = PlanValue(kind);
                 double goal = kind == "model" ? start + opt["p"].N("提升") : Max(start * opt["p"].N("倍数"), start + opt["p"].N("至少"));
-                string GoalText() => kind == "model" ? StoryText("ideo.plan.goal.model", ("火候", Fixed(goal,1))) : kind == "users" ? StoryText("ideo.plan.goal.users", ("用户", UsersText(goal))) : StoryText("ideo.plan.goal.rev", ("收入", Money(goal)));
-                o["hint"] = tables.FillRuntime(opt.Str("hint"), null, ("目标", GoalText()));
+                o["hint"] = tables.FillRuntime(opt.Str("hint"), null, ("目标", PlanText(kind, goal)));
                 dialog.Add(o, () =>
                 {
                     double due = t + w["p"].N("月数");
-                    var ideology = Ideo;
-                    if (ideology == null)
-                    {
-                        ideology = Obj(("v", Region == "bay" ? "us" : "cn"), ("on", 1), ("n", 0), ("heat", 0),
-                            ("picks", new JsonArray()), ("used", new JsonObject()), ("shown", new JsonObject()),
-                            ("t0", t), ("result", null), ("goal", null), ("full", null), ("fired", 0));
-                        foreach (var field in Book["VER"]!["start"].Entries()) ideology[field.Key] = field.Value?.DeepClone();
-                        Snapshot["ideo"] = ideology;
-                    }
-                    ideology["plan"] = Obj(("kind",kind),("goal",goal),("due",due),("t",t));
+                    EnsureStory()["plan"] = Obj(("kind",kind),("goal",goal),("due",due),("t",t));
                     ApplyEffects(opt["fx"], new JsonObject()); Schedule("ideo_plan_due", due);
-                    News(StoryText("ideo.plan.news", ("公司",Company.Name), ("日期",DateText(due)), ("目标",GoalText())));
+                    News(StoryText("ideo.plan.news", ("公司",Company.Name), ("日期",DateText(due)), ("目标",PlanText(kind, goal))));
                     return Said(RouteActionText(id));
                 });
             }
