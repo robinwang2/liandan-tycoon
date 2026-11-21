@@ -122,7 +122,7 @@ namespace Liandan.Kernel
         {
             var c = Rows("cands").FirstOrDefault(x => x.Str("uid") == uid);
             if (c == null) return null;
-            double fee = c.N("salary") * Mod("salaryMult");
+            double fee = MonthlySalary(c);
             string? err = HireBlock(c);
             if (err != null) return Obj(("err", ButtonText(err)));
             var before = ChipValues();
@@ -135,7 +135,7 @@ namespace Liandan.Kernel
             if (e == null) return null;
             if (Ideo.On("on")) Ideo!["fired"] = Ideo.N("fired") + 1;
             var before = ChipValues();
-            cash -= P("fire.payMonths") * e.N("salary") * Mod("salaryMult"); List("staff").Remove(e);
+            cash -= Severance(e); List("staff").Remove(e);
             ApplyEffects(Obj(("morale", P(e.N("skill") >= P("fire.starSkill") ? "fire.starMorale" : "fire.morale"))), new JsonObject());
             return Obj(("text", ActionText("fire.done", ("名字", e.Str("name")))), ("chips", Chips(before)));
         }

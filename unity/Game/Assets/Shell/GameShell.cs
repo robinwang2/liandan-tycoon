@@ -22,6 +22,8 @@ namespace Liandan.Shell
         internal VisualElement Root = null!;
         internal readonly Dictionary<string, Action> Controls = new Dictionary<string, Action>();
         internal JsonArray Menu = new JsonArray();
+        internal JsonArray Advice = new JsonArray();
+        internal bool Recommended(string id)=>Advice.Any(row=>row!["act"]?.ToString()==id && row["later"]?.GetValue<bool>()!=true);
         internal Dictionary<string, JsonNode> Rows = null!;
         internal int Seed;
         internal double RandomValue() => GameState.NextRandom(ref Seed);
@@ -65,19 +67,46 @@ namespace Liandan.Shell
         { var label = new Label(text) { enableRichText = false }; label.AddToClassList(style); parent.Add(label); return label; }
         internal static ScrollView Scroll(VisualElement parent)
         { var scroll = new ScrollView(); scroll.style.flexGrow = 1; parent.Add(scroll); return scroll; }
-        internal void Button(VisualElement parent, string id, string text, Action click, bool enabled = true, bool selected = false)
+        internal Button Button(VisualElement parent, string id, string text, Action click, bool enabled = true, bool selected = false)
         {
             var button = new Button(click) { name = id, text = text, enableRichText = false }; parent.Add(button); button.SetEnabled(enabled);
             if (selected) button.AddToClassList("selected"); if (enabled) Controls.Add(id, click);
+            return button;
+        }
+        internal bool AllHints;
+        internal string LocalId = "", ActionId = "";
+        private Action<VisualElement>? localBody;
+        internal void Local(string id, Action<VisualElement> body) { LocalId=id; localBody=body; ScreenId="local"; Draw(); }
+        internal void CloseLocal() { ScreenId="main"; Draw(); }
+        private VisualElement? bubble;
+        internal void Hover(VisualElement anchor, Func<string> message, string? id=null)
+        {
+            void Hide() { bubble?.RemoveFromHierarchy(); bubble=null; }
+            void Show()
+            {
+                Hide(); var content=message(); if(content.Length==0)return;
+                bubble=Box(Root,"bubble"); bubble.pickingMode=PickingMode.Ignore;
+                Label(bubble,content).pickingMode=PickingMode.Ignore;
+                var bounds=anchor.worldBound; var origin=Root.worldBound;
+                bubble.style.left=Math.Max(0,bounds.xMax-origin.x+320<origin.width ? bounds.xMax-origin.x+4 : bounds.xMin-origin.x-324);
+                bubble.style.top=Math.Max(0,Math.Min(bounds.yMin-origin.y,origin.height-240));
+                var visible=bubble;visible.RegisterCallback<GeometryChangedEvent>(change=>{
+                    if(visible==bubble && change.newRect.height>0)visible.style.top=Math.Max(0,Math.Min(bounds.yMin-origin.y,origin.height-change.newRect.height-4));
+                });
+            }
+            anchor.RegisterCallback<PointerEnterEvent>(_=>Show()); anchor.RegisterCallback<PointerLeaveEvent>(_=>Hide());
+            if(anchor is Button){anchor.RegisterCallback<FocusInEvent>(_=>Show());anchor.RegisterCallback<FocusOutEvent>(_=>Hide());}
+            if(id!=null) Controls.Add(id,Show);
         }
         internal void NewWizard() { Wizard = new Wizard(this); ScreenId = "wizard"; Draw(); }
         internal void Begin(JsonObject setup)
         {
-            State = GameState.NewGame(Tables, setup, Meta, RandomValue); Tab = "rd"; Side = "fin"; Summary = null!;
+            State = GameState.NewGame(Tables, setup, Meta, RandomValue); Tab = "rd"; Side = "board"; AllHints=false; Summary = null!;
             Store.SaveGame(State); Pump();
         }
         internal void Pump(GameState.Dialog? next = null)
         {
+            if(next==null)ActionId="";
             Result = null!; Dialog = next ?? State.NextDialog();
             // 白盒不播放场景特效；与网页一样消费表现队列，不留进存档。
             State.Snapshot["fxq"]!.AsArray().Clear();
@@ -92,7 +121,7 @@ namespace Liandan.Shell
         }
         internal void Act(string id)
         {
-            var result = State.Perform(id, out var dialog);
+            ActionId=id; var result = State.Perform(id, out var dialog);
             if (dialog != null || result == null) Pump(dialog); else ShowResult(result);
         }
         internal void Choose(int index)
@@ -104,16 +133,17 @@ namespace Liandan.Shell
         internal void Title() { ScreenId = "title"; State = null!; Summary = null!; Dialog = null; Draw(); }
         internal void Draw()
         {
-            Root.Clear(); Controls.Clear();
+            Root.Clear(); bubble=null; Controls.Clear();
             if (ScreenId == "main")
             {
-                TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); Box(body, "stage"); SidePanel.Draw(this, Box(body, "right")); return;
+                Advice=State.Advise();TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); Dashboard.Hints(this,Box(body, "stage")); SidePanel.Draw(this, Box(body, "right")); return;
             }
             var overlay = Box(Root, "veil"); var panel = Box(overlay, "panel");
             if (ScreenId != "title" && ScreenId != "end") panel.AddToClassList("scroll-panel");
             switch (ScreenId)
             {
                 case "wizard": Wizard.Draw(panel); break;
+                case "local": localBody!(Scroll(panel)); Button(panel,"back",Text("ui.back"),CloseLocal); break;
                 case "event": case "result": EventPanel.Draw(this, panel); break;
                 case "end": EndingPanel.Draw(this, panel); break;
                 case "meta":

@@ -77,7 +77,10 @@ namespace Liandan.Kernel
             }
             return Clean(root)!.ToJsonString();
         }
-        public string Currency(double value) => Money(value);
+        public string Currency(double value, bool sign = false) => Money(value, sign);
+        public static string DisplayFixed(double value, int digits) => Fixed(value, digits);
+        public double MonthlySalary(JsonNode person) => person.N("salary") * Mod("salaryMult");
+        public double Severance(JsonNode person) => P("fire.payMonths") * person.N("salary") * Mod("salaryMult");
         public string MonthHeading() => Tx("ui.top.when", ("日期", DateText(t)), ("月", t), ("总", P("MONTHS")), ("地区", D("REGIONS")[Region].Str("name")), ("办公室", OfficeName()));
         public JsonObject Settle(JsonObject meta)
         {

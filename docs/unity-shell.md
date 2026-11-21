@@ -1,4 +1,4 @@
-# Unity 最小可玩界面（阶段 2）
+# Unity 可玩界面（阶段 2 / 界面 A）
 
 ## Windows 验收顺序
 
@@ -35,7 +35,16 @@ node tools/unity/run.mjs build-game-il2cpp
 ## 代码边界
 
 - `unity/Kernel/GameStore.cs`：存档、兼容、结算；`Tables` 提供表视图和文本填充。UI 不推演月结、费用、成功率、结局或事件效果。
-- `Assets/Shell/GameShell.cs`：标题、商店、继续、界面状态与队列泵。`Wizard.cs`：五步建角，属性上限、区域和局外锁定，允许留点。品牌图标图稿、完整教学和其余经营页不在本轮范围。
+- `Assets/Shell/GameShell.cs`：标题、商店、继续、界面状态与队列泵、本地选择窗和悬浮提示。`Wizard.cs`：五步建角、深色名字输入框。
 - `Panels.cs`：顶栏、按页签分类的内核行动视图、公司/团队侧栏、事件与结果、结局。`Resources/Shell.uss` 和 `ShellTheme.tss` 提供布局和控件主题；`Whitebox.cs` 与 `Whitebox.mat` 是真实 URP 方块场景，不是 UI 背景截图。中文使用随包的 Noto Sans SC 动态多图集字体，字重使用默认值。
 - `Autoplay.cs`：单独的固定种子 UI 冒烟机器人，调用与按钮相同的回调（包括切页签、选项和结果继续），不在后台直接跑完整局；优先现金流、招人、发布、上市，其余随机。它不替代 144 局指纹机器人。截图等到帧尾，读取真实 framebuffer 后同步编码写 PNG，再退出。
 - `Editor/Build.cs`：构建前自动生成或复用 Resources/ShellPanel.asset 和 ShellFont.asset，检查 ICU 与 URP/Lit 引用。可用 `node tools/unity/run.mjs setup-ui` 单独生成，生成的资源与 .meta 可纳入版本控制。构建完成后恢复原后端。`GameCheck` 同时编译编辑器和播放器脚本，不能验证 Unity 的资源导入、面板排版、鼠标输入、字体或显卡输出。首轮图形验收请检查长事件可滚动、中文无方框、方块不呈洋红色，以及完整局结束后能回标题重新开局。
+
+## 界面 A 验收
+
+- `Dashboard.cs`：右侧七个页签与六项仪表。项目页同时列出功能冲刺、特殊项目和链记录；招人、解雇确认、政策、算力均可从界面操作。功能三选一和融资报价直接使用内核窗口，不重新抽取选项。左侧意识形态页从公司目标切换为两地各自的路线进度、人物和结局。
+- `Engine.Dashboard.cs`：榜单、员工贡献探算、路线状态等只读展示接口。金额、用户数和日期复用内核格式；`save-roundtrip` 另与网页直接比较小数边界、五类岗位、工资、榜单和读后原档。
+- 参谋条在中央场景上方，点击执行可用行动或定位目标；可忽略一条或展开其余条目。员工卡悬停显示贡献，事件选项悬停显示效果，结果页按好坏区分变化标签。事件 `art-slot` / `portrait-slot` 的 `userData` 保存表中资源键，现在只画占位。
+- 试玩逐帧访问右侧 `side-*`、左侧 `action-*`、`dialog-recruit`、`dialog-policy-work`，记录候选人气泡 `employee-hover`。已雇员工气泡 `staff-hover`、`advice`、`dialog-gpu`、`dialog-sprint`、`dialog-raise` 和 `ideology-active` 在真实状态满足时才截图；不同种子不保证都有融资机会或触发路线之争。错误、断言、异常、缺失必检图仍判失败。
+- 手验：清空姓名后检查占位字，再输入中文；检查长选项悬停前后是否遮挡；从建议跳转招人或算力，切换政策后重开存档，确认已保存；分别看深圳和湾区的路线说法。请反馈截图目录和 `player.log`，不要把静态编译当作图形验收。
+- 留到下一轮：老周教学队列和分步开放、设置、四套主题、正式插画和头像，以及底部工位条、楼层操作、动效与小屏排版细调。当前不提供教学开关；正常新局按全部开放的模式游玩。

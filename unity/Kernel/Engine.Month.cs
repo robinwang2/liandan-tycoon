@@ -76,7 +76,7 @@ namespace Liandan.Kernel
             }
         }
 
-        private double ProjectRate(string kind)
+        public double ProjectRate(string kind)
         {
             if (kind == "ap") return 0;
             double rate = kind == "gpu" ? Js.Clamp(Max(0, gpu - InferNeed) / Max(P("proj.gpuMin"), P("proj.gpuShare") * Quota), 0, P("proj.max"))

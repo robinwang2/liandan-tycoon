@@ -27,6 +27,14 @@ static int Run(string[] args)
         if (state != null && args.Length == 4)
         {
             if (args[3] == "month") state.EndMonth();
+            else if(args[3]=="dashboard")
+            {
+                var sample=JsonNode.Parse(File.ReadAllText(Path.Combine(args[1],"sample.json")))!;
+                var result=new { users=sample["users"]!.AsArray().Select(value=>state.UsersText((double)value!)).ToArray(),
+                    board=state.Leaderboard(), impact=sample["people"]!.AsArray().Select(person=>state.StaffImpact(person!)).ToArray(),
+                    salaries=sample["people"]!.AsArray().Select(person=>state.Currency(state.MonthlySalary(person!))).ToArray() };
+                File.WriteAllText(Path.Combine(args[2],"dashboard.json"),JsonSerializer.Serialize(result));
+            }
             else if (args[3] == "settle")
             {
                 state.Snapshot["over"] = JsonNode.Parse(File.ReadAllText(Path.Combine(args[1], "ending.json")));

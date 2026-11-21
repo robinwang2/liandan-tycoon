@@ -24,6 +24,14 @@ try {
   const meta = {...game.loadMeta(), points: 12, runs: 2, best: 50, own: {m_cash:1}, ach:{demo:1}, ends:{small:1}, extra:{keep:true}};
   game.saveMeta(meta);
   const state = game.newGame(mkSetup({region:'bay',route:'model',track:'chat'},'clean'),meta); drain(state); game.saveGame(state);
+  const users=[0,0.29999999999999999,19.610832183283492,1.25,99.99,100,100.5,9999.9,10000,12034.56];
+  const people=['res','eng','ops','biz','legal'].map(role=>({...state.cands[0],role})).concat(state.staff);
+  writeFileSync(join(input,'sample.json'),JSON.stringify({users,people})); run('dashboard');
+  const board=game.board(state).map(({id,...row})=>row), impacts=people.map(person=>game.staffImpact(state,person));
+  assert.deepEqual(JSON.parse(readFileSync(join(output,'dashboard.json'),'utf8')),{
+    users:users.map(game.fmtUsers),board,impact:impacts.map(i=>[...i.lines,i.quirk].filter(Boolean).join('\n')),salaries:impacts.map(i=>game.money(state,i.salary))});
+  assert.deepEqual(JSON.parse(readFileSync(join(output,'ldt_save_v1.json'),'utf8')),JSON.parse(JSON.stringify(state)),'展示不能改档');
+  console.log('展示比对通过：用户数边界、榜单、五个岗位的贡献说明和工资。');
   for (const mode of ['current','month','legacy','settle','ended','version','broken']) {
     active=input; game.saveMeta(meta); game.saveGame(state);
     if(mode==='legacy') { const old=JSON.parse(localStorage.getItem('ldt_save_v1')); for(const key of ['projects','chains','quotaAdd','ideoAt','quotaEarn'])delete old[key]; old.stage=2; old.co.office=0; game.saveGame(old); }

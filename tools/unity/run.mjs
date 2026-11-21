@@ -37,6 +37,8 @@ function run() {
     const failure = output.match(/^Liandan autoplay FAILED:.*$/m);
     if (failure) throw new Error(failure[0] + '\n' + log);
     const required = ['01-title','02-wizard','03-month-1','04-event','05-result'];
+    required.push(...['board','chain','team','safe','perks','fin','log'].map(key=>'side-'+key),
+      ...['rd','team','cap','pr','ops','ideo'].map(key=>'action-'+key),'dialog-recruit','dialog-policy-work','employee-hover');
     if (!months) required.push('07-ending');
     if (proc.error || proc.status !== 0 || !output.includes('Liandan autoplay OK:') || required.some(name => !images.includes(name + '.png')))
       throw proc.error || new Error('试玩或截图未完成：' + log);

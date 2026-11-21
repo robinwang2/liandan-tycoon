@@ -11,8 +11,20 @@ namespace Liandan.Shell
         internal static void Draw(GameShell game)
         {
             var bar = Box(game.Root,"bar"); var state = game.State; var data = state.Snapshot;
-            Label(bar,state.Company.Name + "\n" + state.MonthHeading()); Label(bar,game.Text("ui.top.cash") + "\n" + state.Currency((double)data["cash"]!));
-            foreach (string key in new[]{"hype","rep","morale"}) Label(bar,game.Text("chip."+key) + "\n" + Math.Round(double.Parse(data[key]!.ToString(),System.Globalization.CultureInfo.InvariantCulture)));
+            string Fixed(double value,int digits)=>Liandan.Kernel.GameState.DisplayFixed(value,digits);
+            void Chip(string key,string value,Func<string> detail)=>game.Hover(Label(bar,game.Text("ui.top."+key)+"\n"+value),detail);
+            Label(bar,state.Company.Name+" · "+game.Tables.Definition("STAGES")[(int)Number(data["stage"]!)]!["name"]+"\n"+state.MonthHeading());
+            Chip("cash",state.Currency(Number(data["cash"]!)),()=>{
+                double runway=state.ReadBotValue("runway"),net=Number(state.Revenue()["total"]!)-Number(state.Costs()["total"]!);
+                string months=runway<1?game.Text("ui.top.runway.lt1"):Fixed(Math.Floor(runway),0);
+                string note=runway>=99?game.Text("ui.top.profit"):game.Text("ui.top.runway",("月数",months));
+                return game.Text("ui.top.net",("净",state.Currency(net,true)),("续航",note));
+            });
+            double users=Number(data["users"]!),fake=Number(data["fake"]!),equity=Number(data["equity"]!);
+            Chip("users",state.UsersText(users+fake),()=>fake>.5?game.Text("ui.top.fake",("假用户",state.UsersText(fake))):game.Text("ui.top.share",("份额",Fixed(users/state.Market*100,1))));
+            Chip("equity",Fixed(equity,0)+"%",()=>game.Text(equity<game.Tables.Parameter("coup.equity")?"ui.top.equity.warn":"ui.top.equity.ok"));
+            Chip("val",state.Currency(state.Valuation()),()=>game.Text("ui.top.perf",("业绩",Fixed(state.Performance(),2))));
+            Label(bar,data["model"] is JsonObject model?game.Text("ui.top.rankN",("名次",state.Rank))+"\n"+game.Text("ui.top.bench",("模型",model["name"]!), ("跑分",Liandan.Kernel.GameState.DisplayFixed(Number(model["bench"]!),1))):game.Text("ui.top.model")+"\n"+game.Text("ui.top.wrapper"));
             Label(bar,game.Text("ui.top.ap") + "\n" + data["ap"]); game.Button(bar,"month",game.Text("ui.top.next"),()=> { state.EndMonth(); game.Pump(); });
             game.Button(bar,"title",game.Text("ui.end.title"),game.Title);
         }
@@ -24,27 +36,21 @@ namespace Liandan.Shell
             game.Menu = game.State.ViewMenu(); var tabs = Box(parent,"row");
             foreach (var row in game.Tables.GetActionTabs())
             {
-                string tab = row!["id"]!.ToString(); if (!game.Menu.Any(item=>item!["name"]!=null && game.Rows[item["id"]!.ToString()]["tab"]!.ToString()==tab)) continue;
-                game.Button(tabs,"tab:"+tab,row["name"]!.ToString(),()=> { game.Tab=tab; game.Draw(); },true,game.Tab==tab);
+                string tab = row!["id"]!.ToString();
+                bool suggested=game.Advice.Any(h=>h!["act"] is JsonNode act && game.Recommended(act.ToString()) && game.Rows[act.ToString()]["tab"]!.ToString()==tab);
+                game.Button(tabs,"tab:"+tab,row["icon"]+" "+row["name"]+(suggested&&game.Tab!=tab?" •":""),()=> { game.Tab=tab; game.Draw(); },true,game.Tab==tab);
             }
             var list = Scroll(parent);
-            if(game.Tab=="team") foreach(var person in game.State.Snapshot["cands"]!.AsArray())
-            {
-                string uid=person!["uid"]!.ToString(); var why=game.State.HireReason(person);
-                game.Button(list,"hire:"+uid,game.Text("ui.cand.hire")+" · "+person["name"]+"   "+(why??""),()=>game.ShowResult(game.State.Hire(uid)!),why==null);
-            }
-            if(game.Tab=="ops" && (bool)game.State.Snapshot["ownModel"]!)
-            {
-                var line=Box(list,"row"); var count=Number(game.State.Snapshot["gpu"]!);
-                Label(line,game.Text("ui.gpu.h")+"   "+game.Text("ui.gpu.count",("张数",count)));
-                void Set(double value) {game.State.SetGpu(value); game.Pump();}
-                game.Button(line,"gpu:-","−",()=>Set(count-1),count>0); game.Button(line,"gpu:+","+",()=>Set(count+1)); game.Button(line,"gpu:max",game.Text("ui.gpu.max"),()=>Set(game.State.ReadBotValue("quota")));
-            }
+            var dashboard=new Dashboard(game,list);
+            if(game.Tab=="team") dashboard.Recruit();
+            if(game.Tab=="ops") dashboard.Operations();
+            if(game.Tab=="ideo") dashboard.Ideology();
             foreach (var entry in game.Menu)
             {
                 var item=entry!; string id=item["id"]!.ToString(); var row=game.Rows[id]; if(item["name"]==null || row["tab"]!.ToString()!=game.Tab) continue;
                 var why=item["why"]?.ToString(); var cost=game.State.Currency((double)item["cost"]!);
-                game.Button(list,"act:"+id,item["name"] + " · " + game.Text("ui.top.ap") + " " + row["ap"] + " · " + cost + "\n" + item["desc"] + (string.IsNullOrEmpty(why)?"":"\n"+why),()=>game.Act(id),string.IsNullOrEmpty(why));
+                var cooldown=game.State.CooldownText(id); if(cooldown.Length>0 && why!=cooldown)why=string.Join(" · ",new[]{why,cooldown}.Where(value=>!string.IsNullOrEmpty(value)));
+                var action=game.Button(list,"act:"+id,row["icon"]+"  "+item["name"] + (game.Recommended(id)?" · "+game.Text("ui.act.rec"):"")+" · " + game.Text("ui.top.ap") + " " + row["ap"] + (Number(item["cost"]!)>0?" · " + cost:"") + "\n" + item["desc"] + (string.IsNullOrEmpty(why)?"":"\n"+why),()=>game.Act(id),string.IsNullOrEmpty(why));action.AddToClassList("action-card");
             }
         }
     }
@@ -52,10 +58,12 @@ namespace Liandan.Shell
     {
         internal static void Draw(GameShell game, VisualElement parent)
         {
-            var tabs=Box(parent,"row"); foreach (string key in new[]{"fin","team","board","chain","safe","perks","log"}) game.Button(tabs,"side:"+key,game.Text("ui.rtab."+key),()=> {game.Side=key;game.Draw();},key=="fin"||key=="team",game.Side==key);
-            var list=Scroll(parent); var state=game.State;
-            if(game.Side=="team") {var roles=game.Tables.Definition("ROLES"); foreach(var staff in state.Staff) Label(list,staff.Name+" · "+roles[staff.Role]!["name"]+" · "+staff.Skill); if(!state.Staff.Any())Label(list,game.Text("ui.team.none"));}
-            else { Label(list,state.Company.Name,"heading"); Label(list,state.Founder.Name); Label(list,state.MonthHeading()); Label(list,game.Text("ui.top.equity")+"   "+state.Snapshot["equity"]+"%"); Label(list,game.Text("ui.top.users")+"   "+state.Snapshot["users"]+game.Text("unit.wan")); }
+            var gauges=Box(parent,"row");foreach(var key in new[]{"hype","rep","morale","reg","bubble","dirt"}){
+                double value=key=="dirt"?Math.Min(100,game.State.DirtTotal):Number(game.State.Snapshot[key]!);var cell=Box(gauges,"gauge");Label(cell,game.Text("ui.gauge."+key)+"  "+Math.Floor(value+0.5));Box(Box(cell,"meter"),"fill").style.width=Length.Percent((float)value);
+                game.Hover(cell,()=>game.Text("ui.gauge."+key+".tip",("过高",game.Tables.Parameter("reg.high"))));
+            }
+            var tabs=Box(parent,"row"); foreach (string key in new[]{"board","chain","team","safe","perks","fin","log"}){int badge=key=="safe"?game.State.Snapshot["dirt"]!.AsArray().Count:key=="chain"?game.State.Snapshot["projects"]!.AsArray().Count:0;game.Button(tabs,"side:"+key,game.Text("ui.rtab."+key)+(badge>0?" "+badge:""),()=> {game.Side=key;game.Draw();},true,game.Side==key);}
+            new Dashboard(game,Scroll(parent)).Side(game.Side);
         }
     }
     internal static class EventPanel
@@ -63,19 +71,35 @@ namespace Liandan.Shell
         internal static void Draw(GameShell game, VisualElement panel)
         {
             var view=game.Dialog?.View; var body=Scroll(panel);
-            if(view!=null) { Label(body,view["icon"]?.ToString()??"◇","art"); Label(body,view["title"]!.ToString(),"heading"); }
+            if(view!=null) {
+                var categories=game.Tables.Definition("CAT"); Label(body,(categories[view["cat"]?.ToString()??"sys"]??categories["sys"])!["name"]!.ToString(),"section");
+                if(view["chain"] is JsonNode chain){var info=new Dashboard(game,body).Chain(chain.ToString());if(info!=null)Label(body,game.Text("ui.dlg.chain",("图标",info["icon"]!),("链",info["title"]!)));
+                    if(chain.ToString()=="ideo" && game.State.Snapshot["ideo"] is JsonObject story){Label(body,game.State.StoryMeters());string id=view["id"]?.ToString()??"";if(id.StartsWith("ideo_") && int.TryParse(id.Substring(5),out int step)) Label(body,game.State.StoryStrip(step,game.ScreenId!="result"));}
+                }
+                var art=Box(body,"art-row");var image=Label(art,view["icon"]?.ToString()??"◇","art");image.name="art-slot";image.userData=view["art"]?.ToString();
+                if(view["portrait"] is JsonNode portrait){var slot=Label(art,"♙","portrait");slot.name="portrait-slot";slot.userData=portrait.ToString();}
+                Label(body,view["title"]!.ToString(),"heading");
+            }
             if(game.ScreenId=="result")
             {
                 var result=game.Result; if(result["ok"]!=null) Label(body,game.Text((bool)result["ok"]!?"ui.ok":"ui.fail")); Label(body,(result["text"]??result["err"])?.ToString()??"");
-                if(result["chips"] is JsonArray chips) foreach(var chip in chips) Label(body,chip!["name"]+"   "+chip["v"]);
+                if(result["chips"] is JsonArray chips){var line=Box(body,"row");foreach(var chip in chips){var label=Label(line,chip!["name"]+"   "+chip["v"],"chip");if(chip["good"]!=null)label.AddToClassList((bool)chip["good"]!?"good":"bad");}}
                 game.Button(panel,"advance",game.Text("ui.dlg.continue"),()=>game.Pump()); return;
             }
             Label(body,view!["text"]?.ToString()??""); var options=view["options"]!.AsArray();
+            var choices=view["kind"]?.ToString()=="cards"?Box(body,"card-choices"):body;
             for(int index=0;index<options.Count;index++)
             {
-                int choice=index; var opt=options[index]!; string text=string.Join("\n",new[]{opt["label"],opt["card"]?["desc"],opt["hint"],opt["chk"],opt["why"]}.Where(node=>node!=null && node.ToString()!=""));
-                if(opt["tip"] is JsonObject tip) foreach(var pair in tip) if(pair.Value is JsonArray lines && lines.Count>0) text+="\n"+game.Text(pair.Key=="ok"?"ui.ok":pair.Key=="fail"?"ui.fail":"ui.tip.fx")+"  "+string.Join(" · ",lines.Select(line=>line![0]!.ToString()));
-                game.Button(body,"option:"+choice,text,()=>game.Choose(choice),opt["disabled"]==null || !(bool)opt["disabled"]!);
+                int choice=index; var opt=options[index]!;bool enabled=opt["disabled"]==null || !(bool)opt["disabled"]!;
+                string text=string.Join("\n",new[]{opt["label"],opt["card"]?["desc"],!enabled && opt["why"]!=null?opt["why"]:opt["hint"],opt["chk"]}.Where(node=>node!=null && node.ToString()!=""));
+                if(opt["side"] is JsonNode side)text=game.State.SideTag(side.ToString())+"  "+text;
+                if(opt["card"] is JsonNode card)text=card["icon"]+"  "+text;
+                var button=game.Button(choices,"option:"+choice,text,()=>game.Choose(choice),enabled);
+                if(opt["card"] is JsonNode ranked)button.AddToClassList("rarity-"+ranked["r"]);
+                if(enabled && opt["tip"] is JsonObject tip && tip.Any(pair=>pair.Value is JsonArray lines && lines.Count>0)) {
+                    var groups=tip.Select(pair=>game.Text(pair.Key=="ok"?"ui.ok":pair.Key=="fail"?"ui.fail":"ui.tip.fx")+"\n"+(pair.Value is JsonArray lines && lines.Count>0?string.Join("\n",lines.Select(line=>line![0]!.ToString())):game.Text("ui.tip.nothing")));
+                    game.Hover(button,()=>string.Join("\n",groups));
+                }
             }
             if(view["closable"]!=null && (bool)view["closable"]!) game.Button(panel,"close",game.Text("ui.back"),()=>game.Pump());
         }

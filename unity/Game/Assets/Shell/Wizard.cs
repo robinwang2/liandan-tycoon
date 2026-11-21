@@ -46,6 +46,7 @@ namespace Liandan.Shell
             void Field(string key, string textKey, int limit)
             {
                 var field = new TextField(game.Text(textKey)) { value = names[key], maxLength = limit }; body.Add(field);
+                field.textEdition.placeholder=game.Text(key=="name"?"ui.wiz.default.name":key=="coName"?"ui.wiz.default.co":"default.model");
                 field.RegisterValueChangedCallback(change => names[key] = change.newValue);
             }
             void Choices(string group, IEnumerable<JsonNode?> rows)
