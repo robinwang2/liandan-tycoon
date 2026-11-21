@@ -40,6 +40,7 @@ namespace Liandan.Shell
             var args = Environment.GetCommandLineArgs(); bool auto = args.Contains("-autoplay");
             try
             {
+                if(args.Contains("-art-batch1-ab")){enabled=false;return;}
                 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
                 if (args.Contains("-audiotest") || args.Contains("-audiotest-readback")) { StartAudioTest(args); return; }
                 var driver = auto ? new Autoplay(this, args) : null;
@@ -47,7 +48,7 @@ namespace Liandan.Shell
                 Tables = new Tables(Path.Combine(Application.streamingAssetsPath, "tables"));
                 Rows = Tables.GetActionRows().ToDictionary(row => row!["id"]!.ToString(), row => row!);
                 Store = new GameStore(driver?.SaveDirectory ?? Application.persistentDataPath, Tables); Meta = Store.LoadMeta();
-                Whitebox.Create();
+                if(args.Contains("-art-batch1")){Whitebox.Create(false,true);PropBatch.Place();} else Whitebox.Create();
                 var panel = Required<PanelSettings>("ShellPanel");
                 var ui = new GameObject("Shell UI");
                 ui.SetActive(false);

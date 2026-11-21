@@ -15,7 +15,7 @@ namespace Liandan.Shell
             return instance;
         }
 
-        public static Camera Create(bool placeFurnace = true)
+        public static Camera Create(bool placeFurnace = true, bool batch = false)
         {
             var camera = new GameObject("Office Camera").AddComponent<Camera>();
             camera.transform.position = new Vector3(8,8,-10); camera.transform.LookAt(Vector3.zero); camera.orthographic = true; camera.orthographicSize = 5.5f;
@@ -28,13 +28,14 @@ namespace Liandan.Shell
                 var renderer=cube.GetComponent<MeshRenderer>(); renderer.sharedMaterial=material; var props=new MaterialPropertyBlock(); props.SetColor("_BaseColor",color); renderer.SetPropertyBlock(props);
             }
             bool original = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-furnace-original") >= 0;
-            bool extended = !placeFurnace || PlaceFurnace(original);
+            bool extended = batch || !placeFurnace || PlaceFurnace(original);
             if (extended)
             {
                 var focus = new Vector3(2,1,0);
                 camera.transform.position += focus; camera.transform.LookAt(focus); camera.orthographicSize = 6.5f;
             }
             Block("Floor",new Vector3(0,-.15f,0),extended ? new Vector3(16,.3f,11.5f) : new Vector3(6,.3f,5),new Color(.54f,.64f,.69f));
+            if(batch){ PropBatch.Overview(camera); return camera; }
             for(int desk=0;desk<4;desk++)
             {
                 var position = new Vector3((desk%2-.5f)*2.4f,.45f,(desk/2-.5f)*2);

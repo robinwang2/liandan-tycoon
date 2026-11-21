@@ -1,0 +1,23 @@
+{
+  "thresholds": [0.38, 0.16, 0.025],
+  "lodRules": [
+    {"budgetPercent":100,"widthDepth":0.06,"height":0.04,"center":0.002,"contact":0.002},
+    {"budgetPercent":42,"widthDepth":0.08,"height":0.06,"center":0.04,"contact":0.01},
+    {"budgetPercent":14,"widthDepth":0.12,"height":0.08,"center":0.06,"contact":0.02}
+  ],
+  "epsilon": 0.0001,
+  "props": [
+    {"id":"desk_set","name":"工位桌组","origin":"bottom","x":-5.4,"y":0.06,"z":-3.17},
+    {"id":"office_chair","name":"办公椅","origin":"bottom","x":-5.4,"y":0.06,"z":-3.87},
+    {"id":"server_rack","name":"服务器机柜","origin":"bottom","x":4.55,"y":0.12,"z":-4.9},
+    {"id":"tv_wall","name":"壁挂数据屏","origin":"wall","x":-7.98,"y":1.05,"z":-0.6,"yaw":90},
+    {"id":"chat_sign","name":"聊天气泡灯牌","origin":"bottom","x":-1.5,"y":0.06,"z":4.7,"yaw":25.783},
+    {"id":"rubber_duck","name":"调试小黄鸭","origin":"bottom","x":1,"y":0.06,"z":4.7,"yaw":25.783},
+    {"id":"plush_bear","name":"陪伴玩具熊","origin":"bottom","x":3.5,"y":0.06,"z":4.7,"yaw":25.783},
+    {"id":"film_set","name":"影视拍摄组","origin":"bottom","x":6,"y":0.06,"z":4.7,"yaw":25.783},
+    {"id":"bunk_bed","name":"上下铺","origin":"bottom","x":-7.3,"y":0.06,"z":-4.45,"yaw":90},
+    {"id":"camp_bed","name":"折叠行军床","origin":"bottom","x":-4.45,"y":0.06,"z":4.6,"yaw":180},
+    {"id":"office_egg","name":"套壳派的蛋","origin":"bottom","x":5.9,"y":0.06,"z":0.15,"scale":1.2,"w":2.64,"d":2.64,"h":2.63,"budget":40000},
+    {"id":"elevator_car","name":"观光电梯轿厢","origin":"bottom","x":8.8,"z":2.55,"w":1.62,"d":1.72,"h":2.57,"budget":40000}
+  ]
+}

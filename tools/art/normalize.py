@@ -56,7 +56,10 @@ def load(file):
 
 
 def bounds(objects):
-    coords = np.array([tuple(obj.matrix_world @ vertex.co) for obj in objects for vertex in obj.data.vertices])
+    coords = np.array([tuple(obj.matrix_world @ obj.data.vertices[index].co) for obj in objects
+                       for index in {loop.vertex_index for loop in obj.data.loops}])
+    if not coords.size:
+        raise ValueError('没有可测量的网格面')
     return coords.min(axis=0), coords.max(axis=0)
 
 
@@ -235,6 +238,10 @@ parser.add_argument('--out', type=Path, required=True)
 parser.add_argument('--budget', type=int, default=40000)
 parser.add_argument('--name', default='Furnace')
 parser.add_argument('--rotate-z', type=float, default=0)
+parser.add_argument('--mirror-depth', action='store_true')
+parser.add_argument('--width', type=float)
+parser.add_argument('--depth', type=float)
+parser.add_argument('--origin', choices=['bottom','wall','ceiling'], default='bottom')
 target = parser.add_mutually_exclusive_group(required=True)
 target.add_argument('--height', type=float)
 target.add_argument('--reference', type=Path)
@@ -251,20 +258,43 @@ if not math.isfinite(height) or height <= 0:
     raise ValueError('目标高度必须为正数')
 objects = load(args.source)
 rotation = Matrix.Rotation(math.radians(args.rotate_z), 4, 'Z')
+if args.mirror_depth:
+    rotation = Matrix.Diagonal(Vector((1, -1, 1, 1))) @ rotation
 worlds = [rotation @ obj.matrix_world.copy() for obj in objects]
 for obj, world in zip(objects, worlds):
     obj.parent = None
     obj.data = obj.data.copy()
-    obj.data.transform(world)
+    mesh = obj.data
+    reverse = world.to_3x3().determinant() < 0
+    # 翻面会重排面角。按原面的顶点对应自定义法线，UV 随原面角走，不翻贴图。
+    normals = None
+    if reverse and mesh.has_custom_normals:
+        basis = world.to_3x3().inverted().transposed()
+        normals = [{mesh.loops[i].vertex_index: (basis @ mesh.corner_normals[i].vector).normalized()
+                    for i in face.loop_indices} for face in mesh.polygons]
+    mesh.transform(world)
+    if reverse:
+        mesh.flip_normals()
+        if normals is not None:
+            mesh.normals_split_custom_set([normals[face.index][mesh.loops[i].vertex_index]
+                                           for face in mesh.polygons for i in face.loop_indices])
     obj.matrix_world = Matrix.Identity(4)
 bpy.context.view_layer.update()
 low, high = bounds(objects)
 factor = height / (high-low)[2]
-offset = Vector(((high[0]+low[0])/2, (high[1]+low[1])/2, low[2]))
+def anchor(low, high):
+    return Vector(((high[0]+low[0])/2, high[1] if args.origin=='wall' else (low[1]+high[1])/2,
+                   high[2] if args.origin=='ceiling' else low[2]))
+
+
+offset = anchor(low,high)
+factors = [args.width/(high[0]-low[0]) if args.width else factor, args.depth/(high[1]-low[1]) if args.depth else factor, factor]
+transform = Matrix.Diagonal(Vector([*factors,1])) @ Matrix.Translation(-offset)
+pivots = {obj: transform @ world.translation for obj,world in zip(objects,worlds)}
 palette(objects)
 merged = 0
 for obj in objects:
-    obj.data.transform(Matrix.Scale(factor,4) @ Matrix.Translation(-offset))
+    obj.data.transform(transform)
     merged += clean(obj.data)
 materials = sorted({mat for obj in objects for mat in obj.data.materials if mat}, key=lambda mat: mat.name)
 records = []
@@ -273,6 +303,7 @@ for index, mat in enumerate(materials):
     mat.name = 'M_' + stem
     records.append(textures(mat, stem))
 initial = sum(map(triangles,objects))
+part_names = [obj.name for obj in objects]
 for obj in objects:
     reduce(obj,min(1,args.budget/initial))
 # 多零件的边界和取整可能使第一次减面稍超预算，不应导出超标的 LOD0。
@@ -293,7 +324,7 @@ for level, ratio in enumerate([1,.4,.12]):
             obj.data = original.data.copy()
             bpy.context.collection.objects.link(obj)
             reduce(obj,ratio)
-        suffix = '' if len(objects)==1 else f'_Part{index+1:02}'
+        suffix = '' if len(objects)==1 else ('_'+part_names[index] if part_names[index] in ('Upper','Lower') else f'_Part{index+1:02}')
         obj.name = f'SM_{args.name}{suffix}_LOD{level}'
         obj.data.name = obj.name
         group.append(obj)
@@ -302,21 +333,45 @@ for level, ratio in enumerate([1,.4,.12]):
         raise ValueError(f'LOD{level} 面数不合格：{count}')
     # 减面可能让脚底穿地（试验中 LOD2 低了约 1 cm）；整组平移，不单独移动耳、足或盖。
     floor, ceiling = bounds(group)
-    center = (floor+ceiling)/2
-    center[2] = floor[2]
+    fit = Matrix.Identity(4)
+    if args.width and args.depth:
+        # 边折叠可能把顶点推出原包围盒，按整组校正，不单独拉伸零件。
+        ratios = np.array([args.width,args.depth,height]) / (ceiling-floor)
+        if not np.isfinite(ratios).all() or np.max(np.abs(1-ratios)) > .2:
+            raise ValueError(f'LOD{level} 减面后尺寸变化过大，请人工复核')
+        fit = Matrix.Diagonal(Vector([*ratios,1]))
     for obj in group:
-        obj.data.transform(Matrix.Translation(-Vector(center)))
-    lods.append(dict(level=level, triangles=count, size=dimensions(floor,ceiling), origin=[0,0,0], parts=[obj.name for obj in group]))
+        obj.data.transform(fit)
+    shift = Matrix.Translation(-anchor(*bounds(group)))
+    for obj in group:
+        obj.data.transform(shift)
+    floor, ceiling = bounds(group)
+    lods.append(dict(level=level, triangles=count, size=dimensions(floor,ceiling), origin=list(anchor(floor,ceiling)), parts=[obj.name for obj in group]))
     exported.extend(group)
+# 各级减面结束后再还原活动件枢轴，避免 LOD1/2 重复变换。
+if len(objects)>1:
+    for index,obj in enumerate(exported):
+        pivot = pivots[objects[index % len(objects)]]
+        obj.data.transform(Matrix.Translation(-pivot)); obj.location = pivot
+bpy.context.view_layer.update()
 bpy.ops.object.select_all(action='DESELECT')
 for obj in exported:
     obj.select_set(True)
 model = 'SM_'+args.name+'.fbx'
 bpy.ops.export_scene.fbx(filepath=str(out/model), use_selection=True, object_types={'MESH'}, axis_forward='-Z', axis_up='Y',
                          apply_scale_options='FBX_SCALE_UNITS', bake_space_transform=True, bake_anim=False, path_mode='RELATIVE')
-report = dict(source=args.source.name, model=model, budget=args.budget, targetHeight=height, scale=factor, rotateZ=args.rotate_z,
+imported = load(out/model)
+for lod in lods:
+    group = [obj for obj in imported if obj.name in lod['parts']]
+    if len(group) != len(lod['parts']):
+        raise ValueError(f"FBX 回读缺少零件：{lod['parts']}")
+    measured = list(anchor(*bounds(group)))
+    if not all(abs(value) <= .0001 for value in measured):
+        raise ValueError(f"FBX 回读 LOD{lod['level']} 表面锚点偏移：{measured} m")
+    lod['fbxSurfaceAnchorMeters'] = measured
+report = dict(source=args.source.name, model=model, budget=args.budget, targetHeight=height, scale=factor, rotateZ=args.rotate_z, mirrorDepth=args.mirror_depth,
               sourceSize=dimensions(low,high), normals='按连通面统一绕序；开口壳片按源拐角法线面积投票校正朝向，保留 UV 接缝与硬边', weldToleranceMeters=1e-6,
               mergedVertices=merged, lods=lods, materials=records, seconds=round(time.monotonic()-start,2),
-              movingParts='保留输入网格；Tripo 整体炉盖暂不切。后续选 Tripo 分件、按高度切并封口或单独生成炉盖，再设枢轴。')
+              origin=args.origin, axisScales=factors, movingParts='保留分件；单网格不自动推断活动边界。')
 (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
 print(model, [lod['triangles'] for lod in lods], report['seconds'])

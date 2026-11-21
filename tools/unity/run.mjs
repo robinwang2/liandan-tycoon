@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { summarizeDraws } from './art-ab-summary.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const project = process.env.UNITY_PROJECT ? resolve(process.env.UNITY_PROJECT) : join(root, 'unity/Game');   // 工程被别的 Unity 锁住时可以指到一份副本
@@ -11,6 +12,8 @@ const player = join(project, 'Build/ParityProbe/ParityProbe.exe');
 const methods = new Map([
   ['compile', 'ConfigureUrp'],
   ['art-furnace', 'Capture'],
+  ['art-batch1', 'Capture'],
+  ['build-game-art','BuildArtProbe'],
   ['editor-parity', 'RunEditor'],
   ['build-probe', 'BuildIl2cppProbe'],
   ['setup-ui', 'SetupUi'],
@@ -27,6 +30,26 @@ function run() {
   function checkMix(shots) {
     const proc = spawnSync(process.execPath, [join(root,'tools/audio/check-output.mjs'),shots], {stdio:'inherit'});
     if (proc.error || proc.status!==0) throw proc.error || new Error('播放器混音验收失败：'+shots);
+  }
+  if(mode==='art-batch1-ab' && !input){
+    const dest=join(project,'Build/art-batch1'),exe=gamePath('ArtProbe');mkdirSync(dest,{recursive:true});
+    if(!existsSync(exe))throw Error('请先运行 build-game-art：'+exe);
+    const log=join(dest,'ab.log');
+    for(const file of ['ab.log','draws.csv','structure-A.json','structure-B.json','office-A.png','office-B.png','ab-summary.txt'])rmSync(join(dest,file),{force:true});
+    console.log('A/B 图形播放器（最多 180 秒），阶段日志：'+log);
+    const result=spawnSync(exe,['-art-batch1-ab',dest,'-screen-fullscreen','0','-screen-width','1280','-screen-height','720','-logFile',log],{cwd:project,windowsHide:false,timeout:180000});
+    const text=existsSync(log)?readFileSync(log,'utf8'):'';
+    if(result.error || result.status!==0 || !text.includes('Liandan batch1 A/B OK:')){
+      const stage=text.split(/\r?\n/).filter(line=>/^Liandan A\/B(?: FAILED)?:/.test(line)).at(-1)??'未进入探针';
+      const diagnostic=`A/B ${result.error?.code==='ETIMEDOUT'?'超时（180 秒）':result.error?.message??'退出码 '+result.status}；${stage}`;
+      appendFileSync(log,'\nRunner: '+diagnostic+'\n');throw Error(`${diagnostic}；详见 ${log}`);
+    }
+    for(const mode of ['A','B']){
+      const image=readFileSync(join(dest,`office-${mode}.png`));
+      if(image.length<24 || image.subarray(0,8).toString('hex')!=='89504e470d0a1a0a' || image.readUInt32BE(16)!==1280 || image.readUInt32BE(20)!==720)throw Error(`office-${mode}.png 不是有效的 1280×720 截图`);
+    }
+    const summary=summarizeDraws(readFileSync(join(dest,'draws.csv'),'utf8'),['A','B'].map(mode=>JSON.parse(readFileSync(join(dest,`structure-${mode}.json`),'utf8').replace(/^\uFEFF/,'')))).join('\n');
+    writeFileSync(join(dest,'ab-summary.txt'),summary+'\n');console.log(summary+'\n绘制次数与截图：'+dest);return;
   }
   if (mode === 'audiotest') {
     if (!input || extra.length) throw new Error('用法：audiotest <全新或空截图目录>');
@@ -84,9 +107,10 @@ function run() {
   mkdirSync(logs, { recursive: true });
   const log = join(logs, mode + '.log');
   const result = join(logs, mode === 'run-probe' ? 'parity-il2cpp.txt' : 'parity-editor.txt');
-  const args = ['-batchmode', ...(mode === 'art-furnace' ? [] : ['-nographics']), '-logFile', log];
+  const args = ['-batchmode', ...(mode.startsWith('art-') ? [] : ['-nographics']), '-logFile', log];
+  if(mode==='art-batch1') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
   if (methods.has(mode))
-    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
+    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='art-batch1'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
   if (checking) {
     const bits = input ? resolve(input) : join(logs, 'math-bits.bin');
     if (!input && (mode === 'editor-parity' || !existsSync(bits))) {
@@ -103,6 +127,7 @@ function run() {
   const proc = spawnSync(exe, args, { cwd: project, stdio: 'inherit', windowsHide: true, env: { ...process.env, LIANDAN_REPO: root } });
   if (proc.error) throw proc.error;
   const contents = existsSync(log) ? readFileSync(log, 'utf8') : '';
+  if(mode==='art-batch1')for(const line of contents.split(/\r?\n/).filter(line=>/^Liandan batch1 (shots:|FAIL:)/.test(line)))console.log(line);
   const errors = contents.split(/\r?\n/).filter(line => /\berror (?:CS|BC|IL)\d+|compilation failed|executeMethod.*(?:exception|failed)|unable to resolve packages/i.test(line));
   if (errors.length) console.error([...new Set(errors)].join('\n'));
   let report = '';
@@ -111,12 +136,13 @@ function run() {
     console.log(result + '\n' + report);
   }
   if (proc.status !== 0 || errors.length || !contents ||
+      (mode==='art-batch1' && !contents.includes('Liandan batch1 shots OK:')) ||
       (mode === 'art-furnace' && (!contents.includes('Liandan furnace shots OK:') || ['original','tripo','tripo-close','tripo-front','tripo-back-high'].some(name=>!existsSync(join(project,'Build/art-furnace',name+'.png'))))) ||
       (checking && !report.trimEnd().endsWith('对拍通过')) ||
       (mode === 'setup-ui' && !contents.includes('Liandan UI setup OK')) ||
       (mode === 'audio-render' && !contents.includes('Liandan audio render OK')) ||
       (mode === 'compile' && !contents.includes('URP 设置完成')) ||
-      (mode.startsWith('build-game') && (!contents.includes('Liandan build OK:') || !existsSync(gamePath(mode === 'build-game' ? 'Game' : 'GameIl2cpp')))) ||
+      (mode.startsWith('build-game') && (!contents.includes('Liandan build OK:') || !existsSync(gamePath(mode === 'build-game' ? 'Game' : mode==='build-game-art'?'ArtProbe':'GameIl2cpp')))) ||
       (mode === 'build-probe' && (!existsSync(player) || !contents.includes('IL2CPP 探针构建完成'))))
     throw new Error('执行失败（进程退出码 ' + proc.status + '），请查看 ' + log);
 }

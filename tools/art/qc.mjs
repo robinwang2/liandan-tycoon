@@ -9,16 +9,50 @@ import sharp from 'sharp';
 const BLENDER = process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe';
 const args = process.argv.slice(2), model = args[0];
 if (!model) { console.log('用法：node tools/art/qc.mjs <模型> [--out 目录] [--budget N] [--height 米] [--ref 目录或图片] [--flat]'); process.exit(1); }
-const opt = {}; for (let i = 1; i < args.length; i++) { if (args[i] === '--flat') opt.flat = true; else opt[args[i].slice(2)] = args[++i]; }
+const opt = {}; for (let i = 1; i < args.length; i++) { if (['--flat','--silhouette','--mirror-depth'].includes(args[i])) opt[args[i].slice(2)] = true; else opt[args[i].slice(2)] = args[++i]; }
+if(opt['mirror-depth']) opt.silhouette=true;
+if (opt.silhouette) {
+  if(!opt.ref || !fs.statSync(opt.ref).isDirectory()) throw Error('轮廓检查需要 --ref 四视图目录');
+  Object.assign(opt,{flat:true,bg:1,views:'front,left,right,back'});
+}
 const out = path.resolve(opt.out || model.replace(/\.[^.]+$/, '') + '_qc');
 const views = (opt.views || 'front,left,right,back,persp').split(',');
 const pyArgs = ['--', path.resolve(model), '--out', out, '--views', views.join(','), ...(opt.budget ? ['--budget', opt.budget] : []), ...(opt.height ? ['--height', opt.height] : []), ...(opt.res ? ['--res', opt.res] : []), ...(opt.flat ? ['--flat'] : [])];
 const t0 = Date.now();
 if (opt.lod !== undefined) pyArgs.push('--lod', opt.lod);
+if (opt.bg !== undefined) pyArgs.push('--bg', opt.bg);
 const r = spawnSync(BLENDER, ['-b', '--factory-startup', '-P', path.resolve(import.meta.dirname, 'qc.py'), ...pyArgs], { encoding: 'utf8', maxBuffer: 64 << 20 });
 const line = (r.stdout || '').split('\n').find(l => l.startsWith('QC_REPORT '));
 if (!line) { console.log('Blender 没跑通：\n' + (r.stderr || '').slice(-2000) + '\n' + (r.stdout || '').slice(-2000)); process.exit(1); }
 const rep = JSON.parse(line.slice(10));
+if (opt.silhouette) {
+  const side=160, threshold=.45, raw={}, mirrored={}, opposite={front:'back',back:'front',left:'left',right:'right'};
+  const mask=file=>sharp(file).resize(side,side).removeAlpha().greyscale().raw().toBuffer();
+  const images=Object.fromEntries(await Promise.all(views.map(async view=>[view,await mask(rep.renders[view])])));
+  function overlap(reference,generated,flip) {
+    let both=0,either=0;
+    for(let index=0;index<reference.length;index++) {
+      const a=reference[index]<249,b=generated[flip?index+side-1-2*(index%side):index]<249;
+      both+=a&&b; either+=a||b;
+    }
+    return either?both/either:0;
+  }
+  for(const view of views) {
+    const reference=await mask(path.join(opt.ref,view+'.png'));
+    raw[view]=overlap(reference,images[view],false);
+    // 深度反射后正背相机互换，且屏幕横轴翻转；侧视相机不换，仅水平翻图。
+    mirrored[view]=overlap(reference,images[opposite[view]],true);
+  }
+  rep.silhouetteCandidates={raw,mirrored}; rep.mirrorDepth=!!opt['mirror-depth'];
+  rep.silhouetteIoU=rep.mirrorDepth?mirrored:raw;
+  if(Object.values(raw).some(score=>score<threshold) && Object.values(mirrored).every(score=>score>=threshold)) {
+    rep.orientation='深度镜像，可用 --mirror-depth 修正';
+    if(!rep.mirrorDepth) rep.problems.push(rep.orientation);
+  }
+  for(const [view,score] of Object.entries(rep.silhouetteIoU)) if(score<threshold) rep.problems.push(`${view} 轮廓交并比 ${score.toFixed(2)} 低于 ${threshold}，请复核朝向/缺件`);
+  rep.pass=!rep.problems.length;
+  fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(rep,null,2)+'\n');
+}
 // 拼图：一格 320 像素
 const S = 320, refs = [];
 if (opt.ref) {

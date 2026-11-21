@@ -10,13 +10,7 @@ namespace Liandan.EditorTools
 {
     public static class FurnaceShots
     {
-        public static void Capture()
-        {
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            var camera = Whitebox.Create(false);
-            var folder = Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-furnace"));
-            Directory.CreateDirectory(folder);
-            void Shot(string name)
+        internal static void WriteShot(Camera camera,string folder,string name)
             {
                 var target = RenderTexture.GetTemporary(1280,720,24,RenderTextureFormat.ARGB32);
                 var previous = RenderTexture.active;
@@ -38,6 +32,13 @@ namespace Liandan.EditorTools
                     UnityEngine.Object.DestroyImmediate(pixels); RenderTexture.ReleaseTemporary(target);
                 }
             }
+        public static void Capture()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var camera = Whitebox.Create(false);
+            var folder = Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-furnace"));
+            Directory.CreateDirectory(folder);
+            void Shot(string name)=>WriteShot(camera,folder,name);
             foreach (bool original in new[]{true,false})
             {
                 var instance = Whitebox.PlaceFurnace(original);

@@ -60,6 +60,7 @@ for o in meshes:
         outward_faces += front and not back
         unresolved_faces += front == back
     for v in bm.verts:
+        if not v.link_faces: continue
         for k in range(3): lo[k] = min(lo[k], v.co[k]); hi[k] = max(hi[k], v.co[k])
     verts += len(bm.verts)
     tris += sum(len(f.verts) - 2 for f in bm.faces)
@@ -113,6 +114,7 @@ sc.render.engine = 'BLENDER_WORKBENCH'
 sc.render.resolution_x = sc.render.resolution_y = res
 sc.render.film_transparent = False
 sc.display.shading.light = 'STUDIO'
+sc.display.shading.background_type = 'WORLD'
 sc.display.shading.color_type = 'SINGLE' if opt.get('flat') else ('TEXTURE' if images else 'MATERIAL')
 if opt.get('flat'): sc.display.shading.single_color = (0.8, 0.8, 0.8)
 sc.display.shading.show_cavity = True
@@ -134,9 +136,7 @@ for v in views:
         cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
     else:
         cam_data.type = 'ORTHO'
-        w = {'front': size.x, 'back': size.x, 'left': size.y, 'right': size.y, 'top': max(size.x, size.y)}[v]
-        h = size.z if v != 'top' else max(size.x, size.y)
-        cam_data.ortho_scale = max(w, h) * 1.12
+        cam_data.ortho_scale = span * 1.12
     cam_data.clip_end = dist * 4
     sc.render.filepath = os.path.join(out, v + '.png')
     bpy.ops.render.render(write_still=True)

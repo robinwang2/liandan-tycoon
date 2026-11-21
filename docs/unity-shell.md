@@ -13,11 +13,48 @@ node tools/unity/run.mjs art-furnace
 ```
 
 - **输入与交付**：私有源 `art-src/tripo/run3/` 需从授权存储另取；可用 `BLENDER` 指定无界面 Blender。两个包位于 `unity/Game/Assets/Art/Props/Furnace/Resources/Furnaces/{Tripo,Original}/`，各含一个 FBX（三级网格）、外置 PNG、`report.json`。选 FBX 是因为本工程直接使用 Unity 的 `ModelImporter`，无需为 glTF 安装额外包。分目录但材质/资源名不冲突。六张对照页在 `art-src/tripo/run3/normalized-qc/{Tripo,Original}/LOD{0,1,2}/sheet.png`，上行为原炉灰模，下行为交付 FBX 的实际回读。
-- **美术参数**：`node tools/art/normalize.mjs 输入.glb --out 输出目录 --name Furnace --height 2.511 --budget 40000 --rotate-z 0`。也支持 FBX；用 `--reference 参考模型.glb` 替代 `--height` 可按其包围盒高度等比匹配，不拉伸宽深。`--qc 输出目录 --ref 参考四视图目录` 对每个 LOD 单独回读。米制、底面中心、Blender 正面 −Y；不跨 UV/硬边合点。静态网格保留为独立零件，不输出骨骼、动画或原始枢轴。
-- **Unity 导入**：`FurnaceImport.cs` 只处理丹炉目录，用文件单位、比例 1、导入法线和 URP/Lit；底色用 sRGB，法线按 Normal Map，ORM 是线性数据，另外打包 LitMask（R 金属、G 遮蔽、A 光滑度）。这只 Tripo 炉只有 BaseColor，原炉的平涂顶点色转成 UV 调色板。根节点只加一个 LOD0 的盒碰撞，切 LOD 不换碰撞。`FurnacePolicy.json` 配高度 2.511、宽深 2.8 m、分级预算和容差；异常记导入警告。切换以屏幕相对高度为准：≥38% 用 LOD0，16–38% 用 LOD1，3.5–16% 用 LOD2，再小剔除（实际还受质量设置的 LOD Bias 影响）。
+- **美术参数**：`node tools/art/normalize.mjs 输入.glb --out 输出目录 --name Furnace --height 2.511 --budget 40000 --rotate-z 0`。也支持 FBX；用 `--reference 参考模型.glb` 替代 `--height` 可按其包围盒高度等比匹配，不拉伸宽深。`--qc 输出目录 --ref 参考四视图目录` 对每个 LOD 单独回读。米制、底面中心、Blender 正面 −Y；不跨 UV/硬边合点。静态网格保留为独立零件，保留分件枢轴，不输出骨骼或动画。
+- **Unity 导入**：`PropImport.cs` 的丹炉分支沿用原规则，用文件单位、比例 1、导入法线和 URP/Lit；底色用 sRGB，法线按 Normal Map，ORM 是线性数据，另外打包 LitMask（R 金属、G 遮蔽、A 光滑度）。这只 Tripo 炉只有 BaseColor，原炉的平涂顶点色转成 UV 调色板。根节点只加一个 LOD0 的盒碰撞，切 LOD 不换碰撞。`FurnacePolicy.json` 配高度 2.511、宽深 2.8 m、分级预算和容差；异常记导入警告。切换以屏幕相对高度为准：≥38% 用 LOD0，16–38% 用 LOD1，3.5–16% 用 LOD2，再小剔除（实际还受质量设置的 LOD Bias 影响）。
 - **摆位与切换**：网页 `ui.js` 的标题页使用 3 档。`scene3a/office.js` 取 `x=W/2-rz/2`、`y=0.06`、`z=clamp(-D/2+5.9,-D/2+4.2,D/2-2.2)`。白盒沿用这组房间局部坐标 **(5.9, 0.06, 0.15)** 和实例比例 **1.3**，因此炉高约 **3.264 m**；不是把 1.3 烘进资产。默认 Tripo；已重建的播放器加 `-furnace-original` 启动即显示原炉。白盒地板扩到相应楼层尺寸，未移植网页其他楼层逻辑。
 - **截图**：`art-furnace` 是带图形设备的编辑器批处理，不运行经营模拟，也不保存临时场景。`unity/Game/Build/art-furnace/{original,tripo,tripo-close}.png` 应各为 1280×720；前两张机位、灯光、LOD0、场景尺寸固定，近景看炉耳、足和贴图。若出现洋红/白贴图或尺寸警告，检查 `unity/Game/Logs/art-furnace.log`；截图生成并不等于美术通过。
 - **版本管理**：本轮新增源码和配置不附 `.meta`；私有原模、Unity 本地模型包及其 `.meta`、QC 和截图均不入 Git，未配置 LFS。正式入库前先核对授权与私有远端权限，再将源 `.blend`/GLB、交付 FBX、PNG 纳入 Git LFS，同时正常跟踪对应 Unity `.meta` 以稳定 GUID；LFS 不是访问控制。
+
+## 第 1 批道具：从底图到验收
+
+在仓库根目录执行。生成新底图前先在另一个终端保持 `npm run dev` 运行（默认 `127.0.0.1:5173`）；已有底图只刷新上传清单用 `node tools/art/batch.mjs prep --manifest-only`，不用开服务器。可用 `GAME_URL`、`CHROME`、`BLENDER` 指定本机程序。Tripo 上传、生成、下载和授权核对均由人操作，命令不会消耗积分。
+
+```powershell
+node tools/art/batch.mjs prep                           # 默认全部；也可只传 desk_set office_egg 等 ID
+node tools/art/batch.mjs status
+# 按 upload.json 的 tripoSlots 填格：网页「左侧」用 ref/right.png，「右侧」用 ref/left.png，正背同名。
+node tools/art/batch.mjs ingest desk_set "$HOME/Downloads/desk_set.glb"
+# 本批旧下载若提示深度镜像，用留存原件重试，无需重新生成或下载
+node tools/art/batch.mjs ingest desk_set art-src/tripo/batch1/desk_set/tripo.glb --mirror-depth
+node tools/art/batch.mjs ingest film_set art-src/tripo/batch1/film_set/tripo.glb --mirror-depth
+# 将实际累计积分写入台账，例如 $points 已设为平台显示的数字；不是每次重跑都加一次
+node tools/art/batch.mjs credit desk_set $points '首版，待美术复核'
+node tools/art/batch.mjs credit --from-notes             # 从本批 credits-notes.json 合并累计积分、返工和备注，不累加
+node tools/art/atlas.mjs                                 # 材质有变化就重做；部分批次亦可运行
+dotnet build unity/GameCheck -c Release                 # 静态编译，不启动 Unity
+node tools/unity/run.mjs art-batch1                     # 本机：关闭占用工程的 Unity，再截图
+node tools/unity/run.mjs build-game-art                 # 本机：专用开发播放器
+node tools/unity/run.mjs art-batch1-ab                  # 本机：同机位测 A/B
+node tools/art/batch.mjs ledger                         # 先关闭 Excel；仅更新「素材来源」本批行
+npm run tables
+node tools/art/batch.mjs status
+```
+
+**只诊断，不修改模型**：`node tools/art/qc.mjs 输入.glb --ref 原模四视图目录 --out 诊断目录 --silhouette`。报告的 `silhouetteCandidates` 同时给出原样、深度镜像两组四向 IoU；不能逐视图挑高分。只有原样不过、整组镜像过线才提示修正。`ingest --mirror-depth` 会在 Blender 世界 Y 轴反射、修正绕序，并对实际交付的 LOD0 再做一次不翻图的比对（`verified-lod0/`）；`qc/sheet.png` 留作未经修正的下载件证据。`status` 只认正式目录内匹配下载件、原模及修正方式的 FBX，不把暂存件或单级「合格」当作完成。
+
+- **底图与质检**：每件私有目录 `art-src/tripo/batch1/<id>/` 下有 `game.glb`、`ref/`、移入的 `tripo.glb` 和 `qc/`。`qc/sheet.png` 上原模、下下载件，以正、左、右、后排列。任一方向轮廓交并比低于 0.45、宽高或深高比偏离原模超过 30%、无贴图等会中止；数值通过后仍要人工检查开口、正反、文字、风格。失败时不替换上次交付，重做后再 ingest；新下载替换前旧下载另存。`lod-qc/` 为三档 FBX 回读图。正式交付在 `unity/Game/Assets/Art/Props/<id>/Resources/Batch1/<id>/`，均不入 Git。
+- **分件**：先保留完整下载件的副本，按下载件实际 Blender 世界坐标测量切面（Z 向上，不能直接套游戏里的目标米数）。`node tools/art/split-part.mjs 原蛋.glb 分件蛋.glb --height $cutZ --upper-pivot 0 0 $cutZ`；斜切改用 `--point X Y Z --normal X Y Z`，下半也可给 `--lower-pivot X Y Z`。输出文件必须不存在。封盖适合单个封闭网格；多网格用 `--mesh` 会只输出指定网格，不能用这个结果冒充完整道具。确认切口、UV 和枢轴后，再把完整分件版本交给 ingest。
+- **白盒和回执**：开发播放器加 `-art-batch1` 可预览批次摆位。`art-batch1` 给已安装的每件生成 `<id>.png` 近景、整屋生成 `office.png`；缺件跳过，不以占位方块充数。`status` 的 Unity 列指本次交付生成了匹配报告摘要的截图回执，不代表人工美术通过。无模型时即使有总览也不算单件通过。
+- **几何判据**：批次 FBX 回读与 Unity 导入共用 `Assets/Shell/Resources/PropPolicy.json`（米）。底座取底面、吊装取顶面；贴墙取下缘和背面（Blender `max.y` / Unity 根局部 `max.z`），不是厚度中心。LOD0/1/2 宽深允许偏差分别为 6/8/12 cm，高为 4/6/8 cm；边界另留 0.1 mm 给浮点及 QC 报告取整。远景减面会去掉单侧突出的床腿、支架，允许深/宽中心分别偏 0.2/4/6 cm（远景约为单侧收缩量的一半）；接地、贴墙、贴顶仍限 0.2/1/2 cm，不随轮廓一起放宽。面数预算仍是 100%/42%/14%，向上取整。FBX 与导出报告的回读一致性是另一道检查，不能用远景容差放过导出错误。
+- **重新导出**：`node tools/art/batch.mjs reexport [id...]` 沿用已质检的原件、参考图及镜像选择；随后用 `node tools/art/atlas.mjs` 刷新图集指纹。每级减面和尺寸校正后只以三角面引用的顶点定位，整件平移，不移动各零件的相对位置。导出并回读后，报告中的 `lods[].fbxSurfaceAnchorMeters` 三轴必须在 0.1 mm 内；孤立顶点不代表地面。
+- **批量失败**：仅未安装的 FBX 跳过；已安装但导入、校验或截图失败的道具不留旧回执，继续处理余项，最后在终端及 `Logs/art-batch1.log` 汇总并以非零退出。编辑器只写近景及 `office.png`，不再代写播放器的对比图。
+- **引擎采样**：重新 `build-game-art` 后运行 `art-batch1-ab`，不要最小化播放器。每种模式预热 30 帧，再用 `ProfilerRecorderHandle.GetAvailable` 枚举 Render 和 Render Pipeline 指标；在 `ab.log` 搜 `Liandan Render:` 可见原名、单位、类型和标志。Draw Calls、Batches（含 Total Batches）、SetPass 分别记录，不拿批次冒充绘制次数。计数器启动后等 4 帧，再在帧末读取已完成的新样本；每种最多尝试 120 帧，预热及采样限时 20 秒，播放器总超时 180 秒。
+- **结果与回退**：`unity/Game/Build/art-batch1/` 下的 `draws.csv` 包含实际读到的各项原值（完全没有样本时仅表头）；`ab-summary.txt` 和终端列出来源及最近 30 个样本的中位数，孤立零值不丢弃，持续为零或不足 30 个样本标为不可用。两种模式都输出 `structure-A/B.json` 和 `office-A/B.png`；无引擎数据时仍成功生成结构对照。结构统计为整间办公室的启用 Renderer（包含各级 LOD，未按可见性筛选）、材质槽及不同材质/贴图，SRP Batcher 仅做兼容条件初筛，不是实际绘制或合批次数。截图及文件错误仍以非零退出。
+- **台账**：`art-src/tripo/batch1/ledger.json` 按 ID 存对象，`credits` 为累计实耗，`reworks` 为返工次数；`note`、`source`、`method`、`prompt`、`date`、`license` 按实际补填。积分未知留空，不当作零；工作簿行键为 `batch1_<id>`。本批导入器为 `Editor/PropImport.cs`，也承接前述丹炉规则；整件静态资产不凭空产生动画，已切出的 Upper/Lower 保留枢轴。
 
 ## Windows 验收顺序
 
