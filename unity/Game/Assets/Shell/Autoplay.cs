@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using UnityEngine;
+using UnityEngine.UIElements;
+using Liandan.Kernel;
 
 namespace Liandan.Shell
 {
@@ -18,6 +20,18 @@ namespace Liandan.Shell
         private int currentMonth, attempts, selectedStep = -1;
         private static bool failed;
         private bool employeeVisible, hiredVisible, hiring, inspectAction;
+        private GameState? realState;
+        private int fixture;
+        private void ThemeShot(string name){if(!game.Root.ClassListContains("theme-"+name))throw new InvalidOperationException("主题未切换："+name);Shot("theme-"+name);}
+        private bool ThemeFixtures(){
+            if(fixture>4)return false;
+            if(fixture==0){ThemeShot("default");realState=game.State;game.State=new GameState(realState.Snapshot.DeepClone().AsObject(),game.Tables);game.State.Snapshot["tut"]=new JsonObject{["on"]=true,["open"]=new JsonObject(),["queue"]=new JsonArray(),["dirt0"]=game.State.Snapshot["dirt"]!.AsArray().Count};}
+            else if(fixture==1){if(!game.Controls.ContainsKey("tip"))throw new InvalidOperationException("教学气泡未出现");Shot("tutorial-tip");game.State.Snapshot.Remove("tut");game.State.Snapshot["ideo"]=new JsonObject{["v"]="cn",["result"]="red"};}
+            else if(fixture==2){ThemeShot("soviet");game.State.Snapshot["ideo"]!["v"]="us";}
+            else if(fixture==3){ThemeShot("rose");game.State.Snapshot["ideo"]!["result"]="cap";}
+            else {ThemeShot("cold");game.State=realState!;game.Tab="rd";game.Side="board";}
+            fixture++;game.Draw();return true;
+        }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void WatchStartup()
         {
@@ -47,19 +61,44 @@ namespace Liandan.Shell
             var texture=ScreenCapture.CaptureScreenshotAsTexture(); try { File.WriteAllBytes(Path.Combine(shots,name+".png"),texture.EncodeToPNG()); } finally { UnityEngine.Object.Destroy(texture); }
         }
         private void Click(string id) => game.Controls[id]();
+        private void CheckHudLayout()
+        {
+            void CheckRow(VisualElement row)
+            {
+                var bounds=row.worldBound;
+                var prior=new List<Rect>();
+                foreach(var item in row.Children()){
+                    var rect=item.worldBound;
+                    bool Outside(Rect inner,Rect outer)=>inner.xMin<outer.xMin-1 || inner.yMin<outer.yMin-1 || inner.xMax>outer.xMax+1 || inner.yMax>outer.yMax+1;
+                    if(rect.width<=0 || rect.height<=0 || Outside(rect,bounds) || prior.Any(other=>Math.Min(other.xMax,rect.xMax)-Math.Max(other.xMin,rect.xMin)>1 && Math.Min(other.yMax,rect.yMax)-Math.Max(other.yMin,rect.yMin)>1))
+                        throw new InvalidOperationException($"顶栏或页签越界/重叠：{item.name} {rect}，容器 {bounds}");
+                    prior.Add(rect);
+                    if(item.Q<Label>(className:"button-caption") is Label caption){
+                        var size=caption.MeasureTextSize(caption.text,0,VisualElement.MeasureMode.Undefined,0,VisualElement.MeasureMode.Undefined);
+                        if(Outside(caption.worldBound,rect) || caption.contentRect.width+1<size.x)
+                            throw new InvalidOperationException($"页签文字被挤压：{caption.text}，需要 {size.x}，实际 {caption.contentRect.width}");
+                    }
+                }
+            }
+            CheckRow(game.Root.Q(className:"bar"));
+            game.Root.Query(className:"tab-strip").ForEach(CheckRow);
+        }
         private string Pick(IEnumerable<string> items) { var choices=items.ToArray(); return choices[(int)(game.RandomValue()*choices.Length)]; }
         private bool Tick()
         {
             switch(game.ScreenId)
             {
-                case "title": Shot("01-title"); Click("new"); break;
+                case "title": Shot("01-title");Click("menu");break;
+                case "menu":Shot("menu");Click(captured.Contains("settings")?"new":"settings");break;
+                case "settings":Shot("settings");Click("back");break;
                 case "wizard":
                     Shot("02-wizard"); int step=game.Wizard.Step;
                     if(step==1 && game.Controls.Keys.Any(key=>key.StartsWith("plus:"))) Click(Pick(game.Controls.Keys.Where(key=>key.StartsWith("plus:"))));
                     else if(selectedStep!=step && (step==0||step==2||step==3||step==4))
                     { selectedStep=step; string prefix=step==0?"region:":step==2?"bg:":step==3?"track:":"mission:"; Click(Pick(game.Controls.Keys.Where(key=>key.StartsWith(prefix)))); }
-                    else Click("forward"); break;
+                    else {if(step==4)game.Wizard.Tutorial=false;Click("forward");} break;
                 case "event":
+                    if(game.Root.Q<Image>("art-slot")?.image!=null)Shot("illustrated-event");
                     if(game.Dialog!.View["closable"]!=null && game.ActionId!="")Shot("dialog-"+game.ActionId);
                     if(inspectAction){inspectAction=false;Click("close");break;}
                     Shot("04-event"); var options=game.Controls.Keys.Where(key=>key.StartsWith("option:")).ToArray();
@@ -75,6 +114,8 @@ namespace Liandan.Shell
                 case "result": Shot("05-result"); Click("advance"); break;
                 case "end": Shot("07-ending"); return true;
                 case "main":
+                    try { CheckHudLayout(); } catch { Shot("layout-failure"); throw; }
+                    if(ThemeFixtures())break;
                     var state=game.State; int month=int.Parse(state.Snapshot["t"]!.ToString());
                     if(month>limit) return true;
                     if(month==1) Shot("03-month-1");

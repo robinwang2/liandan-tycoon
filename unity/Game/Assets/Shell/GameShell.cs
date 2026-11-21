@@ -9,7 +9,7 @@ using UnityEngine.UIElements;
 
 namespace Liandan.Shell
 {
-    public sealed class GameShell : MonoBehaviour
+    public sealed partial class GameShell : MonoBehaviour
     {
         internal Tables Tables = null!;
         internal GameStore Store = null!;
@@ -55,6 +55,7 @@ namespace Liandan.Shell
                 doc.panelSettings = panel;
                 ui.SetActive(true);
                 Root = doc.rootVisualElement;
+                InitSettings(auto);
                 Root.styleSheets.Add(Required<StyleSheet>("Shell")); Root.AddToClassList("shell");
                 Root.style.unityFontDefinition = FontDefinition.FromSDFFont(Required<UnityEngine.TextCore.Text.FontAsset>("ShellFont"));
                 Draw(); if (driver != null) StartCoroutine(driver.Run());
@@ -102,7 +103,7 @@ namespace Liandan.Shell
         internal void Begin(JsonObject setup)
         {
             State = GameState.NewGame(Tables, setup, Meta, RandomValue); Tab = "rd"; Side = "board"; AllHints=false; Summary = null!;
-            Store.SaveGame(State); Pump();
+            lastTip=null; floorOffice=-1; Store.SaveGame(State); Pump();
         }
         internal void Pump(GameState.Dialog? next = null)
         {
@@ -116,7 +117,7 @@ namespace Liandan.Shell
                 if (Summary == null) { Summary = State.Settle(Meta); Store.SaveMeta(Meta); Store.ClearSave(); }
                 ScreenId = "end";
             }
-            else { ScreenId = "main"; Store.SaveGame(State); }
+            else { ScreenId = "main"; PrepareTutorial(); Store.SaveGame(State); }
             Draw();
         }
         internal void Act(string id)
@@ -133,15 +134,19 @@ namespace Liandan.Shell
         internal void Title() { ScreenId = "title"; State = null!; Summary = null!; Dialog = null; Draw(); }
         internal void Draw()
         {
-            Root.Clear(); bubble=null; Controls.Clear();
+            Root.Clear(); bubble=null; Controls.Clear(); ApplyTheme();
+            if(State!=null && State.Snapshot["over"]==null && ScreenId!="wizard") PrepareTutorial();
             if (ScreenId == "main")
             {
-                Advice=State.Advise();TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); Dashboard.Hints(this,Box(body, "stage")); SidePanel.Draw(this, Box(body, "right")); return;
+                Advice=VisibleAdvice();TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); var stage=Box(body,"stage"); Dashboard.Hints(this,stage); DrawTutorial(stage); if(Open("team")) SidePanel.Draw(this, Box(body, "right")); DrawFooter(); return;
             }
             var overlay = Box(Root, "veil"); var panel = Box(overlay, "panel");
             if (ScreenId != "title" && ScreenId != "end") panel.AddToClassList("scroll-panel");
             switch (ScreenId)
             {
+                case "menu": DrawMenu(panel); break;
+                case "settings": DrawSettings(panel); break;
+                case "ach": case "ends": DrawCatalogue(panel); break;
                 case "wizard": Wizard.Draw(panel); break;
                 case "local": localBody!(Scroll(panel)); Button(panel,"back",Text("ui.back"),CloseLocal); break;
                 case "event": case "result": EventPanel.Draw(this, panel); break;
@@ -161,12 +166,12 @@ namespace Liandan.Shell
                         Label(shop, Text("ui.meta."+group.Item1)+"   "+known.Count+" / "+catalogue.Count,"heading");
                         foreach (var entry in catalogue.Where(pair=>known.ContainsKey(pair.Key))) Label(shop,entry.Value!["name"]+"   "+(group.Item1=="ends"?Text("ui.meta.endCount",("次数",known[entry.Key]!)):entry.Value["desc"]?.ToString()));
                     }
-                    Button(panel, "back", Text("ui.back"), Title); break;
+                    Button(panel, "back", Text("ui.back"), OpenMenu); break;
                 default:
                     Label(panel, Text("ui.title.name"), "heading"); Label(panel, Text("ui.title.fine"));
                     Button(panel, "new", Text("ui.title.new"), NewWizard);
-                    var save = Store.LoadGame(); if (save != null) Button(panel, "continue", Text("ui.title.continue") + " · " + save.Company.Name, () => { State = save; Pump(); });
-                    Button(panel, "meta", Text("ui.title.meta"), () => { ScreenId = "meta"; Draw(); }); break;
+                    var save = Store.LoadGame(); if (save != null) Button(panel, "continue", Text("ui.title.continue") + " · " + save.Company.Name, () => Resume(save));
+                    Button(panel, "meta", Text("ui.title.meta"), () => Page("meta")); Button(panel,"menu","菜单",OpenMenu); break;
             }
         }
     }

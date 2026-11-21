@@ -1,4 +1,4 @@
-# Unity 可玩界面（阶段 2 / 界面 A）
+# Unity 可玩界面（阶段 2 / 界面 A、B）
 
 ## Windows 验收顺序
 
@@ -47,4 +47,45 @@ node tools/unity/run.mjs build-game-il2cpp
 - 参谋条在中央场景上方，点击执行可用行动或定位目标；可忽略一条或展开其余条目。员工卡悬停显示贡献，事件选项悬停显示效果，结果页按好坏区分变化标签。事件 `art-slot` / `portrait-slot` 的 `userData` 保存表中资源键，现在只画占位。
 - 试玩逐帧访问右侧 `side-*`、左侧 `action-*`、`dialog-recruit`、`dialog-policy-work`，记录候选人气泡 `employee-hover`。已雇员工气泡 `staff-hover`、`advice`、`dialog-gpu`、`dialog-sprint`、`dialog-raise` 和 `ideology-active` 在真实状态满足时才截图；不同种子不保证都有融资机会或触发路线之争。错误、断言、异常、缺失必检图仍判失败。
 - 手验：清空姓名后检查占位字，再输入中文；检查长选项悬停前后是否遮挡；从建议跳转招人或算力，切换政策后重开存档，确认已保存；分别看深圳和湾区的路线说法。请反馈截图目录和 `player.log`，不要把静态编译当作图形验收。
-- 留到下一轮：老周教学队列和分步开放、设置、四套主题、正式插画和头像，以及底部工位条、楼层操作、动效与小屏排版细调。当前不提供教学开关；正常新局按全部开放的模式游玩。
+
+## 界面 B：操作与验收
+
+- **菜单与设置**：标题和经营页均有菜单。可继续、新游戏、访问商店/图鉴/成就或退出。设置存在 `Application.persistentDataPath/ldt_settings.json`，与当前局、局外成就分开；试玩不读取也不写入这份设置。四个音量通道的初值来自 `audio.json/VOLUMES`。参谋、静音、实时 FPS、帧率上限、自动降档和 50–150% 渲染比例可调。七个网页画质档按顺序映射到本机 Unity QualitySettings，渲染比例作用于 URP 而非 UI。
+- **教学与主题**：首局按网页 `meta.runs == 0` 默认启用，建角最后一步可以关闭。`Engine.Tutorial.cs` 按表中月份和提前触发条件逐项开放，提示和未读队列随单局存档。老周说话时参谋让位；按钮、页签、仪表及顶栏按步骤开放。路线主题沿用内核版本选择，红色结果按剧情版本分苏联/合作社，资本结果用冷色，其余默认；结果窗口暂缓换色。
+- **资源**：构建前的 `SyncTables` 同时调用 `tools/unity/sync-art.mjs`（需 Node 和已安装的 sharp）。仅转换美术表 `uses > 0` 的 46 张 WebP 为 JPEG；运行时以事件 art 键解码为 Texture2D。另从网页 SVG 生成公司标志、头像、剧情人物及页签图标。输出是忽略入库的 `Assets/StreamingAssets/shell-art`；单独检查转换可运行 `node tools/unity/sync-art.mjs`。编辑器直接 Play 前先用 **Liandan / Sync Tables**。
+- **底栏与楼层**：可从丹炉出炉或转经营、从产品开冲刺或转研发、从首个项目转项目链；底栏列最近三条日志。多层办公室按部门显示楼层、人数、老板所在层；按钮或 ↑/↓、PageUp/PageDown、Home 切换，搬楼重置为全楼。
+- **试玩**：`menu`、`settings`、`theme-default/soviet/rose/cold`、`tutorial-tip`、`illustrated-event` 均为新增必检 PNG。主题和教学采用首月快照副本，不向生产局写测试结局；带图事件仅当 UI 实际挂有纹理时抓取。看图时请留意老周提示是否挡住按钮、品牌图是否压住文字、插画裁切、调节后重启是否保留设置，以及真实路线结算后换色的时机。
+
+### 已知差异
+
+- 没有程序合成音乐、音效、环境声。保留混音设置和 `AudioLevelChanged` 接口；静音不清除各通道原音量。
+- 苏联、合作社、冷色只有静态配色和标识。燃烧、藤蔓、冻结过渡留在 `ThemeChanged` 接口；无网页粒子和电梯/镜头动画，3D 仍是白盒。
+- 员工按五种岗位复用网页头像，不按每个 UID 生成脸；创始人按四套衣着复用头像画法，不是 3D 人物渲染。剧情头像、菜单/页签图标和建角标准品牌色使用网页原图形；其他行动等仍用数据表符号。自定义旧档非标准品牌色不是逐色渲染。
+- Unity 的质量档位、自动降档判断与网页 GPU 管线不同；没有 WebGL GPU 时间/绘制次数面板。桌面以外尺寸、字体回退、画面和鼠标交互仍须播放器实测。
+
+### 内核改动后的复验
+
+在仓库根目录执行；若已有与当前 JS 对应的轨迹文件，可省略两行生成命令。`save-roundtrip` 另用真实网页教学模块逐步比较开放顺序、提前触发、队列消费和教学关闭。
+
+```powershell
+dotnet build unity/GameCheck -c Release
+dotnet build unity/KernelCli -c Release
+node tools/verify/save-roundtrip.mjs
+npm run parity
+dotnet run --no-build -c Release --project unity/KernelCli -- parity
+node tools/parity.mjs ops
+dotnet run --no-build -c Release --project unity/KernelCli -- ops tools/parity/ops
+node tools/parity.mjs trace
+dotnet run --no-build -c Release --project unity/KernelCli -- trace tools/parity/trace
+```
+
+图形验收由本机执行：`node tools/unity/run.mjs build-game`，随后 `node tools/unity/run.mjs autoplay 42 unity/Game/Build/shots-B-42`（新目录）。请回传该目录的 `player.log` 和截图；静态编译、轨迹比对均不能代替此项。
+
+页签排版回归：重新 `build-game` 后，用同一种子跑以下两次。目录须全新或为空；脚本核对每张 PNG 的实际像素尺寸。对照 `action-ideo.png`、`side-log.png` 和 `03-month-1.png`：左右页签的图标、文字和角标应在同一按钮内横排；空间不足时整颗按钮移到下一行。顶栏允许整项换行，不应盖住正文；行动卡的长说明仍应自然折行。
+
+```powershell
+node tools/unity/run.mjs autoplay 42 unity/Game/Build/layout-42-720 1280x720
+node tools/unity/run.mjs autoplay 42 unity/Game/Build/layout-42-900 1600x900
+```
+
+试玩在主界面布局完成后检查顶栏和两侧页签是否越界、互相重叠，并比较页签文字所需宽度与实际宽度。失败时保留 `layout-failure.png`，具体控件和尺寸见 `player.log`。

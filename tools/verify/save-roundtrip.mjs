@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import * as game from '../../src/game/engine.js';
 import { mkSetup, drain } from '../bot.mjs';
 import { seeded } from '../parity/operations.mjs';
+import { advanceTutorial, dismissTip, currentTip } from '../../src/ui/tutorial.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'liandan-store-')), input = join(dir,'js'), output = join(dir,'cs');
 mkdirSync(input); mkdirSync(output);
@@ -32,6 +33,12 @@ try {
     users:users.map(game.fmtUsers),board,impact:impacts.map(i=>[...i.lines,i.quirk].filter(Boolean).join('\n')),salaries:impacts.map(i=>game.money(state,i.salary))});
   assert.deepEqual(JSON.parse(readFileSync(join(output,'ldt_save_v1.json'),'utf8')),JSON.parse(JSON.stringify(state)),'展示不能改档');
   console.log('展示比对通过：用户数边界、榜单、五个岗位的贡献说明和工资。');
+  for(const [month,extra] of [...Array.from({length:11},(_,index)=>[index+1,{}]),[1,{cash:0}],[1,{exposed:1}],[1,{dirt:[{sev:1}]}],[1,{chains:{demo:{}}}],[1,{projects:[{}]}],[1,{perks:['demo']}],[99,{perks:['demo'],projects:[{}]}]]){
+    const sample={...structuredClone(state),t:month,...extra,tut:{on:true,open:{},queue:[],dirt0:0}};
+    game.saveGame(sample);run('tutorial');advanceTutorial(sample);const expected=[structuredClone(sample.tut)];
+    while(currentTip(sample)){dismissTip(sample);expected.push(structuredClone(sample.tut));}assert.deepEqual(JSON.parse(readFileSync(join(output,'tutorial.json'))),expected,'教学步骤 '+month);
+  }
+  console.log('教学比对通过：开放顺序、提早触发、队列消费和结束状态。');
   for (const mode of ['current','month','legacy','settle','ended','version','broken']) {
     active=input; game.saveMeta(meta); game.saveGame(state);
     if(mode==='legacy') { const old=JSON.parse(localStorage.getItem('ldt_save_v1')); for(const key of ['projects','chains','quotaAdd','ideoAt','quotaEarn'])delete old[key]; old.stage=2; old.co.office=0; game.saveGame(old); }

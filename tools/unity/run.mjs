@@ -22,30 +22,37 @@ const checking = mode === 'editor-parity' || mode === 'run-probe';
 function run() {
   const gamePath = folder => join(project, 'Build', folder, 'Liandan.exe');
   if (mode === 'autoplay') {
+    const size = extra.length > 1 && ['1280x720', '1600x900'].includes(extra.at(-1)) ? extra.pop() : '1600x900';
+    const [width, height] = size.split('x');
     const [shotsArg, months] = extra;
     if (!/^-?\d+$/.test(input || '') || Number(input) < -2147483648 || Number(input) > 2147483647 || !shotsArg || extra.length > 2 || (months !== undefined && (!/^\d+$/.test(months) || Number(months) < 1 || Number(months) > 2147483647)))
-      throw new Error('用法：autoplay <整数种子> <全新或空截图目录> [月数]');
+      throw new Error('用法：autoplay <整数种子> <全新或空截图目录> [月数] [1280x720|1600x900]');
     const shots = resolve(shotsArg), exe = gamePath('Game');
     if (!existsSync(exe)) throw new Error('请先 build-game：' + exe);
     mkdirSync(shots, { recursive: true });
     if (readdirSync(shots).length) throw new Error('截图目录必须为空，以免混入旧截图');
     const log = join(shots, 'player.log');
-    const proc = spawnSync(exe, ['-autoplay', input, '-shots', shots, ...(months ? ['-months', months] : []), '-screen-width', '1600', '-screen-height', '900', '-screen-fullscreen', '0', '-logFile', log], { cwd: project, stdio: 'inherit', timeout: 15 * 60 * 1000 });
+    const proc = spawnSync(exe, ['-autoplay', input, '-shots', shots, ...(months ? ['-months', months] : []), '-screen-width', width, '-screen-height', height, '-screen-fullscreen', '0', '-logFile', log], { cwd: project, stdio: 'inherit', timeout: 15 * 60 * 1000 });
     const images = readdirSync(shots).filter(name => name.endsWith('.png')).sort();
     for (const image of images) console.log(join(shots, image));
     const output = existsSync(log) ? readFileSync(log, 'utf8') : '';
     const failure = output.match(/^Liandan autoplay FAILED:.*$/m);
     if (failure) throw new Error(failure[0] + '\n' + log);
-    const required = ['01-title','02-wizard','03-month-1','04-event','05-result'];
+    const required = ['01-title','02-wizard','03-month-1','04-event','05-result','menu','settings','theme-default','theme-soviet','theme-rose','theme-cold','tutorial-tip','illustrated-event'];
     required.push(...['board','chain','team','safe','perks','fin','log'].map(key=>'side-'+key),
       ...['rd','team','cap','pr','ops','ideo'].map(key=>'action-'+key),'dialog-recruit','dialog-policy-work','employee-hover');
     if (!months) required.push('07-ending');
     if (proc.error || proc.status !== 0 || !output.includes('Liandan autoplay OK:') || required.some(name => !images.includes(name + '.png')))
       throw proc.error || new Error('试玩或截图未完成：' + log);
+    for (const name of images) {
+      const png = readFileSync(join(shots, name));
+      const actual = `${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`;
+      if (actual !== size) throw new Error(`${name} 实际为 ${actual}，要求 ${size}`);
+    }
     return;
   }
   if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
-    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | build-game | build-game-il2cpp | autoplay <种子> <截图目录> [月数]');
+    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | build-game | build-game-il2cpp | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
   mkdirSync(logs, { recursive: true });

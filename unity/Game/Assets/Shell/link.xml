@@ -1,4 +1,5 @@
 <linker>
+  <assembly fullname="Unity.RenderPipelines.Universal.Runtime"><type fullname="UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset"><property name="renderScale" /></type></assembly>
   <!-- 白盒用 CreatePrimitive 在运行时建物体，场景文件本身没有这些组件引用。 -->
   <assembly fullname="UnityEngine.CoreModule">
     <type fullname="UnityEngine.MeshFilter" preserve="all" />

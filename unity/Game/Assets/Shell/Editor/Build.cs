@@ -36,6 +36,9 @@ namespace Liandan.EditorTools
             }
             foreach (var copy in Directory.GetFiles(dest, "*.json"))
                 if (!File.Exists(Path.Combine(source, Path.GetFileName(copy)))) AssetDatabase.DeleteAsset("Assets/StreamingAssets/tables/" + Path.GetFileName(copy));
+            var script=Path.Combine(root,"tools/unity/sync-art.mjs");
+            var info=new System.Diagnostics.ProcessStartInfo("node", "\""+script+"\" \""+Path.Combine(Application.streamingAssetsPath,"shell-art")+"\"") {WorkingDirectory=root,UseShellExecute=false,CreateNoWindow=true};
+            using(var process=System.Diagnostics.Process.Start(info)){process.WaitForExit();if(process.ExitCode!=0)throw new IOException("界面资源生成失败，请检查 Node 和 sharp 依赖");}
             AssetDatabase.Refresh();
         }
 

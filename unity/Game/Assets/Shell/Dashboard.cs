@@ -71,6 +71,7 @@ namespace Liandan.Shell
         {
             string uid=person["uid"]!.ToString(); var role=Def("ROLES")[person["role"]!.ToString()]!;
             var card=Box(list,"card"); var salary=State.Currency(State.MonthlySalary(person)); string quirk=person["quirk"]?.ToString()??"";
+            game.Picture(card,"avatar-"+person["role"],36,36);
             var trait=quirk==""?null:Def("STAFF_QUIRKS")[quirk];
             Label(card,person["name"]+"   "+role["name"]+"   "+trait?["name"],"section");
             if(Flag(person,"red") && Data["ideo"]!=null)Label(card,State.StoryText("ideo.page.redTag"));
@@ -107,6 +108,7 @@ namespace Liandan.Shell
         internal void Operations()
         {
             if(Flag(Data,"ownModel"))game.Button(list,"gpu",Text("ui.gpu.h"),()=>Gpu());else Label(list,State.WrapperDetail);
+            if(!game.Open("policy"))return;
             foreach(var pair in Def("POLICIES").AsObject()){
                 var key=pair.Key;var policy=pair.Value!; var active=Data["policies"]![key]!.ToString();
                 game.Button(list,"policy:"+key,policy["name"]+" · "+policy["opts"]![active]!["name"],()=>game.Local("policy-"+key,parent=>{
@@ -161,6 +163,7 @@ namespace Liandan.Shell
         }
         void Cards()
         {
+            game.Picture(list,"founder-"+(Data["founder"]?["outfit"]?.ToString()??"turtleneck"),60,60);
             void Card(JsonNode row,string suffix=""){var card=Box(list,"card");Label(card,row["icon"]+"  "+row["name"]+suffix,"section");Label(card,row["desc"]?.ToString()??"");}
             if(Data["perks"]!.AsArray().Count==0)Label(list,Text("ui.perks.none"));foreach(var id in Data["perks"]!.AsArray())Card(game.Tables.Perk(id!.ToString()));
             if(Data["feats"]!.AsArray().Count>0)Heading(Text("ui.perks.feats"));foreach(var id in Data["feats"]!.AsArray())Card(game.Tables.Feature(id!.ToString()));

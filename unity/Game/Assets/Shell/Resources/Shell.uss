@@ -1,4 +1,15 @@
 .shell, .shell * { -unity-font-definition: resource("ShellFont"); }
+.theme-default { --surface: #161b26; --base: #0c0f16; --gold: #f2c46d; --ink: #e8ecf3; }
+.theme-soviet { --surface: #45100f; --base: #1a0405; --gold: #f5c542; --ink: #fbefe0; }
+.theme-rose { --surface: #17332b; --base: #0a1712; --gold: #f0738a; --ink: #f4efe3; }
+.theme-cold { --surface: #0f1b28; --base: #060b12; --gold: #5ad1ff; --ink: #e6f2ff; }
+.shell .panel, .shell .left, .shell .right, .shell .bar, .shell .footer, .shell .tutorial { background-color: var(--surface); color: var(--ink); border-top-width: 2px; border-top-color: var(--gold); }
+.shell .card, .shell .chip, .shell .bubble, .shell .unity-button { background-color: var(--base); color: var(--ink); }
+.shell .section, .shell .heading, .shell .medal { color: var(--gold); }
+.shell .unity-button:hover, .shell .unity-button.selected, .shell .highlight { border-bottom-width: 3px; border-bottom-color: var(--gold); }
+.footer, .tutorial, .medal { padding: 8px; flex-shrink: 0; }
+.ticker { font-size: 14px; white-space: normal; }
+.shell .unity-toggle__label, .shell .unity-base-slider__label { color: var(--ink); }
 .shell { flex-grow: 1; color: rgb(232,238,241); font-size: 17px; }
 .veil { flex-grow: 1; justify-content: center; align-items: center; background-color: rgba(10,21,32,0.74); }
 .panel, .left, .right, .bar { background-color: rgb(26,42,58); padding: 12px; }
@@ -9,8 +20,18 @@
 .unity-button { min-height: 34px; flex-shrink: 0; margin: 3px; padding: 6px; background-color: rgb(54,76,96); color: white; }
 .unity-button:hover, .selected { background-color: rgb(41,111,112); }
 .unity-button:disabled { color: rgb(166,176,182); background-color: rgb(44,51,61); }
-.body, .bar, .row { flex-direction: row; }
-.row, .bar { flex-wrap: wrap; align-items: center; }
+.body, .bar, .row, .tab-strip { flex-direction: row; }
+.row, .bar, .tab-strip { flex-wrap: wrap; align-items: center; }
+.tab-strip, .bar { flex-shrink: 0; align-self: stretch; }
+.tab-strip > .unity-button, .shell .icon-button { width: auto; flex-grow: 0; flex-shrink: 0; white-space: nowrap; }
+.shell .icon-button { flex-direction: row; align-items: center; justify-content: center; }
+.button-glyph { flex-shrink: 0; margin-right: 4px; }
+.button-caption { flex-shrink: 0; margin: 0; padding: 0; white-space: nowrap; }
+.row > .unity-button, .row > .chip, .gauge > .copy, .bar > .copy, .bar > .unity-button { white-space: nowrap; flex-shrink: 0; }
+.bar > Image { flex-shrink: 0; }
+.row > .copy { flex-shrink: 0; max-width: 100%; }
+.bar > .copy { max-width: 98%; overflow: hidden; text-overflow: ellipsis; }
+.left > .unity-scroll-view, .right > .unity-scroll-view { min-height: 0; flex-shrink: 1; }
 .body, .stage { flex-grow: 1; min-height: 0; }
 .bar { justify-content: space-between; }
 .left { width: 30%; } .right { width: 23%; }

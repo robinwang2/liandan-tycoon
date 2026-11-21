@@ -27,6 +27,11 @@ static int Run(string[] args)
         if (state != null && args.Length == 4)
         {
             if (args[3] == "month") state.EndMonth();
+            else if(args[3]=="tutorial") {
+                state.AdvanceTutorial();var sequence=new JsonArray(state.Snapshot["tut"]!.DeepClone());
+                while(state.TutorialTip!=null){state.DismissTutorial();sequence.Add(state.Snapshot["tut"]!.DeepClone());}
+                File.WriteAllText(Path.Combine(args[2],"tutorial.json"),sequence.ToJsonString());
+            }
             else if(args[3]=="dashboard")
             {
                 var sample=JsonNode.Parse(File.ReadAllText(Path.Combine(args[1],"sample.json")))!;
