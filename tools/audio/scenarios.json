@@ -1,0 +1,11 @@
+{
+  "scene-office": [
+    {"tick":0,"scene":{"mode":"play","region":"bay","staff":45,"heat":0.85,"racks":8,"month":9,"night":0,"rain":0,"alert":false}},
+    {"tick":50,"scene":{"mode":"play","region":"sz","staff":60,"heat":1,"racks":12,"month":6,"night":1,"rain":1,"alert":true}},
+    {"tick":100,"scene":{"mode":"end","region":"sz","staff":5,"heat":0,"racks":0,"month":9,"night":0,"rain":0,"alert":false}}
+  ],
+  "flavor-soviet": [{"tick":0,"flavor":"soviet","music":"focus","volume":{"amb":0}},{"tick":65,"music":"crisis"}],
+  "flavor-rose": [{"tick":0,"flavor":"rose","music":"crisis","volume":{"amb":0}},{"tick":100,"music":"focus"}],
+  "flavor-cold": [{"tick":0,"flavor":"cold","music":"focus","volume":{"amb":0}},{"tick":60,"music":"crisis"},
+    {"tick":90,"muted":true},{"tick":115,"volume":{"music":0.6,"master":0.5},"muted":false}]
+}

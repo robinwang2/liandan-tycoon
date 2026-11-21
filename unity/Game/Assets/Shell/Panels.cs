@@ -26,7 +26,7 @@ namespace Liandan.Shell
             Chip("equity",Fixed(equity,0)+"%",()=>game.Text(equity<game.Tables.Parameter("coup.equity")?"ui.top.equity.warn":"ui.top.equity.ok"));
             Chip("val",state.Currency(state.Valuation()),()=>game.Text("ui.top.perf",("业绩",Fixed(state.Performance(),2))));
             if(game.Open("model"))Label(bar,data["model"] is JsonObject model?game.Text("ui.top.rankN",("名次",state.Rank))+"\n"+game.Text("ui.top.bench",("模型",model["name"]!), ("跑分",Liandan.Kernel.GameState.DisplayFixed(Number(model["bench"]!),1))):game.Text("ui.top.model")+"\n"+game.Text("ui.top.wrapper"));
-            Label(bar,game.Text("ui.top.ap") + "\n" + data["ap"]); game.Button(bar,"month",game.Text("ui.top.next"),()=> { state.EndMonth(); game.Pump(); });
+            Label(bar,game.Text("ui.top.ap") + "\n" + data["ap"]); game.Button(bar,"month",game.Text("ui.top.next"),()=> { state.EndMonth(); if(state.Snapshot["over"]==null)game.Cue("toast"); game.Pump(); });
             game.Button(bar,"menu","菜单",game.OpenMenu); game.DrawFps(bar);
         }
     }

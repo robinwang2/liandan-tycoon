@@ -36,21 +36,31 @@ namespace Liandan.Shell
         }
         private void InitSettings(bool autoplay) {
             BrandData=JsonNode.Parse(File.ReadAllText(ArtPath("brand.json")))!.AsObject();
+            LoadAudioSettings(autoplay?"":Path.Combine(Application.persistentDataPath,"ldt_settings.json"));
+            InitSound();ApplyGraphics();ApplyVolume();
+        }
+        private void LoadAudioSettings(string path) {
             audio=JsonNode.Parse(File.ReadAllText(Path.Combine(Application.streamingAssetsPath,"tables/audio.json")))!.AsObject();
-            prefPath=autoplay?"":Path.Combine(Application.persistentDataPath,"ldt_settings.json");prefs=new JsonObject();
+            prefPath=path;prefs=new JsonObject();
             if(File.Exists(prefPath)){try{prefs=JsonNode.Parse(File.ReadAllText(prefPath))!.AsObject();}catch(Exception error){Debug.LogWarning("设置读取失败，使用默认值："+error.Message);}}
-            ApplyGraphics();ApplyVolume();
         }
         private int Pref(string key,int fallback)=>prefs[key] is JsonValue value && value.TryGetValue<int>(out var count)?count:fallback;
         private void SetPref(string key,int value){prefs[key]=value;if(prefPath!=""){Directory.CreateDirectory(Path.GetDirectoryName(prefPath)!);File.WriteAllText(prefPath,prefs.ToJsonString());}}
         private int Volume(string id)=>Pref(id,(int)Math.Round(Number(audio["VOLUMES"]![id]!)*100));
-        private void ApplyVolume(){foreach(var pair in audio["VOLUMES"]!.AsObject())AudioLevelChanged?.Invoke(pair.Key,Pref("mute",0)==0?Volume(pair.Key)/100f:0);}
+        private void ApplyVolume(){
+            bool muted=Pref("mute",0)!=0;
+            foreach(var pair in audio["VOLUMES"]!.AsObject()){
+                string bus=pair.Key; float value=Volume(bus)/100f;
+                SendSound(s=>s.SetVolume(bus,value)); AudioLevelChanged?.Invoke(bus,muted?0:value);
+            }
+            SendSound(s=>s.SetMuted(muted));
+        }
         private void ApplyGraphics(int? adaptive=null){effectiveTier=Mathf.Clamp(adaptive??Pref("tier",3),0,6);QualitySettings.SetQualityLevel(Mathf.RoundToInt(effectiveTier*(QualitySettings.names.Length-1)/6f),true);
             int cap=Pref("cap",-1);QualitySettings.vSyncCount=0;Application.targetFrameRate=cap<0?(effectiveTier==0?30:-1):cap==0?-1:cap;
             // 使用当前 URP 实例的渲染比例，不改变窗口和 UI 的分辨率。
             var pipeline=GraphicsSettings.currentRenderPipeline; if(pipeline!=null)pipeline.GetType().GetProperty("renderScale")?.SetValue(pipeline,Mathf.Clamp(Pref("scale",100),50,150)/100f);
         }
-        private void Update(){if(Root==null)return;HandleKeys();elapsed+=Time.unscaledDeltaTime;frames++;if(elapsed<1)return;float fps=frames/elapsed;
+        private void Update(){PumpRecording();if(Root==null)return;if(Input.anyKeyDown)UnlockSound();if(Time.unscaledTimeAsDouble>=sceneAt)UpdateSoundScene();HandleKeys();elapsed+=Time.unscaledDeltaTime;frames++;if(elapsed<1)return;float fps=frames/elapsed;
             if(fpsLabel?.panel!=null)fpsLabel.text=Mathf.RoundToInt(fps)+" FPS";
             if(ScreenId=="main" && Pref("auto",1)!=0 && fps<23)slowTime+=elapsed;else slowTime=0;
             if(slowTime>=5 && effectiveTier>0){ApplyGraphics(effectiveTier-1);slowTime=0;}frames=0;elapsed=0;
@@ -58,7 +68,7 @@ namespace Liandan.Shell
         internal void DrawFps(VisualElement bar){fpsLabel=Pref("fps",0)!=0?Label(bar,"— FPS"):null;}
         private void Page(string page){ScreenId=page;Draw();}
         internal void OpenMenu()=>Page("menu");
-        private void Resume(GameState save){State=save;Tab="rd";Side="board";floorOffice=-1;lastTip=null;AllHints=false;Summary=null!;Pump();}
+        private void Resume(GameState save){State=save;Tab="rd";Side="board";floorOffice=-1;lastTip=null;heardHints=null;crisis=0;quietTheme=true;AllHints=false;Summary=null!;Pump();}
         private void DrawMenu(VisualElement panel){Label(panel,Text("ui.menu.title"),"heading");var save=State??Store.LoadGame();
             Button(panel,"resume","继续",()=>{if(State!=null)Page("main");else Resume(save!);},save!=null);
             Button(panel,"new","新游戏",NewWizard); Button(panel,"meta","局外商店",()=>Page("meta")); Button(panel,"ach","成就",()=>Page("ach"));Button(panel,"ends","结局图鉴",()=>Page("ends"));
@@ -76,12 +86,18 @@ namespace Liandan.Shell
             Label(body,Text("ui.set.sound"),"section");foreach(var pair in audio["VOLUMES"]!.AsObject())SliderPref(pair.Key,Text("ui.set.vol."+pair.Key)+" %",0,100,Volume(pair.Key),ApplyVolume);
             TogglePref("mute",Text("ui.set.mute"),0,ApplyVolume);TogglePref("hints",Text("ui.set.hints"),1);TogglePref("fps",Text("ui.set.showFps"),0);Button(panel,"back",Text("ui.set.done"),OpenMenu);}
         private void ApplyTheme(){var next=State==null || ScreenId=="wizard" || ScreenId=="title"?"default":ScreenId=="result" && theme!=""?theme:State.InterfaceTheme;
-            if(next==theme)return;if(theme!="")Root.RemoveFromClassList("theme-"+theme);theme=next;Root.AddToClassList("theme-"+next);ThemeChanged?.Invoke(next);}
-        private void OnDestroy(){foreach(var texture in textures.Values)Destroy(texture);}
+            bool effect=!quietTheme;quietTheme=false;
+            if(next==theme)return;
+            if(theme!=""){
+                Root.RemoveFromClassList("theme-"+theme);
+                if(effect && State!=null && AudioPlayPage(ScreenId) && next!="default") Cue(next=="soviet"?"burn":next=="cold"?"freeze":"bloom");
+            }
+            theme=next;Root.AddToClassList("theme-"+next);ThemeChanged?.Invoke(next);}
+        private void OnDestroy(){audit?.Dispose();if(soundSource!=null)soundSource.Stop();if(soundClip!=null)Destroy(soundClip);foreach(var texture in textures.Values)Destroy(texture);}
         private void HandleKeys(){
             if(Input.GetKeyDown(KeyCode.Escape)){if(ScreenId=="main" || ScreenId=="settings" || ScreenId=="ach" || ScreenId=="ends" || ScreenId=="meta")OpenMenu();else if(ScreenId=="menu")Page(State==null?"title":"main");else if(ScreenId=="local")CloseLocal();return;}
             if(ScreenId!="main")return;bool up=Input.GetKeyDown(KeyCode.UpArrow)||Input.GetKeyDown(KeyCode.PageUp),down=Input.GetKeyDown(KeyCode.DownArrow)||Input.GetKeyDown(KeyCode.PageDown),all=Input.GetKeyDown(KeyCode.Home);
             if(!(up||down||all) || Tables.Definition("FLOOR_PLANS")[floorOffice.ToString()] is not JsonArray plan)return;
-            int next=all?plan.Count:Mathf.Clamp((floor<0?plan.Count:floor)+(up?1:-1),0,plan.Count);floor=next==plan.Count?-1:next;Draw();}
+            int next=all?plan.Count:Mathf.Clamp((floor<0?plan.Count:floor)+(up?1:-1),0,plan.Count);MoveFloor(next==plan.Count?-1:next,plan.Count);Draw();}
     }
 }

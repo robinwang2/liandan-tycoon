@@ -58,7 +58,6 @@ node tools/unity/run.mjs build-game-il2cpp
 
 ### 已知差异
 
-- 没有程序合成音乐、音效、环境声。保留混音设置和 `AudioLevelChanged` 接口；静音不清除各通道原音量。
 - 苏联、合作社、冷色只有静态配色和标识。燃烧、藤蔓、冻结过渡留在 `ThemeChanged` 接口；无网页粒子和电梯/镜头动画，3D 仍是白盒。
 - 员工按五种岗位复用网页头像，不按每个 UID 生成脸；创始人按四套衣着复用头像画法，不是 3D 人物渲染。剧情头像、菜单/页签图标和建角标准品牌色使用网页原图形；其他行动等仍用数据表符号。自定义旧档非标准品牌色不是逐色渲染。
 - Unity 的质量档位、自动降档判断与网页 GPU 管线不同；没有 WebGL GPU 时间/绘制次数面板。桌面以外尺寸、字体回退、画面和鼠标交互仍须播放器实测。
@@ -89,3 +88,112 @@ node tools/unity/run.mjs autoplay 42 unity/Game/Build/layout-42-900 1600x900
 ```
 
 试玩在主界面布局完成后检查顶栏和两侧页签是否越界、互相重叠，并比较页签文字所需宽度与实际宽度。失败时保留 `layout-failure.png`，具体控件和尺寸见 `player.log`。
+
+## 声音
+
+首次点击或按键解锁声音。设置页可以分别调节总音量、配乐、音效和环境声，取消静音后恢复各通道的原值。普通批处理跳过播放器音源。自动试玩和声音巡检会主动解锁合成器并录制最终混音，支持无声卡的软件采样时钟。
+
+### 合成与触发
+
+- `Assets/Shell/Audio/Synth.cs` 使用独立的 xorshift32，初值为 `0x6d2b79f5`。网页也在音频模块内使用这条随机序列。双方依次生成两秒白噪、粉噪、1.65 秒左右声道混响脉冲，再为环境层、声部和旋律抽样。采样率会改变生成缓冲所需的随机数数量。
+- `Dsp.cs` 提供带限振荡器、低通／高通／带通、线性起音、指数衰减和目标渐近曲线。音乐干声与 16% 的卷积湿声汇入配乐总线，音效和环境声各走独立总线。总增益之后是带 6 ms 前视的双声道压缩器。`Reverb.cs` 对脉冲开头直接卷积，尾部用分块 FFT。滤波器的低通和高通按分贝解释 Q，带通使用线性 Q。[Web Audio 滤波器公式](https://www.w3.org/TR/webaudio-1.0/#filters-characteristics)
+- `Recipes.cs` 包含 31 个音效，`Score.cs` 从 `audio.json/MOODS` 读取七种配乐，换曲交叉淡化 2.6 秒。苏联、合作社和冷色主题分别改变主奏和打击乐。危机段使用减三和弦、半拍低音、滴答及上行警报。`Ambience.cs` 按地区、昼夜、季节、人员、炉火、机柜、雨和危急状态混合七层连续声源与零星环境音。
+- `ShellAudio.cs` 在主线程读取游戏快照、收集输入，流式 `AudioClip` 的 PCM 回调消费指令。合成器按采样位置推进 100 ms 调度和 150 ms 前瞻窗口，音符、包络和电梯到站音依采样时间定位。环境参数每半秒更新。危机分级复用内核的现金跑道、黑料曝光概率、监管冷却、政变和路线条件，危急优先于紧张，研发或有余量的在炼丹炉按月份切入专注。
+- 按钮、选项和悬停在控件入口发声。事件窗与抽卡窗分别发出开窗和翻牌声，选项检定盖章并播放好坏结果，直接行动使用好坏结果或提示音。月结、亲自写代码、录用、裁人、参谋新提示、主题切换和危急升级均有独立触发点。进账、发布、撒花、升级、事故和彩蛋消费内核的 `fxq`。
+
+### 离线对比
+
+从仓库根目录运行。第一行使用临时 Chrome 配置和本机回环页面加载原版 `src/audio/audio.js`，无需启动 Vite。第二行启动 Unity 批处理，请先关闭占用同一工程的编辑器。
+
+```powershell
+node tools/audio/render-js.mjs
+node tools/unity/run.mjs audio-render
+node tools/audio/compare.mjs
+```
+
+纯命令行复验时，可用下面一行代替编辑器命令。两个入口都调用 `WavRenderer.RenderAll`，与播放器共享全部 DSP 和配方。
+
+```powershell
+dotnet run -c Release --project unity/AudioCli
+```
+
+JS 默认使用 `C:/Program Files/Google/Chrome/Application/chrome.exe`，也可用 `CHROME_EXE` 指定 Chromium。默认结果在 `unity/Game/Logs/audio-js/` 和 `audio-cs/`。工程副本可用 `node tools/audio/compare.mjs <JS目录> <C#目录>` 指定两边的文件。比较脚本逐项输出，完整指标写入 C# 目录的 `compare.json`，缺文件、静音、格式错误或任一超标都会返回非零退出码。
+
+每个用例重置合成器。WAV 统一为 48 kHz、双声道、32 位浮点。每个音效用三秒窗口，在 0.4 秒触发，保留启动和尾音的实际位置。每种情绪分别渲染 16 秒。单项测试关闭环境声总线，环境调度仍消耗原有随机数。`tools/audio/scenarios.json` 另有四段 16 秒序列，覆盖两地环境、三种主题、换曲、调音量及静音恢复。
+
+Chrome 基准通过 OfflineAudioContext 的 suspend/resume 将时钟停在 128 帧边界，按同一顺序回收已结束音源。离线适配器用单位增益节点固定多输入求和的顺序，避免浏览器内部的散列表遍历顺序影响浮点末位。本机 Chrome 158 上，两次独立进程生成的 42 个 WAV 逐字节一致。受限 Windows 环境中，本次用 `$env:AUDIO_CHROME_LOCAL='1'` 为临时 Chrome 进程传入 `--no-sandbox`；普通桌面运行使用默认启动参数。
+
+| 比较项 | 通过条件与依据 |
+| --- | --- |
+| 时长与起止 | 采样帧数完全相同。以各自峰值的 −80 dB 标记有效声音，起点差 ≤ 3 ms（约一个浏览器渲染块），有效时长差 ≤ 15 ms，容纳微弱尾音。 |
+| 峰值与整体 RMS | 各自相差 ≤ 1 dB，检查增益及总线路由。 |
+| 10 ms RMS 包络 | Pearson 相关 ≥ 0.95，误差的二范数除以 JS 包络二范数 ≤ 0.15，同时限制形状和幅度。 |
+| 频谱 | 4096 点 Hann 窗、50% 重叠，累加双声道功率。功率加权质心相对差 ≤ 10%，有效 1/3 倍频带能量差各 ≤ 3 dB。两端都低于 JS 最强频带 40 dB 的频带略去，避免近静音分母放大误差。 |
+| 立体声 | 有差声道时，其 RMS 差 ≤ 1 dB，左右差分波形相关 ≥ 0.95；原本双声道相同的素材应继续相同。此项可检出丢失湿声或左右接反。 |
+| 逐样本误差 | 报告两个声道合计的 RMSE 和最大绝对误差，保留原始时间位置。该项用于定位波形差异。 |
+
+### 和网页版的差异
+
+实时播放采用 Unity 输出设备的采样率，离线验证锁定 48 kHz。振荡器的带限查表、压缩器及分块卷积的浮点运算与 Chromium 有细微差异。Unity 白盒沿用网页的楼层行程时间、天气哈希和昼夜曲线驱动音频；界面继续使用已有的换层和弹窗表现，音效在相应界面出现时播放。网页定义了 `close`、`spend` 和 `rain_start` 配方但没有直接调用，Unity 分别接到关窗、结果中的现金支出和开始下雨。
+
+### Windows 播放器验收
+
+Windows 版沿用网页的现场合成。配表直接控制下一拍，夜色、降雨、炉火和机柜的声音可以连续混合，包内也省去七种情绪和四种风味对应的循环音轨。代价是播放时要算滤波和卷积，还要在两种后端检查调度、混音和瞬态。原预渲染方案的取舍见[移植计划第六节](unity-port-plan.md#六各系统怎么移植)。
+
+在仓库根目录运行。每次给一个新目录，避免把上次的录音或读回日志算进本次结果。`LIANDAN_PLAYER` 可指定已构建的播放器。以下两轮均会运行约三分钟的无界面声音巡检，再完成一局正常截图试玩。
+
+```powershell
+node tools/unity/run.mjs build-game
+node tools/unity/run.mjs build-game-il2cpp
+foreach ($backend in 'Game','GameIl2cpp') {
+  $env:LIANDAN_PLAYER = (Resolve-Path "unity/Game/Build/$backend/Liandan.exe").Path
+  node tools/unity/run.mjs audiotest "unity/Game/Logs/test-$backend"
+  if ($LASTEXITCODE) { break }
+  node tools/unity/run.mjs autoplay 42 "unity/Game/Logs/play-$backend"
+  if ($LASTEXITCODE) { break }
+}
+Remove-Item Env:LIANDAN_PLAYER
+```
+
+- **整局覆盖**。`player.log` 的 `Liandan audio coverage:` 在一行里列出各类实测值和未触发项。音效和情绪的分母直接取自 `audio.json`。音效在已分配的声部到达起音采样时计数。记录还包括选中的风味、场景模式、地区、内核算出的危机等级和实际发声的环境层。试玩沿用已有主题截图流程，种子与操作路径都影响覆盖，遇不到的事件会列为缺项。前 60 秒录音写满后，覆盖计数继续到本局结束。
+- **全项巡检**。`Liandan.exe -audiotest -shots <目录>` 直接启动合成器，依次独奏每个音效、连续播放七种情绪、遍历四种风味，随后通过场景参数逐层激活城市、办公室、炉火、风扇、雨、虫鸣、警报。城市底噪在后续场景仍可听到。七层分别以经过音量增益的实际信号登记。巡检脚本提供场景与危机输入，实际游戏的危机判定由 autoplay 覆盖。缺少必需覆盖时播放器以失败码退出。
+- **实录位置**。`mix.wav` 是送给流式 `AudioClip` 的双声道 Float32 PCM，保留限幅器之后的原始幅值。`mix.json` 记录设备采样率、声部起音、小节、循环、换曲、巡检分段和覆盖集合，时间使用同一采样时钟。`source=pcm-callback` 表示 Unity 的 PCM 回调取过这些样本。批处理、无设备或启动后 1.5 秒始终没有收到首个回调时，`software-clock` 表示播放器用软件时钟推进相同合成器。这种录音可检查总混音，扬声器、系统音量与设备链路需在有设备的一轮观察。巡检录全程，试玩录满 60 秒或录至本局较早结束。诊断文件均在调用方的输出目录生成。
+- **真实重启读回**。巡检使用设置页的写入、读入与音量应用路径，测试文件放在 `<目录>/prefs/ldt_settings.json`。第一进程保存 master=67、music=43、sfx=81、amb=29、mute=1 后退出。`run.mjs audiotest` 随后用同一可执行文件和目录启动 `-audiotest-readback`，逐项比对；`readback.log` 出现 `Liandan audio prefs OK:` 且退出码为 0 才通过。直接调用可执行文件时，第二步也要显式运行。
+
+两个 Node 入口都会执行 `check-output.mjs`。保留同一目录下的 WAV 和 JSON 即可复查，退出码 0 表示通过，1 表示有缺项或异常。
+
+```powershell
+node tools/audio/check-output.mjs unity/Game/Logs/test-Game unity/Game/Logs/play-Game
+```
+
+| 检查 | 取样与通过条件 |
+|---|---|
+| 完整性和削波 | 校验 WAV 头、采样长度、录音时钟和缓冲溢出标记。两个声道的全段 RMS 均须大于 `1e-5`，逐样本检查非有限值及 `abs(x) >= 1`，容许比例为 0。全项巡检还要求每个独奏段有实际声部及可测 RMS。 |
+| 爆音与咔哒 | 全程逐声道算相邻采样差。差值达到 0.035 满刻度且超过相邻两个 5 ms 窗的差分 RMS 的 12 倍，或差值达到 0.25，即标记异常。仅豁免各音效声部经过压缩器 6 ms 延迟后的起音前 2 ms 至后 4 ms。列出异常时刻、声道及附近的换曲、小节和循环位置。此判据筛查瞬态尖峰，较小的可听失真仍可能低于门限。 |
+| 交叉淡化 | 比较换曲点延迟 6 ms 后两侧各 20 ms 的最终混音 RMS，容许差为 `0.018 + 0.8 × 两侧较大 RMS`。为排除仅靠环境底噪也显得平滑的情况，同时采集新旧配乐干声各自经过实际淡化增益后的 20 ms RMS 及增益。完整换曲须有至少 5 个双声部均超过 `1e-5` 的窗口，活动声部的增益对 2.6 秒线性坡度偏差小于 0.023。巡检六次换曲分别验收，并验证交叠窗口最终 WAV 的 RMS 大于 `1e-6`。试玩频繁操作中被打断或位于录音边缘的换曲另列计数。 |
+| 四路音量与静音 | 每项按开启、归零、恢复分三段，其余通道独奏隔离。总音量和静音使用持续的环境声；音乐使用 `focus`；音效每段在同一偏移发 `ding`。每段取 1.8–3.2 秒的最终混音，避开 120–150 ms 增益平滑的尾部。开启和恢复 RMS 均须大于 `1e-4`；归零须低于 `1e-5`，且比两侧较弱的一段至少低 60 dB。 |
+
+没有 Unity 时可用 `dotnet run -c Release --project unity/AudioCli -- mix-check unity/Game/Logs/mix-cli` 复现巡检音序，再用 `node tools/audio/check-output.mjs --fixture unity/Game/Logs/mix-cli` 校准判据。该录音的来源是 `cli-fixture`，默认播放器验收会拒绝这种来源。CLI 不覆盖播放器回调、设置存储或跨进程读回。
+
+### 包体测量
+
+以 `48b2f18` 为移植前基线。用同一份 Win64 Player 的 Bee 参数、Unity 附带的 Roslyn 和相同的 Release 优化分别编译基线源码与当前工作树，只统计 DLL 字节。命令读取现有编译缓存，两个输出都在临时目录生成。表中包含本轮巡检与录音代码。
+
+| 项目 | 基线 | 本次 | 增量 |
+|---|---:|---:|---:|
+| 既有 `Assembly-CSharp.dll` | 99,328 B | 159,744 B | +60,416 B |
+| 既有 `Kernel.dll` | 220,160 B | 221,184 B | +1,024 B |
+| 托管代码合计 | 319,488 B | 380,928 B | **+61,440 B（60 KiB）** |
+| 新增独立音频程序集、预渲染音频资源 | 0 | 0 | **0 B** |
+| 随包的既有 `StreamingAssets/tables/audio.json` | 3,996 B | 3,996 B | **0 B** |
+
+先前实际播放器的 Mono `Assembly-CSharp.dll` 为 143,360 B，`Kernel.dll` 为 221,184 B；相对上述基线，声音移植约占 44 KiB 的托管代码，本轮验收再增加约 16 KiB。IL2CPP 会裁剪并把 IL 编译进 `GameAssembly.dll`，整包增量还受链接对齐和元数据影响。仓库现有两个已打包的游戏目录均含声音功能；历史探针的场景和裁剪配置不同。要测最终分发增量，请对同一后端、同一 Unity 版本和相同构建配置的移植前后 Windows 游戏包做成对测量。工具排除 Unity 标为 `DoNotShip` 的调试和备份目录，列出分发文件合计、相关程序集、原生代码、元数据和音频资源字节数。
+
+```powershell
+node tools/audio/measure-il.mjs 48b2f18
+node tools/audio/build-size.mjs unity/Game/Build/Game
+node tools/audio/build-size.mjs unity/Game/Build/GameIl2cpp
+# 如果留有移植前的同后端完整游戏包，先保存其清单，再算新包差额。
+node tools/audio/build-size.mjs D:/builds/before-audio/Game --save unity/Game/Logs/mono-before.json
+node tools/audio/build-size.mjs unity/Game/Build/Game --against unity/Game/Logs/mono-before.json
+```

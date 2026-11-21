@@ -182,7 +182,7 @@ namespace Liandan.Kernel
                 hints.Add(Hint("x996","warn",T("x996.title"),T("x996.text", ("月数",streak), ("黑料",D("DIRT")["overwork"].Str("name"))),left:"ops",hl:"pol:work:965"));
             if (WorstDirt is JsonNode dirt && !(Snapshot.N("exposedCrime") >= P("advice.crime.from") && WorstCrime != null))
             {
-                double risk = 1 - Rows("dirt").Where(d => d.N("t") <= t + 1 - P("dirt.hideMonths")).Aggregate(1.0,(k,d) => k * (1 - Expose(d)));
+                double risk = LeakRisk(false);
                 if (risk >= P("advice.dirt.risk"))
                     hints.Add(WithAction(Hint("dirt",risk >= P("advice.dirt.bad") ? "bad" : "warn",T("dirt.title"),T("dirt.text", ("张数",List("dirt").Count), ("概率",RoundJs(risk * 100)), ("黑料",dirt.Str("name")), ("严重度",RoundJs(dirt.N("sev")))),right:"safe"),"wash"));
             }
