@@ -1,0 +1,6 @@
+{
+  "name": "com.liandan.kernel-checks",
+  "version": "0.1.0",
+  "displayName": "炼丹大亨内核对拍",
+  "dependencies": { "com.liandan.kernel": "0.1.0" }
+}

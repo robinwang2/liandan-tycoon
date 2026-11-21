@@ -88,7 +88,7 @@ namespace Liandan.Kernel
                     double x = field switch
                     {
                         "users" => users + fake,
-                        "dirt" => Rows("dirt").Sum(d => d.N("sev")),
+                        "dirt" => DirtTotal,
                         "staff" => List("staff").Count,
                         "rank" => Rank,
                         "runway" => Runway(),

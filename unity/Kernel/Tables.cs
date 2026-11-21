@@ -14,6 +14,11 @@ namespace Liandan.Kernel
         internal JsonNode Parameters { get; }
         internal JsonNode Texts { get; }
         internal JsonNode Actions { get; }
+        private readonly JsonNode chains;
+        public JsonNode? Chain(string id) => chains[id]?.DeepClone();
+        public JsonNode Trait(string id) => Traits[id].DeepClone();
+        public JsonNode Feature(string id) => Features[id].DeepClone();
+        public JsonNode Perk(string id) => Perks[id].DeepClone();
         internal readonly Dictionary<string, JsonNode> ActionRows;
         // 返回副本，界面可以按表中顺序读取按钮与页签，不会修改内核共用的数据。
         public JsonArray GetActionRows() => (JsonArray)Actions["ACTIONS"]!.DeepClone();
@@ -63,7 +68,9 @@ namespace Liandan.Kernel
                 }
             }
             Register(events["EVENTS_CORE"], true);
-            Register(Load("chains")["EVENTS_CHAINS"]);
+            var chainBook = Load("chains");
+            chains = chainBook["CHAINS"]!;
+            Register(chainBook["EVENTS_CHAINS"]);
             Register(events["EVENTS_PACK"]);
             foreach (var book in new[] { Books["cn"], Books["us"] })
                 foreach (var key in new[] { "IDEO_EVENTS", "UTOPIA_EVENTS", "BCI_EVENTS", "SCARE_EVENTS" }) Register(book[key]);
@@ -75,7 +82,9 @@ namespace Liandan.Kernel
                 Events[id] = Js.Obj(("id", id));
             }
         }
-        internal string Text(string key, bool bay, params (string key, object value)[] vars)
+        public JsonNode Definition(string key) => Definitions[key]!.DeepClone();
+        public double Parameter(string key) => Parameters.N(key);
+        public string Text(string key, bool bay, params (string key, object value)[] vars)
         {
             var row = Texts[key] ?? throw new KeyNotFoundException(key);
             return Regex.Replace(bay ? row.Str("bay", row.Str("text")) : row.Str("text"), @"\{([^{}\s]+)\}", m =>

@@ -144,7 +144,7 @@ namespace Liandan.Kernel
                 double value = y < 0 ? 1 / ax : ax;
                 return High(x) < 0 && odd ? -value : value;
             }
-            if (x < 0 && y != Math.Truncate(y)) return double.NaN;
+            if (x < 0 && y != Math.Truncate(y)) return BitConverter.Int64BitsToDouble(unchecked((long)0xfff8000000000000UL));
             if (ax == 1) return odd ? x : 1;
             if (Math.Abs(y) < 2.710505431213761e-20) return 1;
             if (Math.Abs(y) >= 9.223372036854776e18)

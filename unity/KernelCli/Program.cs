@@ -1,3 +1,4 @@
+using Liandan.Verification;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
@@ -17,8 +18,45 @@ catch (Exception error)
 
 static int Run(string[] args)
 {
-    if (args.Length == 2 && args[0] == "math-bits") return MathBits.Run(args[1]);
-    if (args.FirstOrDefault() is "dump" or "parity") return Parity.Run(args);
+    if ((args.Length == 3 || args.Length == 4) && args[0] == "save-roundtrip")
+    {
+        var tablesForSave = new Tables("src/data/tables");
+        var input = new GameStore(args[1], tablesForSave); var output = new GameStore(args[2], tablesForSave);
+        var meta = input.LoadMeta();
+        var state = input.LoadGame();
+        if (state != null && args.Length == 4)
+        {
+            if (args[3] == "month") state.EndMonth();
+            else if(args[3]=="tutorial") {
+                state.AdvanceTutorial();var sequence=new JsonArray(state.Snapshot["tut"]!.DeepClone());
+                while(state.TutorialTip!=null){state.DismissTutorial();sequence.Add(state.Snapshot["tut"]!.DeepClone());}
+                File.WriteAllText(Path.Combine(args[2],"tutorial.json"),sequence.ToJsonString());
+            }
+            else if(args[3]=="dashboard")
+            {
+                var sample=JsonNode.Parse(File.ReadAllText(Path.Combine(args[1],"sample.json")))!;
+                var result=new { users=sample["users"]!.AsArray().Select(value=>state.UsersText((double)value!)).ToArray(),
+                    board=state.Leaderboard(), impact=sample["people"]!.AsArray().Select(person=>state.StaffImpact(person!)).ToArray(),
+                    salaries=sample["people"]!.AsArray().Select(person=>state.Currency(state.MonthlySalary(person!))).ToArray() };
+                File.WriteAllText(Path.Combine(args[2],"dashboard.json"),JsonSerializer.Serialize(result));
+            }
+            else if (args[3] == "settle")
+            {
+                state.Snapshot["over"] = JsonNode.Parse(File.ReadAllText(Path.Combine(args[1], "ending.json")));
+                File.WriteAllText(Path.Combine(args[2], "result.json"), state.Settle(meta).ToJsonString()); state = null;
+            }
+            else throw new ArgumentException("未知存档操作");
+        }
+        output.SaveMeta(meta);
+        if (state != null) output.SaveGame(state); else output.ClearSave();
+        return 0;
+    }
+    if (args.Length == 2 && args[0] == "math-bits") return MathBits.Run(args[1], Console.Out);
+    if (args.FirstOrDefault() is "dump" or "parity")
+    {
+        Console.OutputEncoding = new System.Text.UTF8Encoding(false);
+        return Parity.Run(args, "src/data/tables", Console.Out, Console.Error);
+    }
     const string usage = "用法：math-bits <样本文件>、parity [baseline.json] [--seeds N]、dump <对局key> 或 trace|ops <快照目录> [--tables 表目录] [--only 对局key] [--max N]";
     if (args.Length < 2 || (args[0] != "trace" && args[0] != "ops")) throw new ArgumentException(usage);
     string dir = args[1], tablesPath = "src/data/tables";

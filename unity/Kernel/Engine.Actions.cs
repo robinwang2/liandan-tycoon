@@ -116,12 +116,14 @@ namespace Liandan.Kernel
             }
             return dialog;
         }
+        private string? HireBlock(JsonNode candidate) => ap < 1 ? "common.noAp" : List("staff").Count >= ReadBotValue("teamCap") ? "hire.full" : cash < candidate.N("salary") * Mod("salaryMult") ? "hire.noFee" : null;
+        public string? HireReason(JsonNode candidate) => HireBlock(candidate) is string key ? ButtonText(key) : null;
         public JsonObject? Hire(string uid)
         {
             var c = Rows("cands").FirstOrDefault(x => x.Str("uid") == uid);
             if (c == null) return null;
-            double fee = c.N("salary") * Mod("salaryMult");
-            string? err = ap < 1 ? "common.noAp" : List("staff").Count >= ReadBotValue("teamCap") ? "hire.full" : cash < fee ? "hire.noFee" : null;
+            double fee = MonthlySalary(c);
+            string? err = HireBlock(c);
             if (err != null) return Obj(("err", ButtonText(err)));
             var before = ChipValues();
             ap--; cash -= fee; List("cands").Remove(c); c["since"] = t; List("staff").Add(c);
@@ -133,7 +135,7 @@ namespace Liandan.Kernel
             if (e == null) return null;
             if (Ideo.On("on")) Ideo!["fired"] = Ideo.N("fired") + 1;
             var before = ChipValues();
-            cash -= P("fire.payMonths") * e.N("salary") * Mod("salaryMult"); List("staff").Remove(e);
+            cash -= Severance(e); List("staff").Remove(e);
             ApplyEffects(Obj(("morale", P(e.N("skill") >= P("fire.starSkill") ? "fire.starMorale" : "fire.morale"))), new JsonObject());
             return Obj(("text", ActionText("fire.done", ("名字", e.Str("name")))), ("chips", Chips(before)));
         }

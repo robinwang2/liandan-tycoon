@@ -23,3 +23,20 @@ tools/parity/trace/
 unity/**/bin/
 unity/**/obj/
 tools/parity/ops/
+
+# Unity 本机缓存、生成的解决方案和构建输出
+unity/.build/
+unity/Game/[Ll]ibrary/
+unity/Game/[Tt]emp/
+unity/Game/[Ll]ogs/
+unity/Game/UserSettings/
+unity/Game/[Bb]uild*/
+unity/Game/MemoryCaptures/
+unity/Game/Recordings/
+unity/Game/.vs/
+unity/Game/*.csproj
+unity/Game/*.sln*
+unity/Game/*.user
+unity/Game/*.unitypackage
+unity/Game/Assets/StreamingAssets/
+unity/Game/Assets/StreamingAssets.meta

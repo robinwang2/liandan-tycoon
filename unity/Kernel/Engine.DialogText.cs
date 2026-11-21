@@ -12,11 +12,17 @@ namespace Liandan.Kernel
         {
             double n = Abs(value);
             string amount = n >= 10000 ? Fixed(n / 10000, n >= 1e6 ? 0 : n >= 1e5 ? 1 : 2) + Tx("unit.yi") :
-                (n >= 100 ? RoundJs(n) : FixedNumber(n, 1)) + Tx("unit.wan");
+                WanAmount(n) + Tx("unit.wan");
             return (value < 0 ? "-" : sign ? "+" : "") + D("REGIONS")[Region].Str("cur") + amount;
         }
-        private string UsersText(double n) => n >= 10000 ? Fixed(n / 10000, 2) + Tx("unit.yi") :
-            (n >= 100 ? RoundJs(n) : FixedNumber(n, 1)) + Tx("unit.wan");
+        public string UsersText(double n) => n >= 10000 ? Fixed(n / 10000, 2) + Tx("unit.yi") :
+            WanAmount(n) + Tx("unit.wan");
+        private static string WanAmount(double value)
+        {
+            if(value>=100)return Fixed(RoundJs(value),0);
+            string amount=Fixed(value,1).TrimEnd('0').TrimEnd('.');
+            return amount=="-0"?"0":amount;
+        }
         private string AttrName(string id) => ((JsonArray)D("ATTRS")).First(a => a.Str("id") == id).Str("name");
         private string ChipName(string k) => tables.Text("chip." + k, (k == "red" || k == "capb") && Ideo.Str("v") == "us");
         private static readonly string[] ChipKeys = "cash hype rep morale reg bubble users quality equity quota tech bench dirt proj staff ap perks red capb heat".Split(' ');

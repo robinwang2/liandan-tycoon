@@ -1,0 +1,7 @@
+<linker>
+  <!-- 对拍使用 JsonNode 的泛型读写和 JSON 元数据；为探针保留相关实现。 -->
+  <assembly fullname="System.Text.Json" preserve="all" />
+  <assembly fullname="System.Text.Encodings.Web" preserve="all" />
+  <assembly fullname="Kernel" preserve="all" />
+  <assembly fullname="KernelChecks" preserve="all" />
+</linker>

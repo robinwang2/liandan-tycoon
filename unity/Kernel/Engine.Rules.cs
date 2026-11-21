@@ -58,17 +58,14 @@ namespace Liandan.Kernel
             foreach (var tm in Rows("temp").Where(tm => tm.Str("key") == key))
                 value = mult ? value * tm.N("mult", 1) : value + tm.N("add");
             if (key == "devMult" && Company.Route == "app") value *= P("dev.appMult");
-            if (HasHeat && Ideo.On("heat"))
-            {
-                if (key == "raiseMult") value *= 1 - Ideo.N("heat") / P("ideo.heat.raiseDiv");
-                if (key == "b2bMult") value *= 1 - Ideo.N("heat") / P("ideo.heat.b2bDiv");
-            }
+            if (key == "raiseMult" || key == "b2bMult") value *= HeatDrag(key);
             return value;
         }
         private double Cap(double energy) => P("model.capK") * JsMath.Log2(1 + energy / P("model.capE0"));
+        private double HeatDrag(string key) => HasHeat && Ideo.On("heat") ? 1-Ideo.N("heat")/P(key=="raiseMult"?"ideo.heat.raiseDiv":"ideo.heat.b2bDiv") : 1;
         private double Energy(double cap) => P("model.capE0") * (JsMath.Pow(2, cap / P("model.capK")) - 1);
         private double FrontierE(double month) => P("rival.frontierE0") * JsMath.Pow(P("rival.frontierGrowth"), (month - 1) / 12);
-        private double Frontier(double month) => Cap(FrontierE(month));
+        public double Frontier(double month) => Cap(FrontierE(month));
         private double BaseE => FrontierE(t) / P("model.baseDiv");
         private double Output(JsonNode e) => e.N("skill") * D("STAFF_QUIRKS")[e.Str("quirk")].N("out", 1);
         private double Power(string role)
@@ -82,19 +79,20 @@ namespace Liandan.Kernel
         private double UpCap => Rows("rivals").FirstOrDefault(r => r.Str("id") == Snapshot.Str("upstream")).N("cap", 30) - P("app.upLag");
         private bool UsesOwn => Model != null && (Company.Route == "model" || Model.N("cap") >= UpCap - P("app.ownGap"));
         private double UsedCap => UsesOwn ? Model.N("cap") : UpCap;
-        private int Rank => Model == null ? 99 : 1 + Rows("rivals").Count(r => r.N("bench") >= Model.N("bench"));
-        private double Quota => RoundJs((quotaBase * JsMath.Pow(P("gpu.quotaGrowth"), Max(1, t) - 1) + quotaEarn) * (1 + quotaAdd) * Mod("quotaMult"));
-        private double BrainGpu => Flag("bci_ok") && Snapshot.On("ownModel") ? RoundJs(Rows("staff").Aggregate(0.0, (a, e) => a + P("bci.gpuBase") + e.N("skill")) * (1 + t / P("bci.growMonths"))) : 0;
+        public int Rank => Model == null ? 99 : 1 + Rows("rivals").Count(r => r.N("bench") >= Model.N("bench"));
+        private double QuotaFloor => quotaBase * JsMath.Pow(P("gpu.quotaGrowth"), Max(1, t) - 1);
+        private double Quota => RoundJs((QuotaFloor + quotaEarn) * (1 + quotaAdd) * Mod("quotaMult"));
+        public double BrainGpu => Flag("bci_ok") && Snapshot.On("ownModel") ? RoundJs(Rows("staff").Aggregate(0.0, (a, e) => a + P("bci.gpuBase") + e.N("skill")) * (1 + t / P("bci.growMonths"))) : 0;
         private double InferNeed => UsesOwn ? Ceiling(users * Track.N("infer") * Mod("inferMult")) : 0;
         private double RelativeCap => Js.Clamp((UsedCap - (Frontier(t) - P("model.relGap"))) / P("model.relSpan"), 0, P("model.relMax"));
+        public double Market => Track.N("cap") * Min(1, P("market.start") * JsMath.Pow(P("market.growth"), t));
+        public double ShareCap => P("share.base") + P("share.quality") * quality / 100 + P("share.model") * RelativeCap + P("share.hype") * hype / 100;
         private void GrowUsers()
         {
             double ops = Power("ops"), gm = Track.N("growth") * JsMath.Pow(Mod("growthMult"), P("users.growModExp")) * (reg >= P("reg.high") ? P("reg.growthMult") : 1);
             double rel = RelativeCap;
             double attract = P("users.attract0") + P("users.attractQ") * quality / 100 + P("users.attractHype") * hype / 100 + P("users.attractModel") * rel + Min(P("users.opsMax"), ops / P("users.opsDiv"));
-            double share = P("share.base") + P("share.quality") * quality / 100 + P("share.model") * rel + P("share.hype") * hype / 100;
-            double market = Track.N("cap") * Min(1, P("market.start") * JsMath.Pow(P("market.growth"), t));
-            double room = Max(0, 1 - users / (share * market));
+            double room = Max(0, 1 - users / (ShareCap * Market));
             double churn = Max(P("users.churnMin"), P("users.churn0") + P("users.churnRep") * (1 - rep / 100) + Mod("churnAdd") + outage * P("users.churnOutage"));
             double seed = (P("users.seed0") + hype / P("users.seedHype") + ops / P("users.seedOps") + quality / P("users.seedQ")) * gm * (P("users.seedT0") + t / P("users.seedTMonths")) * (1 - outage);
             users = Max(0, users * (1 + attract * gm * room * (1 - outage) - churn) + seed * room);
@@ -103,9 +101,9 @@ namespace Liandan.Kernel
         private double GpuRent(double n)
         {
             double q = Max(1, Quota), price = ReadBotValue("gpuPrice"), x = Max(0, n - q);
-            return (n - x) * price + x * price * (P("gpu.over0") + x / (P("gpu.overDiv") * q));
+            return (n - x) * price + x * price * OverMult(q,x);
         }
-        private JsonObject Costs()
+        public JsonObject Costs()
         {
             double salary = Staff.Sum(e => e.Salary) * Mod("salaryMult");
             double rent = D("OFFICES")[(int)Company.Office].N("rent") * Mod("rentMult");
@@ -122,7 +120,7 @@ namespace Liandan.Kernel
             var factors = (JsonArray)tables.Parameters[key]!;
             return Rank <= factors.Count ? (double)factors[Rank - 1]! : P(fallback);
         }
-        private JsonObject Revenue()
+        public JsonObject Revenue()
         {
             double rm = JsMath.Pow(Mod("revMult"), P("rev.modExp")) * (1 + P("rev.bizK") * (A.N("biz") - 5));
             double pay = (P("rev.pay0") + quality / P("rev.payQDiv")) * (P("rev.payRep0") + rep / P("rev.payRepDiv"));
@@ -137,7 +135,7 @@ namespace Liandan.Kernel
             double net = Revenue().N("total") - Costs().N("total");
             return net >= 0 ? 99 : Max(0, cash) / -net;
         }
-        private double Performance()
+        public double Performance()
         {
             var stages = (JsonArray)D("STAGES");
             var tg = stages[Min(stages.Count - 1, (int)stage + 1)];
@@ -146,7 +144,7 @@ namespace Liandan.Kernel
             var weights = tables.Parameters["perf.w"]!;
             return P("perf.base") + (double)weights[0]! * scores[0] + (double)weights[1]! * scores[1] + (double)weights[2]! * scores[2];
         }
-        private double Valuation()
+        public double Valuation()
         {
             var stages = (JsonArray)D("STAGES");
             var tg = stages[Min(stages.Count - 1, (int)stage + 1)];

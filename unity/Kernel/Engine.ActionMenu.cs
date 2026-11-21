@@ -15,16 +15,21 @@ namespace Liandan.Kernel
         private JsonArray? Floors(int level) => D("FLOOR_PLANS")[level.ToString()] as JsonArray;
         private string StageName(double index) => D("STAGES")[(int)index].Str("name");
         private bool OwnModel => Snapshot.On("ownModel");
-        private double MyCap => Cap(BaseE + E);
+        public double MyCap => Cap(BaseE + E);
+        public bool SprintIdle => Block("sprint")==null;
+        public double FurnaceGain => Snapshot["furnace"].On("on") ? Max(0,gpu-InferNeed)*ResearchEff*D("DATA_SOURCES")[Snapshot["furnace"].Str("data")].N("mult") : 0;
+        public double FurnaceCapChange => Cap(BaseE+E+FurnaceGain)-MyCap;
         private double QualityCeiling => P("quality.ceil0") + P("quality.ceilK") * UsedCap;
         private double CodeGain(JsonNode? p) => (p.N("基础") + A.N("tech") * p.N("每点技术")) * Max(p.N("最低比例"), 1 - quality / QualityCeiling);
         private double CourseIncome(JsonNode? p) => (p.N("基础") + users * p.N("每万用户") + hype) * (1 + p.N("每点商业") * (A.N("biz") - 5));
         private double AdsGain(JsonNode? p) => Max(p.N("用户最少"), users * p.N("用户比例")) * JsMath.Pow(Mod("growthMult"), P("users.growModExp")) * (p.N("体验基础") + quality / p.N("体验除数"));
         private JsonNode? WorstDirt => Rows("dirt").OrderByDescending(d => d.N("sev")).FirstOrDefault();
-        private string DateText(double month) => tables.Text("date", false, ("年", P("START_YEAR") + Floor((month - 1) / 12)), ("月", (month - 1) % 12 + 1));
-        private JsonNode Book => tables.Books[Ideo.Str("v", Region == "bay" ? "us" : "cn")];
+        public string DateText(double month) => tables.Text("date", false, ("年", P("START_YEAR") + Floor((month - 1) / 12)), ("月", (month - 1) % 12 + 1));
+        private string StoryVersion => Ideo.Str("v", Region == "bay" ? "us" : "cn");
+        private JsonNode Book => tables.Books[StoryVersion];
+        public string InterfaceTheme => Ideo.Str("result") switch { "red" => StoryVersion == "us" ? "rose" : "soviet", "cap" => "cold", _ => "default" };
         private JsonNode StoryWindow(string id) => ((JsonArray)Book["SYS_EVENTS"]!).First(w => w.Str("id") == id)!;
-        private string StoryText(string key, params (string, object)[] vars) => tables.Text(key, Book == tables.Books["us"], vars);
+        public string StoryText(string key, params (string, object)[] vars) => tables.Text(key, Book == tables.Books["us"], vars);
         private string RouteActionText(string id) => Book["ACT_TEXT"]![id] is JsonArray lines && lines.Count > 0 ? Pick(lines.ToArray())!.ToString() : "";
 
         public bool Show(string id)
