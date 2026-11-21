@@ -14,6 +14,7 @@ namespace Liandan.Shell
     {
         private readonly GameShell game;
         private readonly string shots;
+        internal string Shots => shots;
         internal readonly string SaveDirectory;
         private readonly HashSet<string> captured = new HashSet<string>();
         private readonly int limit;
@@ -162,6 +163,9 @@ namespace Liandan.Shell
                 try { if(failed) break; if(Tick()) { exit=failed?1:0; break; } }
                 catch(Exception error) { Debug.LogException(error); break; }
             }
+            // 留出一个前瞻窗口，让最后一次界面操作产生的声部开始发声。
+            yield return new WaitForSecondsRealtime(.4f);
+            try { game.FinishRecording(); } catch(Exception error) { Debug.LogException(error); exit=1; }
             if (failed) exit = 1;
             if(exit==0) Debug.Log("Liandan autoplay OK: "+game.ScreenId); Application.Quit(exit);
         }

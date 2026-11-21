@@ -77,10 +77,14 @@ namespace Liandan.Shell
             if(Flag(person,"red") && Data["ideo"]!=null)Label(card,State.StoryText("ideo.page.redTag"));
             Label(card,new string('●',(int)Num(person,"skill"))+"   "+Text("ui.person.pay",("月薪",salary)));
             game.Hover(card,()=>person["name"]+"\n"+Text("ui.pop.role",("图标",role["icon"]!),("岗位",role["name"]!),("能力",person["skill"]!))+"\n"+Text(hired?"ui.pop.now":"ui.pop.would")+"\n"+State.StaffImpact(person)+"\n"+Text(hired?"ui.pop.pay.hired":"ui.pop.pay.cand",("月薪",salary),("日期",Date(person,"since"))),"who:"+uid);
-            if(!hired){string? why=State.HireReason(person); game.Button(card,"hire:"+uid,Text("ui.cand.hire")+(why==null?"":" · "+why),()=>game.ShowResult(State.Hire(uid)!),why==null);return;}
+            if(!hired){string? why=State.HireReason(person); game.Button(card,"hire:"+uid,Text("ui.cand.hire")+(why==null?"":" · "+why),()=>{
+                var result=State.Hire(uid);if(result==null)return;game.Cue(result["err"]==null?"hire":"error");game.ShowResult(result);
+            },why==null);
+                if(why!=null)card.RegisterCallback<PointerDownEvent>(e=>{if(card.Q<Button>("hire:"+uid).worldBound.Contains(e.position))game.Cue("error");},TrickleDown.TrickleDown);
+                return;}
             game.Button(card,"fire:"+uid,"×",()=>game.Local("fire",parent=>{
                 Label(parent,Text("ui.fire.title",("名字",person["name"]!)),"heading");Label(parent,Text("ui.fire.text",("月数",Param("fire.payMonths")),("金额",State.Currency(State.Severance(person)))));
-                game.Button(parent,"confirm",Text("ui.fire.ok"),()=>game.ShowResult(State.Fire(uid)!));
+                game.Button(parent,"confirm",Text("ui.fire.ok"),()=>{game.Cue("fire");game.ShowResult(State.Fire(uid)!);});
             }));
         }
         internal JsonNode? Chain(string id) => id=="ideo"?new JsonObject{["title"]=State.StoryText("ideo.page.chain"),["icon"]=State.StoryText("ideo.page.chainIcon")}:game.Tables.Chain(id)??State.StoryChainInfo(id);
