@@ -17,6 +17,12 @@ Thumbs.db
 # Tripo 试验里能用脚本重新生成的中间文件（tools/art/：底图、从游戏导出的 GLB、切好的四视图）
 art-src/tripo/ref/
 art-src/tripo/run2/views/
+art-src/tripo/run3/
+# 本地模型包（含质检清单、贴图和 Unity 自动生成的 meta）；暂不配置 LFS。
+unity/Game/Assets/Art/Props/Furnace/
+unity/Game/Assets/Art.meta
+unity/Game/Assets/Art/Props.meta
+unity/Game/Assets/Art/Props/Furnace.meta
 tools/parity/trace/
 
 # C# 内核的编译产物

@@ -5,6 +5,7 @@
 # 坐标约定：glTF 的 +Y 朝上、+Z 朝前，导进 Blender 以后是 +Z 朝上、-Y 朝前。「前」= 从 -Y 往 +Y 看，「左」= 从 -X 看，「右」= 从 +X 看，「后」= 从 +Y 看。
 import bpy, bmesh, sys, os, json, math
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 src = argv[0]
@@ -29,6 +30,10 @@ elif ext == '.obj': bpy.ops.wm.obj_import(filepath=src)
 else: raise SystemExit('不认识的格式：' + ext)
 
 meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+if 'lod' in opt:
+    for obj in meshes:
+        obj.hide_render = not obj.name.endswith('_LOD' + opt['lod'])
+    meshes = [obj for obj in meshes if not obj.hide_render]
 if not meshes: raise SystemExit('文件里没有网格')
 dg = bpy.context.evaluated_depsgraph_get()
 
@@ -36,11 +41,24 @@ dg = bpy.context.evaluated_depsgraph_get()
 tris = verts = 0
 non_manifold = boundary = 0
 islands = 0
+inward_faces = outward_faces = unresolved_faces = 0
 lo = Vector((1e9, 1e9, 1e9)); hi = Vector((-1e9, -1e9, -1e9))
 mats, images = set(), {}
 for o in meshes:
     ev = o.evaluated_get(dg); me = ev.to_mesh()
     bm = bmesh.new(); bm.from_mesh(me); bm.transform(o.matrix_world)
+    # 两侧沿几何法线探测：只有背侧射线能逃出网格时记为疑似朝内。薄片、凹处不强判。
+    bm.normal_update()
+    tree = BVHTree.FromBMesh(bm)
+    for face in bm.faces:
+        center = face.calc_center_median()
+        normal = face.normal
+        def escapes(direction):
+            return tree.ray_cast(center + direction * 1e-6, direction)[0] is None
+        front, back = escapes(normal), escapes(-normal)
+        inward_faces += back and not front
+        outward_faces += front and not back
+        unresolved_faces += front == back
     for v in bm.verts:
         for k in range(3): lo[k] = min(lo[k], v.co[k]); hi[k] = max(hi[k], v.co[k])
     verts += len(bm.verts)
@@ -70,6 +88,8 @@ for o in meshes:
 size = hi - lo
 center = (lo + hi) / 2
 report = {
+    'normalOrientationEstimate': {'suspectedInward': inward_faces, 'likelyOutward': outward_faces,
+        'unresolved': unresolved_faces, 'inwardFractionOfAllFaces': inward_faces/max(1,inward_faces+outward_faces+unresolved_faces)},
     'file': os.path.abspath(src), 'objects': len(meshes), 'materials': sorted(mats), 'textures': images,
     'triangles': tris, 'vertices': verts, 'parts': islands, 'boundaryEdges': boundary, 'nonManifoldEdges': non_manifold,
     'size': {'width': round(size.x, 4), 'depth': round(size.y, 4), 'height': round(size.z, 4)},

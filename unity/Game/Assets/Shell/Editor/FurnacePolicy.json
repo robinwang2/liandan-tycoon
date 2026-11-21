@@ -1,0 +1,7 @@
+{
+  "budgets": [40000, 16000, 4800],
+  "thresholds": [0.38, 0.16, 0.035],
+  "size": { "x": 2.8, "y": 2.511, "z": 2.8 },
+  "widthDepthTolerance": 0.10,
+  "heightTolerance": 0.025
+}

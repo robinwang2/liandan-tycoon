@@ -10,6 +10,7 @@ const editor = process.env.UNITY_EXE || String.raw`D:\Unity edititor\6000.5.2f1\
 const player = join(project, 'Build/ParityProbe/ParityProbe.exe');
 const methods = new Map([
   ['compile', 'ConfigureUrp'],
+  ['art-furnace', 'Capture'],
   ['editor-parity', 'RunEditor'],
   ['build-probe', 'BuildIl2cppProbe'],
   ['setup-ui', 'SetupUi'],
@@ -77,15 +78,15 @@ function run() {
     checkMix(shots); return;
   }
   if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
-    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
+    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
   mkdirSync(logs, { recursive: true });
   const log = join(logs, mode + '.log');
   const result = join(logs, mode === 'run-probe' ? 'parity-il2cpp.txt' : 'parity-editor.txt');
-  const args = ['-batchmode', '-nographics', '-logFile', log];
+  const args = ['-batchmode', ...(mode === 'art-furnace' ? [] : ['-nographics']), '-logFile', log];
   if (methods.has(mode))
-    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
+    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
   if (checking) {
     const bits = input ? resolve(input) : join(logs, 'math-bits.bin');
     if (!input && (mode === 'editor-parity' || !existsSync(bits))) {
@@ -110,6 +111,7 @@ function run() {
     console.log(result + '\n' + report);
   }
   if (proc.status !== 0 || errors.length || !contents ||
+      (mode === 'art-furnace' && (!contents.includes('Liandan furnace shots OK:') || ['original','tripo','tripo-close','tripo-front','tripo-back-high'].some(name=>!existsSync(join(project,'Build/art-furnace',name+'.png'))))) ||
       (checking && !report.trimEnd().endsWith('对拍通过')) ||
       (mode === 'setup-ui' && !contents.includes('Liandan UI setup OK')) ||
       (mode === 'audio-render' && !contents.includes('Liandan audio render OK')) ||

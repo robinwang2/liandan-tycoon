@@ -43,7 +43,7 @@ const art = files.map(f => {
   const uses = count(tableText, new RegExp(`"(?:art|text)":"${id}"`, 'g')) + count(codeText, new RegExp(`'${id}'|\\b${id}:`, 'g'));
   return { id, file: 'src/assets/art/' + f, uses, source: man.source, license: man.license, note: man.note };
 });
-writeFileSync(out, pretty({ PROPS: props, ART: art }) + '\n');
+writeFileSync(out, pretty({ ...old, PROPS: props, ART: art }) + '\n');
 const over = props.filter(p => p.tris > p.budget), unused = art.filter(a => !a.uses);
 console.log(`道具 ${props.length} 个（超预算 ${over.length} 个${over.length ? '：' + over.map(p => p.id).join('、') : ''}），插画 ${art.length} 张（没用到的 ${unused.length} 张${unused.length ? '：' + unused.map(a => a.id).join('、') : ''}）`);
 // 重新生成 美术.xlsx（只动这一本）
