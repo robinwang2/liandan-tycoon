@@ -1,0 +1,18 @@
+.shell, .shell * { -unity-font-definition: resource("ShellFont"); }
+.shell { flex-grow: 1; color: rgb(232,238,241); font-size: 17px; }
+.veil { flex-grow: 1; justify-content: center; align-items: center; background-color: rgba(10,21,32,0.74); }
+.panel, .left, .right, .bar { background-color: rgb(26,42,58); padding: 12px; }
+.panel { width: 76%; max-width: 960px; max-height: 92%; border-top-width: 4px; border-top-color: rgb(104,211,189); }
+.scroll-panel { height: 88%; }
+.heading { font-size: 26px; color: rgb(119,223,202); margin-bottom: 8px; }
+.copy, .heading, .unity-button { white-space: normal; }
+.unity-button { min-height: 34px; flex-shrink: 0; margin: 3px; padding: 6px; background-color: rgb(54,76,96); color: white; }
+.unity-button:hover, .selected { background-color: rgb(41,111,112); }
+.unity-button:disabled { color: rgb(166,176,182); background-color: rgb(44,51,61); }
+.body, .bar, .row { flex-direction: row; }
+.row, .bar { flex-wrap: wrap; align-items: center; }
+.body, .stage { flex-grow: 1; min-height: 0; }
+.bar { justify-content: space-between; }
+.left { width: 30%; } .right { width: 23%; }
+.panel .unity-scroll-view { min-height: 0; flex-shrink: 1; }
+.art { height: 56px; background-color: rgb(49,83,95); -unity-text-align: middle-center; font-size: 26px; }

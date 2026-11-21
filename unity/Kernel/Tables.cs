@@ -75,7 +75,9 @@ namespace Liandan.Kernel
                 Events[id] = Js.Obj(("id", id));
             }
         }
-        internal string Text(string key, bool bay, params (string key, object value)[] vars)
+        public JsonNode Definition(string key) => Definitions[key]!.DeepClone();
+        public double Parameter(string key) => Parameters.N(key);
+        public string Text(string key, bool bay, params (string key, object value)[] vars)
         {
             var row = Texts[key] ?? throw new KeyNotFoundException(key);
             return Regex.Replace(bay ? row.Str("bay", row.Str("text")) : row.Str("text"), @"\{([^{}\s]+)\}", m =>

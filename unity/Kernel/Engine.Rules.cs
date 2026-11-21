@@ -83,7 +83,8 @@ namespace Liandan.Kernel
         private bool UsesOwn => Model != null && (Company.Route == "model" || Model.N("cap") >= UpCap - P("app.ownGap"));
         private double UsedCap => UsesOwn ? Model.N("cap") : UpCap;
         private int Rank => Model == null ? 99 : 1 + Rows("rivals").Count(r => r.N("bench") >= Model.N("bench"));
-        private double Quota => RoundJs((quotaBase * JsMath.Pow(P("gpu.quotaGrowth"), Max(1, t) - 1) + quotaEarn) * (1 + quotaAdd) * Mod("quotaMult"));
+        private double QuotaFloor => quotaBase * JsMath.Pow(P("gpu.quotaGrowth"), Max(1, t) - 1);
+        private double Quota => RoundJs((QuotaFloor + quotaEarn) * (1 + quotaAdd) * Mod("quotaMult"));
         private double BrainGpu => Flag("bci_ok") && Snapshot.On("ownModel") ? RoundJs(Rows("staff").Aggregate(0.0, (a, e) => a + P("bci.gpuBase") + e.N("skill")) * (1 + t / P("bci.growMonths"))) : 0;
         private double InferNeed => UsesOwn ? Ceiling(users * Track.N("infer") * Mod("inferMult")) : 0;
         private double RelativeCap => Js.Clamp((UsedCap - (Frontier(t) - P("model.relGap"))) / P("model.relSpan"), 0, P("model.relMax"));

@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import * as game from '../../src/game/engine.js';
+import { mkSetup, drain } from '../bot.mjs';
+import { seeded } from '../parity/operations.mjs';
+
+const dir = mkdtempSync(join(tmpdir(), 'liandan-store-')), input = join(dir,'js'), output = join(dir,'cs');
+mkdirSync(input); mkdirSync(output);
+let active = input;
+const file = key => join(active,key+'.json');
+globalThis.localStorage = {
+  getItem: key => existsSync(file(key)) ? readFileSync(file(key),'utf8') : null,
+  setItem: (key,value) => writeFileSync(file(key),value), removeItem: key => rmSync(file(key),{force:true}),
+};
+function run(...operation) {
+  const proc = spawnSync('dotnet',['unity/.build/KernelCli/bin/Release/net8.0/KernelCli.dll','save-roundtrip',input,output,...operation],{stdio:'inherit'});
+  if(proc.error) throw proc.error; assert.equal(proc.status,0);
+}
+try {
+  Math.random = seeded(2026);
+  const meta = {...game.loadMeta(), points: 12, runs: 2, best: 50, own: {m_cash:1}, ach:{demo:1}, ends:{small:1}, extra:{keep:true}};
+  game.saveMeta(meta);
+  const state = game.newGame(mkSetup({region:'bay',route:'model',track:'chat'},'clean'),meta); drain(state); game.saveGame(state);
+  for (const mode of ['current','month','legacy','settle','ended','version','broken']) {
+    active=input; game.saveMeta(meta); game.saveGame(state);
+    if(mode==='legacy') { const old=JSON.parse(localStorage.getItem('ldt_save_v1')); for(const key of ['projects','chains','quotaAdd','ideoAt','quotaEarn'])delete old[key]; old.stage=2; old.co.office=0; game.saveGame(old); }
+    if(mode==='ended')game.saveGame({...state,over:{id:'ipo'}});
+    if(mode==='version')game.saveGame({...state,v:2});
+    if(mode==='broken')localStorage.setItem('ldt_save_v1','{');
+    const expected=game.loadGame(); let summary=null;
+    if(mode==='month')game.endMonth(expected);
+    if(mode==='settle') {const over={id:'acquired',val:1234,pay:567}; writeFileSync(join(input,'ending.json'),JSON.stringify(over)); expected.over=over; summary=game.finalize(expected,game.loadMeta()); game.saveGame(state);}
+    const expectedMeta=game.loadMeta(); if(mode==='settle')game.saveMeta(meta);
+    run(...(['month','settle'].includes(mode)?[mode]:[])); active=output;
+    assert.deepEqual(game.loadGame(),mode==='settle'?null:JSON.parse(JSON.stringify(expected)),mode);
+    if(expected && mode!=='settle')assert.deepEqual(JSON.parse(localStorage.getItem('ldt_save_v1')),JSON.parse(JSON.stringify(expected)),mode+'：原始字段');
+    assert.deepEqual(game.loadMeta(),expectedMeta,mode+'：局外进度');
+    if(summary)assert.deepEqual(JSON.parse(readFileSync(join(output,'result.json'),'utf8')),summary);
+  }
+  console.log('存档互读通过：当前档、跨端推进一月、旧档迁移、结算、已结束、版本错误、损坏 JSON。');
+} finally {rmSync(dir,{recursive:true,force:true});}

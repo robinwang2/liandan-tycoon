@@ -116,12 +116,14 @@ namespace Liandan.Kernel
             }
             return dialog;
         }
+        private string? HireBlock(JsonNode candidate) => ap < 1 ? "common.noAp" : List("staff").Count >= ReadBotValue("teamCap") ? "hire.full" : cash < candidate.N("salary") * Mod("salaryMult") ? "hire.noFee" : null;
+        public string? HireReason(JsonNode candidate) => HireBlock(candidate) is string key ? ButtonText(key) : null;
         public JsonObject? Hire(string uid)
         {
             var c = Rows("cands").FirstOrDefault(x => x.Str("uid") == uid);
             if (c == null) return null;
             double fee = c.N("salary") * Mod("salaryMult");
-            string? err = ap < 1 ? "common.noAp" : List("staff").Count >= ReadBotValue("teamCap") ? "hire.full" : cash < fee ? "hire.noFee" : null;
+            string? err = HireBlock(c);
             if (err != null) return Obj(("err", ButtonText(err)));
             var before = ChipValues();
             ap--; cash -= fee; List("cands").Remove(c); c["since"] = t; List("staff").Add(c);

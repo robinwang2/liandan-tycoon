@@ -18,6 +18,26 @@ catch (Exception error)
 
 static int Run(string[] args)
 {
+    if ((args.Length == 3 || args.Length == 4) && args[0] == "save-roundtrip")
+    {
+        var tablesForSave = new Tables("src/data/tables");
+        var input = new GameStore(args[1], tablesForSave); var output = new GameStore(args[2], tablesForSave);
+        var meta = input.LoadMeta();
+        var state = input.LoadGame();
+        if (state != null && args.Length == 4)
+        {
+            if (args[3] == "month") state.EndMonth();
+            else if (args[3] == "settle")
+            {
+                state.Snapshot["over"] = JsonNode.Parse(File.ReadAllText(Path.Combine(args[1], "ending.json")));
+                File.WriteAllText(Path.Combine(args[2], "result.json"), state.Settle(meta).ToJsonString()); state = null;
+            }
+            else throw new ArgumentException("未知存档操作");
+        }
+        output.SaveMeta(meta);
+        if (state != null) output.SaveGame(state); else output.ClearSave();
+        return 0;
+    }
     if (args.Length == 2 && args[0] == "math-bits") return MathBits.Run(args[1], Console.Out);
     if (args.FirstOrDefault() is "dump" or "parity")
     {

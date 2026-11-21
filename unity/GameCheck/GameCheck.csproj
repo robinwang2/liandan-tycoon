@@ -9,7 +9,7 @@
     <UnityData>$([System.IO.Path]::GetDirectoryName('$(UnityExe)'))/Data</UnityData>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../Game/Assets/Parity/**/*.cs;../Kernel/*.cs;../KernelChecks/*.cs" />
+    <Compile Include="../Game/Assets/Parity/**/*.cs;../Game/Assets/Shell/**/*.cs;../Kernel/*.cs;../KernelChecks/*.cs" />
     <Reference Include="$(UnityData)/Managed/UnityEngine/*.dll;$(UnityData)/BCLExtensions/runtime/netstandard2.1/*.dll" Private="false" />
   </ItemGroup>
 </Project>

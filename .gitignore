@@ -38,3 +38,5 @@ unity/Game/*.csproj
 unity/Game/*.sln*
 unity/Game/*.user
 unity/Game/*.unitypackage
+unity/Game/Assets/StreamingAssets/
+unity/Game/Assets/StreamingAssets.meta
