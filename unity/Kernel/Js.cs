@@ -72,7 +72,7 @@ namespace Liandan.Kernel
             double.Parse(Fixed(x, digits), CultureInfo.InvariantCulture);
         internal static IEnumerable<KeyValuePair<string, JsonNode?>> Entries(this JsonNode? node) =>
             node is JsonObject obj ? obj.OrderBy(p => Index(p.Key)) : Enumerable.Empty<KeyValuePair<string, JsonNode?>>();
-        private static uint Index(string key) =>
+        internal static uint Index(string key) =>
             uint.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n.ToString(CultureInfo.InvariantCulture) == key ? n : uint.MaxValue;
     }
 }

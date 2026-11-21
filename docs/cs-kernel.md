@@ -219,3 +219,50 @@ Node 24.18.1、.NET SDK 8.0.428：Debug 与 Release 均为 0 警告、0 错误�
 | 从种子独立跑全量 | 先核对单局，再核对 144 局的终局、月份、逐月及整局指纹。首差回查月份、操作和内外随机状态 | 0.5–1 人日 |
 
 第 6 段合计预计 **2–4 人日**。本段验收使用 JS 记录的操作和选择，第 6 段将由 C# 机器人自行生成。
+
+## 第 6 段结果
+
+**默认基线 144/144 局通过，退出码 0。** 每局由 C# 独立开局、选行动、点对话框并结算。CLI 只读取公共规则表和最终比对用的基线，逐局核对 `hash`、`months`、`end`、`t`。首局 `bay/model/chat/clean#0` 的两份 dump 共 259,366 字节，逐字节一致，结局为 `ousted`，`t=20`，整局指纹为 `b0c6223f054230b0`。Debug 和 Release 均为 0 警告、0 错误，`npm run parity` 通过 144/144 局。
+
+三种打法按 clean、shady、advice 遍历，每种依次遍历地区、路线、赛道和种子。机器人用对局 key 的 UTF-16 码元做 32 位 FNV 哈希，以此初始化外层 mulberry32。随机分配属性、重抽满值属性和抽特质后，`NewGame` 接收空 meta，从同一外层发生器取一次初始 rs。后续引擎只推进状态里的 rs，机器人继续用外层流抽选项和行动；通用行动先从完整池抽，再检查能否执行。
+
+指纹复用内核的菜单、对话框和选择结果视图。每条记录写成「标签、一个空格、规范 JSON、LF」，以 UTF-8 同时更新整局和当月的 SHA-1。对象按 JS 键序规范化，数字用最短往返表示，字符串遵循 JSON.stringify 的转义规则。对象里的 undefined 省略，数组里写 null，负零写 0。每次机器人写完「月末」截取当月摘要前 6 位；首月包含开局与初始窗口，整局取前 16 位。
+
+### 扩展基线
+
+16 个种子的 JS 自检通过 768/768 局。C# 通过 **766/768**，退出码 1。两份 dump 的首差都在「月末」状态的有效算力 `E`。
+
+| 对局 | 首差月份 | JS 的 E | C# 的 E |
+|---|---:|---:|---:|
+| bay/model/chat/clean#8 | 36 | 4776.573278010832 | 4776.573278010828 |
+| sz/model/code/clean#9 | 22 | 3946.238390375711 | 3946.238390375709 |
+
+第一局另用 ops 定位到第 1,845 步，`shutdown_blackmail` 第三个选项生效后，`$.after.E` 首次不同。该技术效果将能力换回算力，输入 `2 ** 9.973200356415402` 在本机 Node 得到 `1005.1536639005418`，.NET 的 `Math.Pow` 得到 `1005.1536639005417`。两局的最终结局和 t 均与 JS 相同，逐月及整局指纹仍判失败。
+
+### 复跑与定位
+
+在仓库根目录用 PowerShell 执行。整局对拍无需提前生成 trace 或 ops。
+
+```powershell
+$env:PATH = "C:\Program Files\dotnet;" + $env:PATH
+dotnet build unity/Kernel.sln -c Release
+$cli = 'unity/KernelCli/bin/Release/net8.0/KernelCli.dll'
+dotnet $cli parity
+npm run parity
+dotnet $cli parity tools/verify/baseline-768.json --seeds 16
+node tools/parity.mjs check tools/verify/baseline-768.json --seeds 16
+```
+
+CLI 最多打印 12 局首差，月份从 1 起算。以下命令在 Windows 下直接重定向两个进程的 stdout，保留原始 UTF-8 和 LF。摘要输出到 stderr。需要继续定位操作和字段时，使用第 2 段的 ops 命令，为 JS 的 ops 生成命令指定相应的 `--seeds N --only 对局key`。
+
+```powershell
+cmd /c "node tools/parity.mjs dump bay/model/chat/clean#0 > js.dump"
+cmd /c "dotnet unity/KernelCli/bin/Release/net8.0/KernelCli.dll dump bay/model/chat/clean#0 > cs.dump"
+fc.exe /b js.dump cs.dump
+```
+
+### 六段总结与 Unity 接入边界
+
+C# 类库已覆盖这批对局经过的开局、月结、经营行动、融资发布、团队、建议、两地路线剧情、弹窗选择和结局。第 5 段验证了 459,215 个操作的前后状态与可见返回值，第 6 段进一步验证三种机器人能从种子自行走出默认基线的整局过程。扩展种子留下的两处数值差异见上表。
+
+Unity 接入还需让工程加载内核及其 JSON 依赖和规则表，把玩家输入接到行动与选项入口，绑定菜单、弹窗、月末状态和场景表现，并实现存档读写。在目标 Mono 或 IL2CPP 环境复跑相同基线，才能验证该运行时的浮点结果。

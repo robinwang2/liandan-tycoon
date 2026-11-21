@@ -17,7 +17,8 @@ catch (Exception error)
 
 static int Run(string[] args)
 {
-    const string usage = "用法：trace|ops <快照目录> [--tables 表目录] [--only 对局key] [--max 月份总数]";
+    if (args.FirstOrDefault() is "dump" or "parity") return Parity.Run(args);
+    const string usage = "用法：parity [baseline.json] [--seeds N]、dump <对局key> 或 trace|ops <快照目录> [--tables 表目录] [--only 对局key] [--max N]";
     if (args.Length < 2 || (args[0] != "trace" && args[0] != "ops")) throw new ArgumentException(usage);
     string dir = args[1], tablesPath = "src/data/tables";
     string? only = null;
