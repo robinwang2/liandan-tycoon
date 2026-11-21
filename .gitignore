@@ -18,3 +18,7 @@ Thumbs.db
 art-src/tripo/ref/
 art-src/tripo/run2/views/
 tools/parity/trace/
+
+# C# 内核的编译产物
+unity/**/bin/
+unity/**/obj/
