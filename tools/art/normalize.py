@@ -17,6 +17,7 @@ from mathutils import Matrix, Vector
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from seam_weld import stitch_boundaries
+from lod_integrity import compare
 
 
 def import_glb(file):
@@ -181,10 +182,21 @@ def textures(mat, stem):
         info['emission'] = [value*strength for value in sockets['Emission Color'].default_value[:3]]
     for key, role in [('Base Color','BaseColor'), ('Normal','Normal')]:
         image, _ = image_source(sockets[key])
+        tint = [1,1,1,1]
+        if args.hybrid and key == 'Base Color' and sockets[key].is_linked:
+            # glTF 的底图乘底色因子会导入为 Mix 节点。保留纹理和线性乘色。
+            node = sockets[key].links[0].from_node
+            if node.type == 'MIX' and node.blend_type == 'MULTIPLY':
+                a, b = [s for s in node.inputs if s.enabled and s.type == 'RGBA']
+                if b.is_linked:
+                    a, b = b, a
+                if a.is_linked and not b.is_linked:
+                    image, _ = image_source(a)
+                    tint = list(b.default_value)
         if image:
             info[role] = save_png(image, 'T_' + stem + '_' + role)
             if role == 'BaseColor':
-                info['baseColor'] = [1, 1, 1, 1]
+                info['baseColor'] = tint
     ao = next((node.inputs.get('Occlusion') for node in nodes if node.type == 'GROUP' and node.inputs.get('Occlusion')), None)
     channels = [image_source(ao) if ao else (None,0), image_source(sockets['Roughness']), image_source(sockets['Metallic'])]
     images = [image for image, channel in channels if image]
@@ -221,6 +233,34 @@ def reduce(obj, ratio):
         bpy.ops.object.modifier_apply(modifier=mod.name)
         # 微小连通件折到最后可能剩下一对重复的三角面，FBX 导入器会删掉其中一面。
         obj.data.validate(clean_customdata=False)
+
+
+def hybrid_reduction(counts, goal, limit, legacy):
+    if legacy:
+        # 只用于复现修复前已经交付的 FBX。
+        fixed = sum(n for name, n in counts.items() if name != 'Shell' and n <= 320)
+        keep = min(1, .98 * (limit-fixed) / (sum(counts.values())-fixed))
+        ratios = {name: keep if name == 'Shell' or n > 320 else 1. for name, n in counts.items()}
+        return ratios, math.ceil(fixed + keep * (sum(counts.values()) - fixed))
+
+    # 给玻璃及小程序件保留原网格。大程序件独立分配，只在整级额度紧张时简化。
+    ratios = dict.fromkeys(counts, 1.)
+    large = {name: n for name, n in counts.items() if name not in ('Shell', 'Glass') and n > 320}
+    fixed = sum(n for name, n in counts.items() if name != 'Shell' and name not in large)
+    available = limit - fixed
+    if available <= 0:
+        raise ValueError(f'玻璃及小程序件占 {fixed} 面，该级预算 {limit} 面，外壳没有剩余额度')
+    if large and sum(large.values()) > available / 2:
+        # 通常保留七成；多轮车辆等程序几何本身超预算时，至少留出剩余额度的四分之一给壳。
+        keep = min(.70, .75 * available / sum(large.values()))
+        ratios.update(dict.fromkeys(large, keep))
+    program = sum(math.ceil(n * ratios[name]) for name, n in counts.items() if name != 'Shell')
+    if program >= limit:
+        raise ValueError(f'程序件预留 {program} 面，该级预算 {limit} 面，外壳没有剩余额度')
+    if program >= goal:
+        goal = limit
+    ratios['Shell'] = min(1., (goal - program) / counts['Shell'])
+    return ratios, goal
 
 
 def flatten_rack_sides(shell):
@@ -299,6 +339,10 @@ parser.add_argument('--budget', type=int, default=40000)
 parser.add_argument('--name', default='Furnace')
 parser.add_argument('--rotate-z', type=float, default=0)
 parser.add_argument('--mirror-depth', action='store_true')
+parser.add_argument('--hybrid', action='store_true')
+parser.add_argument('--lod-limits')
+parser.add_argument('--lod-targets', default='0,0')
+parser.add_argument('--legacy-hybrid', action='store_true')
 parser.add_argument('--width', type=float)
 parser.add_argument('--depth', type=float)
 parser.add_argument('--origin', choices=['bottom','wall','ceiling'], default='bottom')
@@ -365,8 +409,16 @@ for index, mat in enumerate(materials):
     else:
         mat.name = 'M_' + stem
     records.append(textures(mat, stem))
+    if args.hybrid and mat.name == 'M_'+args.name+'_Glass':
+        bsdf = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+        records[-1]['baseColor'][3] = bsdf.inputs['Alpha'].default_value
+        records[-1]['glass'] = True
 initial = sum(map(triangles,objects))
 part_names = [obj.name for obj in objects]
+if args.hybrid and ('Shell' not in part_names or len(objects) < 2 or initial > args.budget):
+    raise ValueError('修补件须包含预算内的外壳和独立程序件')
+part_boxes = [bounds([obj]) for obj in objects] if args.hybrid else []
+expected_pivots = {obj.name: list(pivots[obj]) for obj in objects} if args.hybrid else {}
 repair_rack = args.name == 'server_rack' and args.source.name == 'repaired.glb'
 repair_tv = args.name == 'tv_wall' and args.source.name == 'repaired.glb'
 if repair_tv and (set(part_names) != {'Screen', 'Bezel', 'Shell'} or initial > args.budget):
@@ -386,17 +438,38 @@ for attempt in range(4):
         reduce(obj, .98*args.budget/current)
 lods = []
 exported = []
+counts = dict(zip(part_names, map(triangles, objects)))
+limits = [args.budget, *map(int, args.lod_limits.split(','))] if args.lod_limits else [args.budget] * 3
+targets = [0, *map(int, args.lod_targets.split(','))]
 for level, ratio in enumerate([1,.4,.12]):
     group = []
+    goal = targets[level]
+    if args.hybrid and level:
+        # 首轮保留原常用的 40% / 12% 目标，重试只增加外壳预算。
+        goal = goal or min(limits[level], math.ceil(args.budget * ratio))
+        part_ratios, goal = hybrid_reduction(counts, goal, limits[level], args.legacy_hybrid and not targets[level])
+    elif goal and not repair_rack:
+        fixed = counts.get('Screen', 0) + (counts.get('Bezel', 0) if repair_tv else 0)
+        ratio = min(1., (goal - fixed) / max(1, sum(counts.values()) - fixed))
     for index, original in enumerate(objects):
         obj = original
         if level:
             obj = original.copy()
             obj.data = original.data.copy()
             bpy.context.collection.objects.link(obj)
-            if repair_rack and part_names[index] == 'Shell':
+            if args.hybrid:
+                part_ratio = part_ratios[part_names[index]]
+                if part_ratio < 1:
+                    reduce(obj,part_ratio)
+                    lo, hi = bounds([obj])
+                    base, top = part_boxes[index]
+                    if np.any((top-base > 1e-7) & (hi-lo < 1e-8)):
+                        raise ValueError('程序部件减面塌陷：'+part_names[index])
+                    scale = np.divide(top-base,hi-lo,out=np.ones(3),where=hi-lo>1e-8)
+                    obj.data.transform(Matrix.Translation(Vector(base)) @ Matrix.Diagonal(Vector([*scale,1])) @ Matrix.Translation(-Vector(lo)))
+            elif repair_rack and part_names[index] == 'Shell':
                 # 以交付预算而非当前面数分配远级额度；先预留整块面板，再简化机身。
-                shell_limit = int(args.budget*(.138 if level == 2 else ratio))-front_count
+                shell_limit = (goal or int(args.budget*(.138 if level == 2 else ratio))) - front_count
                 if shell_limit < 1:
                     raise ValueError(f'LOD{level} 没有剩余外壳预算')
                 if level == 2:
@@ -407,7 +480,7 @@ for level, ratio in enumerate([1,.4,.12]):
                 reduce(obj,ratio)
         if repair_rack and part_names[index] == 'Shell':
             flatten_rack_sides(obj)
-        suffix = '' if len(objects)==1 else ('_'+part_names[index] if repair_rack or part_names[index] in ('Upper','Lower') else f'_Part{index+1:02}')
+        suffix = '' if len(objects)==1 else ('_'+part_names[index] if args.hybrid or repair_rack or part_names[index] in ('Upper','Lower') else f'_Part{index+1:02}')
         obj.name = f'SM_{args.name}{suffix}_LOD{level}'
         obj.data.name = obj.name
         group.append(obj)
@@ -444,6 +517,12 @@ for level, ratio in enumerate([1,.4,.12]):
         count = sum(map(triangles,group))
     floor, ceiling = bounds(group)
     lods.append(dict(level=level, triangles=count, size=dimensions(floor,ceiling), origin=list(anchor(floor,ceiling)), parts=[obj.name for obj in group]))
+    lods[-1]['budget'] = limits[level]
+    lods[-1]['targetTriangles'] = goal or count
+    lods[-1]['retainedRatio'] = count / sum(counts.values())
+    if args.hybrid:
+        lods[-1]['partRatios'] = part_ratios if level else dict.fromkeys(counts, 1.)
+        lods[-1]['partTriangles'] = dict(zip(part_names, map(triangles, group)))
     if repair_rack:
         lods[-1]['trimmedShellTriangles'] = trimmed
     exported.extend(group)
@@ -464,10 +543,22 @@ for lod in lods:
     group = [obj for obj in imported if obj.name in lod['parts']]
     if len(group) != len(lod['parts']):
         raise ValueError(f"FBX 回读缺少零件：{lod['parts']}")
+    if lod['level'] == 0:
+        reference_group = group
+    else:
+        lod['lodIntegrity'] = compare(reference_group, group)
     measured = list(anchor(*bounds(group)))
     if not all(abs(value) <= .0001 for value in measured):
         raise ValueError(f"FBX 回读 LOD{lod['level']} 表面锚点偏移：{measured} m")
     lod['fbxSurfaceAnchorMeters'] = measured
+    if args.hybrid:
+        lod['partPivotsBlender'] = {}
+        for name, pivot in expected_pivots.items():
+            obj = next(o for o in group if o.name == f"SM_{args.name}_{name}_LOD{lod['level']}")
+            actual = obj.matrix_world.translation
+            if (actual-Vector(pivot)).length > 1e-4 or triangles(obj) == 0:
+                raise ValueError('FBX 回读枢轴或几何不匹配：'+obj.name)
+            lod['partPivotsBlender'][name] = list(actual)
     if repair_rack:
         front = next(obj for obj in group if '_Front_LOD' in obj.name)
         signature = panel_signature(front)
@@ -488,5 +579,9 @@ report = dict(source=args.source.name, model=model, budget=args.budget, targetHe
               sourceSize=dimensions(low,high), normals='缝合反向同位对边，保留面角 UV；按连通面统一绕序，开口壳片按源法线校正朝向', weldToleranceMeters=0,
               mergedVertices=merged, lods=lods, materials=records, seconds=round(time.monotonic()-start,2),
               origin=args.origin, axisScales=factors, movingParts='保留分件；单网格不自动推断活动边界。')
+if args.hybrid:
+    report['legacyHybridRecipe'] = args.legacy_hybrid
+    # 将规范化枢轴还原为网页 XYZ 轴序，Unity 可据此反验导入轴转换并应用角位移。
+    report['pivots'] = [dict(node=name, x=p[0], y=p[2], z=-p[1]) for name,p in expected_pivots.items()]
 (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
 print(model, [lod['triangles'] for lod in lods], report['seconds'])

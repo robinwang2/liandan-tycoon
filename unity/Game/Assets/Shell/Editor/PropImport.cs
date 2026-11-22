@@ -12,7 +12,8 @@ namespace Liandan.EditorTools
     {
         const string Folder = "Assets/Art/Props/Furnace/Resources/Furnaces/";
         bool Furnace => assetPath.StartsWith(Folder, StringComparison.Ordinal);
-        bool Batch => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && (assetPath.Contains("/Resources/Batch1/") || assetPath.Contains("/Resources/Batch2/"));
+        bool Hybrid => assetPath.Contains("/Resources/Batch3/");
+        bool Batch => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && (assetPath.Contains("/Resources/Batch1/") || assetPath.Contains("/Resources/Batch2/") || Hybrid);
         bool Reference => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Editor/RepairReference/");
         bool InPackage => Furnace || Batch || Reference;
         string Sibling(string file) => assetPath.Substring(0, assetPath.LastIndexOf('/')+1) + file;
@@ -21,10 +22,73 @@ namespace Liandan.EditorTools
         {
             public string name = "", BaseColor = "", Normal = "", LitMask = "";
             public float metallic = 0, smoothness = 0;
+            public bool glass;
             public float[] baseColor = Array.Empty<float>();
             public float[] emission = Array.Empty<float>();
         }
-        [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); }
+        [Serializable] class Pivot { public string node=""; public float x,y,z; }
+        [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); public Pivot[] pivots=Array.Empty<Pivot>(); }
+
+        // 由实际 FBX 回读的枢轴确定横轴镜像方向。轮心、肩轴、双风扇均不在模型中心。
+        internal static float CheckAssembly(GameObject root, LOD[] levels, PropBatch.Item item, string reportPath)
+        {
+            var report=JsonUtility.FromJson<Report>(File.ReadAllText(reportPath));
+            var pivots=report.pivots;
+            var baseMaps=report.materials.Where(m=>!string.IsNullOrEmpty(m.BaseColor)).ToDictionary(m=>m.name,m=>m.BaseColor);
+            var assetDir=Path.GetDirectoryName(reportPath)!.Replace('\\','/');
+            var emissiveNames=new HashSet<string>(report.materials.Where(m=>m.emission.Any(v=>v>0)).Select(m=>m.name));
+            var animated=new HashSet<string>(item.actions.Select(action=>action.node));
+            var lampNodes=new HashSet<string>(item.actions.Where(action=>action.axis=="emission").Select(action=>action.node)) { "Lights" };
+            var lod0Slots=new Dictionary<string,string[]>();
+            var names=item.parts.Concat(new[]{"Shell"}).OrderBy(n=>n).ToArray();
+            if(!pivots.Select(p=>p.node).OrderBy(n=>n).SequenceEqual(names))
+                throw new InvalidDataException(item.id+" 的枢轴记录缺件");
+            bool positive=true, negative=true;
+            for(int level=0;level<levels.Length;level++)
+            {
+                var lod=levels[level];
+                if(lod.renderers.Length!=names.Length) throw new InvalidDataException(item.id+" 的 LOD 节点数不符");
+                foreach(var pivot in pivots)
+                {
+                    var node=PropBatch.Part(lod,item.id,pivot.node,level);
+                    var point=root.transform.InverseTransformPoint(node.position);
+                    positive &= Vector3.Distance(point,new Vector3(pivot.x,pivot.y,-pivot.z))<.0002f;
+                    negative &= Vector3.Distance(point,new Vector3(-pivot.x,pivot.y,pivot.z))<.0002f;
+                    var materials=node.GetComponent<Renderer>().sharedMaterials;
+                    if(pivot.node=="Shell")
+                    {
+                        if(!materials.Any(mat=>baseMaps.ContainsKey(mat.name)))
+                            throw new InvalidDataException($"{node.name} 缺少报告中带底色图的外壳材质");
+                        foreach(var mat in materials)
+                        {
+                            if(!baseMaps.TryGetValue(mat.name,out var file)) continue;
+                            var actual=AssetDatabase.GetAssetPath(mat.GetTexture("_BaseMap"));
+                            if(actual!=assetDir+"/"+file)
+                                throw new InvalidDataException($"{node.name} 的 {mat.name} 底色图应为 {file}，实际为 [{actual}]");
+                        }
+                    }
+                    var slots=materials.Select(m=>m.name).OrderBy(name=>name,StringComparer.Ordinal).ToArray();
+                    if(level==0) lod0Slots.Add(pivot.node,slots);
+                    var reference=lod0Slots[pivot.node];
+                    if((animated.Contains(pivot.node) || pivot.node=="Glass" || lampNodes.Contains(pivot.node) || reference.Any(emissiveNames.Contains))
+                        && !slots.SequenceEqual(reference))
+                        throw new InvalidDataException($"{node.name} 材质槽 [{string.Join(", ",slots)}] 与 LOD0 [{string.Join(", ",reference)}] 不符");
+                    if(pivot.node=="Glass" && !materials.Any(m=>
+                        m.name==$"M_{item.id}_Glass" && m.GetFloat("_Surface")==1 && m.GetColor("_BaseColor").a<1))
+                        throw new InvalidDataException(item.id+" 的玻璃专槽未使用透明材质");
+                    foreach(var mat in materials)
+                    {
+                        if(!emissiveNames.Contains(mat.name) && !lampNodes.Contains(pivot.node)) continue;
+                        if(!mat.IsKeywordEnabled("_EMISSION") || mat.GetColor("_EmissionColor").maxColorComponent<=0 ||
+                            (mat.globalIlluminationFlags & MaterialGlobalIlluminationFlags.EmissiveIsBlack)!=0 ||
+                            (mat.globalIlluminationFlags & MaterialGlobalIlluminationFlags.AnyEmissive)==0)
+                            throw new InvalidDataException($"{node.name} 的 {mat.name} 发光状态异常，GI={mat.globalIlluminationFlags}，关键字 [{string.Join(", ",mat.shaderKeywords)}]");
+                    }
+                }
+            }
+            if(!positive && !negative) throw new InvalidDataException(item.id+" 的 FBX 枢轴偏离程序原模");
+            return positive?1f:-1f;
+        }
         // 独立于模型实测值的验收配置；屏占比比世界距离更适合正交相机。
         const string PolicyPath = "Assets/Shell/Editor/FurnacePolicy.json";
         [Serializable] class Policy
@@ -35,7 +99,7 @@ namespace Liandan.EditorTools
             public float widthDepthTolerance = 0, heightTolerance = 0;
         }
 
-        public override uint GetVersion() => 7;
+        public override uint GetVersion() => 8;
         void OnPreprocessTexture()
         {
             if (!InPackage) return;
@@ -85,9 +149,24 @@ namespace Liandan.EditorTools
                 return tex!;
             }
             if (finish.baseColor.Length == 4) material.SetColor("_BaseColor", new Color(finish.baseColor[0],finish.baseColor[1],finish.baseColor[2],1).gamma);
+            if (Hybrid && finish.glass)
+            {
+                var tint=material.GetColor("_BaseColor"); tint.a=finish.baseColor[3];
+                material.SetColor("_BaseColor",tint);
+                material.SetFloat("_Surface",1); material.SetFloat("_Blend",0);
+                material.SetFloat("_SrcBlend",(float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                material.SetFloat("_DstBlend",(float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                material.SetFloat("_DstBlendAlpha",(float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                material.SetFloat("_ZWrite",0); material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                material.SetOverrideTag("RenderType","Transparent"); material.renderQueue=3000;
+                material.SetShaderPassEnabled("ShadowCaster",false);
+            }
             if (finish.emission.Length==3 && finish.emission.Any(value=>value>0))
             {
                 material.SetColor("_EmissionColor",new Color(finish.emission[0],finish.emission[1],finish.emission[2]).gamma);
+                // URP/Lit 重算 _EMISSION 时读取 AnyEmissive，FBX 默认标记可能仍是 EmissiveIsBlack。
+                material.globalIlluminationFlags = (material.globalIlluminationFlags & ~MaterialGlobalIlluminationFlags.EmissiveIsBlack)
+                    | MaterialGlobalIlluminationFlags.BakedEmissive;
                 material.EnableKeyword("_EMISSION");
             }
             bool bronze = tripo && string.IsNullOrEmpty(finish.LitMask);
@@ -108,7 +187,7 @@ namespace Liandan.EditorTools
             foreach (var child in root.GetComponentsInChildren<LODGroup>(true))
                 if (child.gameObject != root) UnityEngine.Object.DestroyImmediate(child);
             var group = root.GetComponent<LODGroup>() ?? root.AddComponent<LODGroup>();
-            Policy policy; string origin="bottom"; PropBatch.Config config=null!;
+            Policy policy; string origin="bottom"; PropBatch.Config config=null!; PropBatch.Item selectionItem=null!;
             if (Batch)
             {
                 context.DependsOnSourceAsset(PropBatch.PolicyPath);
@@ -117,6 +196,7 @@ namespace Liandan.EditorTools
                 context.DependsOnSourceAsset(selectionPath);
                 var selection=selectionPath==PropBatch.PolicyPath ? config : JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(selectionPath));
                 var item=selection.props.Single(prop=>prop.id==assetPath.Split('/')[3]); origin=item.origin;
+                selectionItem=item;
                 if(item.budget==0)
                 {
                     const string art="Assets/StreamingAssets/tables/art.json";
@@ -171,6 +251,7 @@ namespace Liandan.EditorTools
                 }
                 if (level==0) { var box = root.AddComponent<BoxCollider>(); box.center=bounds.center; box.size=bounds.size; }
             }
+            if(Hybrid) CheckAssembly(root,lods,selectionItem,Sibling("report.json"));
             group.SetLODs(lods); group.RecalculateBounds();
         }
     }

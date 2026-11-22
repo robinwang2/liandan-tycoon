@@ -86,7 +86,7 @@ namespace Liandan.EditorTools
                     void Shot(string suffix, Vector3 focus, float scale, Func<Texture2D,bool>? ready=null)
                     {
                         camera.transform.position=focus+direction*6;camera.orthographicSize=scale;
-                        FurnaceShots.WriteShot(camera,folder,id+"-"+suffix,ready);
+                        FurnaceShots.WriteShot(camera,folder,id+"-"+suffix,ready,"12 行琥珀灯全部可见");
                     }
                     // 展位距相机 6 米，收紧正交深度范围，避免薄面板在远裁面下争抢深度。
                     camera.nearClipPlane=3;camera.farClipPlane=9;
@@ -109,6 +109,21 @@ namespace Liandan.EditorTools
 
         public static void Capture() => CaptureBatch("Batch1");
         public static void CaptureBatch2() => CaptureBatch("Batch2");
+        public static void CaptureBatch3() => CaptureBatch("Batch3");
+
+        static void SetLamp(Transform node,float intensity)
+        {
+            var renderer=node.GetComponent<Renderer>();
+            var block=new MaterialPropertyBlock();
+            for(int slot=0;slot<renderer.sharedMaterials.Length;slot++)
+            {
+                var mat=renderer.sharedMaterials[slot];
+                if(!mat.IsKeywordEnabled("_EMISSION")) throw new InvalidDataException(node.name+" 缺少发光材质");
+                renderer.GetPropertyBlock(block,slot);
+                block.SetColor("_EmissionColor",mat.GetColor("_EmissionColor")*intensity);
+                renderer.SetPropertyBlock(block,slot);
+            }
+        }
 
         static void CaptureBatch(string resource)
         {
@@ -125,6 +140,7 @@ namespace Liandan.EditorTools
                 try
                 {
                     File.Delete(Path.Combine(folder,id+".json"));File.Delete(Path.Combine(folder,id+".png"));
+                    if(resource=="Batch3") File.Delete(Path.Combine(folder,id+"-action.png"));
                     for (int level = 1; level <= 2; level++)
                         File.Delete(Path.Combine(folder, $"{id}-lod{level}.png"));
                     if(!File.Exists(source)){skipped.Add(id);continue;}
@@ -141,12 +157,40 @@ namespace Liandan.EditorTools
                         if(lod.renderers.Length==0 || lod.renderers.Any(renderer=>!renderer || renderer.sharedMaterials.Length==0 || renderer.sharedMaterials.Any(mat=>!mat || mat.shader.name!="Universal Render Pipeline/Lit")))throw new InvalidDataException("LOD 缺少渲染器或 URP/Lit 材质");
                     if(!group.GetLODs()[0].renderers.SelectMany(renderer=>renderer.sharedMaterials).Any(mat=>mat.GetTexture("_BaseMap")))throw new InvalidDataException("LOD0 缺少底色图");
                     group.ForceLOD(0);var bounds=box.bounds;camera.transform.position=bounds.center+new Vector3(.65f,.5f,1)*bounds.size.magnitude*2;camera.transform.LookAt(bounds.center);camera.orthographicSize=bounds.extents.magnitude*1.08f;
+                    var levels=group.GetLODs();
+                    float xSign=1;
+                    if(resource=="Batch3")
+                    {
+                        xSign=PropImport.CheckAssembly(copy,levels,item,Path.Combine(Path.GetDirectoryName(source)!,"report.json"));
+                        float front=-xSign;
+                        if(id=="news_rack") front=Mathf.Sign(PropBatch.Part(levels[0],id,"Glass",0).GetComponent<Renderer>().bounds.center.z-bounds.center.z);
+                        camera.transform.position=bounds.center+new Vector3(.9f,.55f,front)*bounds.size.magnitude*2;
+                        camera.transform.LookAt(bounds.center);
+                        foreach(var pose in item.actions.Where(action=>action.axis=="emission"))
+                            for(int level=0;level<levels.Length;level++)
+                                SetLamp(PropBatch.Part(levels[level],id,pose.node,level),pose.rest);
+                    }
                     using var sha=SHA256.Create();var digest=BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(source)!,"report.json")))).Replace("-","").ToLowerInvariant();
-                    FurnaceShots.WriteShot(camera,folder,id);
+                    if(resource=="Batch3" && passed==0) FurnaceShots.WriteFirstShot(camera,folder,id);
+                    else FurnaceShots.WriteShot(camera,folder,id);
                     for (int level = 1; level < group.lodCount; level++)
                     {
                         group.ForceLOD(level);
                         FurnaceShots.WriteShot(camera, folder, $"{id}-lod{level}");
+                    }
+                    if(resource=="Batch3" && item.actions.Length>0)
+                    {
+                        // 旋转轴为轴向量，左右手坐标互转时须再变一次符号。截图只动展位副本。
+                        group.ForceLOD(0);
+                        foreach(var pose in item.actions)
+                        {
+                            var node=PropBatch.Part(levels[0],id,pose.node,0);
+                            if(pose.axis=="emission"){SetLamp(node,pose.peak);continue;}
+                            var axis=pose.axis switch { "x"=>Vector3.left*xSign, "y"=>Vector3.down,
+                                "z"=>Vector3.forward*xSign, _=>throw new InvalidDataException("未知动作轴："+pose.axis) };
+                            node.Rotate(copy.transform.TransformDirection(axis),pose.degrees,Space.World);
+                        }
+                        FurnaceShots.WriteShot(camera,folder,id+"-action");
                     }
                     File.WriteAllText(Path.Combine(folder,id+".json"),"{\"reportSha\":\""+digest+"\"}");passed++;
                 }
