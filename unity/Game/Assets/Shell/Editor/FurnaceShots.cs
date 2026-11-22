@@ -10,13 +10,7 @@ namespace Liandan.EditorTools
 {
     public static class FurnaceShots
     {
-        public static void Capture()
-        {
-            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-            var camera = Whitebox.Create(false);
-            var folder = Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-furnace"));
-            Directory.CreateDirectory(folder);
-            void Shot(string name)
+        internal static void WriteShot(Camera camera,string folder,string name,Func<Texture2D,bool>? ready=null)
             {
                 var target = RenderTexture.GetTemporary(1280,720,24,RenderTextureFormat.ARGB32);
                 var previous = RenderTexture.active;
@@ -27,10 +21,19 @@ namespace Liandan.EditorTools
                     camera.targetTexture = target;
                     var request = new RenderPipeline.StandardRequest { destination=target };
                     if (!RenderPipeline.SupportsRenderRequest(camera,request)) throw new InvalidOperationException("丹炉截图需要已配置的 URP 和可用的图形设备");
-                    RenderPipeline.SubmitRenderRequest(camera,request);
-                    RenderTexture.active=target;
-                    pixels.ReadPixels(new Rect(0,0,target.width,target.height),0,0); pixels.Apply();
-                    File.WriteAllBytes(Path.Combine(folder,name+".png"),pixels.EncodeToPNG());
+                    for(int attempt=0;attempt<3;attempt++)
+                    {
+                        RenderPipeline.SubmitRenderRequest(camera,request);
+                        RenderTexture.active=target;
+                        pixels.ReadPixels(new Rect(0,0,target.width,target.height),0,0); pixels.Apply();
+                        if(ready==null || ready(pixels))
+                        {
+                            File.WriteAllBytes(Path.Combine(folder,name+".png"),pixels.EncodeToPNG());
+                            return;
+                        }
+                        Debug.LogWarning(name+"：未读到全部 12 行琥珀灯，丢弃本帧");
+                    }
+                    throw new InvalidOperationException(name+"：连续三帧未通过截图验收，没有写入 PNG");
                 }
                 finally
                 {
@@ -38,6 +41,13 @@ namespace Liandan.EditorTools
                     UnityEngine.Object.DestroyImmediate(pixels); RenderTexture.ReleaseTemporary(target);
                 }
             }
+        public static void Capture()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var camera = Whitebox.Create(false);
+            var folder = Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-furnace"));
+            Directory.CreateDirectory(folder);
+            void Shot(string name)=>WriteShot(camera,folder,name);
             foreach (bool original in new[]{true,false})
             {
                 var instance = Whitebox.PlaceFurnace(original);

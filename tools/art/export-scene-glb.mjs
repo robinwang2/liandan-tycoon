@@ -1,7 +1,7 @@
 // 把游戏 3D 场景里的一样东西导出成 GLB（给 Blender 和 Tripo 当底图、当对照）。
 // 要先开着开发服务器（npm run dev，127.0.0.1:5173），用无界面 Chrome 打开游戏标题画面，从场景里取出物体，用 three.js 自带的 glTF 导出器导出。
 //   node tools/art/export-scene-glb.mjs furnace art-src/tripo/ref/furnace-game.glb
-// 现在支持：furnace（丹炉）。以后要导别的，在 PICK 里加一条「怎么在场景里找到它」。
+// 库道具取固定种子；蛋和轿厢通过一次性页面的 room.sync 生成。
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,20 +15,28 @@ const PICK = {
   // 丹炉：office.js 的 createRoom 把它放在 world 的第 4 个子组（furnaceG）里；world 是场景里挂着三盏点光源的那个组
   furnace: `(() => { const sc = __game.office.debug.stage.scene; const world = sc.children.find(o => o.isGroup && o.children.filter(c => c.isPointLight).length >= 3); return world?.children[3]?.children[0]; })()`,
 };
-if (!PICK[what]) { console.log('不认识：' + what + '，现在支持：' + Object.keys(PICK).join(', ')); process.exit(1); }
+const art = JSON.parse(fs.readFileSync(new globalThis.URL('../../src/data/tables/art.json',import.meta.url)));
+const world = `stage.scene.children.find(o=>o.isGroup && o.children.filter(c=>c.isPointLight).length>=3)`;
+PICK.office_egg = `(()=>{const {room,stage}=__game.office.debug; room.sync({level:3,own:false}); return ${world}.children[3].children[0]})()`;
+PICK.elevator_car = `(()=>{const {room,stage}=__game.office.debug; room.sync({level:5,floor:0}); return ${world}.children[1].children.find(o=>Math.abs(o.position.x-room.L.W/2-.8)<.001 && o.children.length===3 && o.children[1].isMesh && o.children[2].isMesh)})()`;
+if (art.PROPS.some(prop=>prop.id===what)) PICK[what] = `(await import('/src/scene3a/props.js')).PROPS[${JSON.stringify(what)}].build(__game.office.debug.k,{seed:0,brand:'#3d968d'})`;
+if (!Object.hasOwn(PICK,what)) throw Error('未知道具：'+what);
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'ldt-export-'));
-const port = 9300 + Math.floor(Math.random() * 600);
-const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${prof}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--window-size=1280,800', 'about:blank'], { stdio: 'ignore' });
-let ver = null;
-for (let i = 0; i < 80 && !ver; i++) { try { ver = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { await sleep(250); } }
-if (!ver) { console.log('Chrome 没启动'); proc.kill(); process.exit(1); }
+const proc = spawn(CHROME, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${prof}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--window-size=1280,800', 'about:blank'], { stdio: 'ignore' });
+let port, launchError;
+proc.once('error',error=>{launchError=error});
+try {
+for (let attempt = 0; attempt < 80 && !port && !launchError && proc.exitCode===null; attempt++) {
+  try { port = Number(fs.readFileSync(path.join(prof,'DevToolsActivePort'),'utf8').split('\n')[0]); } catch { await sleep(250); }
+}
+if (!port) throw launchError??Error('Chrome 未开启调试端口；请检查 CHROME、临时目录权限和沙箱限制');
 function connect(u) {
   const ws = new WebSocket(u), pending = new Map(), handlers = []; let id = 0;
   ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } else handlers.forEach(h => h(m)); };
-  const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
-  return new Promise(r => { ws.onopen = () => r({ ws, send, on: h => handlers.push(h) }); });
+  const send = (method, params = {}) => new Promise((resolve,reject) => { const i = ++id; const timer=setTimeout(()=>reject(Error('Chrome 调试超时：'+method)),60000); if(ws.readyState!==1){clearTimeout(timer);reject(Error('Chrome 调试连接已断开'));return;} pending.set(i, reply=>{clearTimeout(timer);reply.error?reject(Error(reply.error.message)):resolve(reply)}); ws.send(JSON.stringify({ id: i, method, params })); });
+  return new Promise((resolve,reject) => { ws.onerror=()=>reject(Error('Chrome 调试连接失败')); ws.onclose=()=>{for(const done of pending.values()) done({error:{message:'Chrome 调试连接已关闭'}}); pending.clear();}; ws.onopen = () => resolve({ ws, send, on: h => handlers.push(h) }); });
 }
 let targets = [];
 for (let i = 0; i < 20 && !targets.some(t => t.type === 'page'); i++) { targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); if (!targets.some(t => t.type === 'page')) await sleep(250); }
@@ -40,18 +48,24 @@ await page.send('Page.navigate', { url: URL });
 const ev = async expr => { const r = await page.send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text); return r.result?.result?.value; };
 // 等场景搭好
 let ok = false;
-for (let i = 0; i < 40 && !ok; i++) { await sleep(500); ok = await ev(`!!(window.__game && ${PICK[what]})`).catch(() => false); }
-if (!ok) { console.log('场景里没找到 ' + what + (errors.length ? '；页面报错：' + errors.join(' | ') : '')); proc.kill(); process.exit(1); }
+for (let i = 0; i < 80 && !ok; i++) { await sleep(500); ok = await ev('!!window.__game?.office?.debug?.room').catch(() => false); }
+if (!ok) throw Error('未加载 3A 开发场景 '+URL+(errors.length?'；页面报错：'+errors.join(' | '):''));
 await sleep(2500);
 const res = await ev(`(async () => {
-  const root = ${PICK[what]};
   const { GLTFExporter } = await import('/node_modules/three/examples/jsm/exporters/GLTFExporter.js');
-  const c = root.clone(true);
+  const root = ${PICK[what]};
+  if (!root) throw Error('未找到指定道具');
+  // 场景重建后立即固定姿势，不把动画推进或页面里缓存的几何、材质写进 glTF extras。
+  const saved=new Map(); let c;
+  try { root.traverse(o=>{saved.set(o,o.userData);o.userData={tris:o.userData.tris};});c=root.clone(true); }
+  finally {for(const [obj,data] of saved)obj.userData=data;}
   const gameScale = c.scale.x;
   c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1);
   // 只留静态合批出来的那几块（炉座、炉身、炉盖……，合批结果的 userData 里记着三角面数）；火星、烟、光晕这些会动的特效不要
   const drop = []; c.traverse(o => { if (o.isSprite || o.isPoints || o.isLine || o.isLight || !o.visible) drop.push(o); });
-  for (const ch of c.children) if (ch.userData?.tris == null && !drop.includes(ch)) drop.push(ch);
+  if (${what === 'furnace'}) for (const ch of c.children) if (ch.userData?.tris == null && !drop.includes(ch)) drop.push(ch);
+  c.visible = true;
+  c.traverse(o => { o.userData = {}; if (o.geometry) {o.geometry=o.geometry.clone();o.geometry.userData={};} });
   for (const o of drop) if (o !== c) o.removeFromParent();
   c.updateMatrixWorld(true);
   let tris = 0, meshes = 0, box = null;
@@ -66,7 +80,8 @@ const size = res.max.map((v, i) => +(v - res.min[i]).toFixed(3));
 console.log(`✓ ${what} → ${outFile}（${(fs.statSync(outFile).size / 1024).toFixed(0)} KB）`);
 console.log(`  网格 ${res.meshes} 个、三角面 ${Math.round(res.tris)}、去掉粒子和灯 ${res.dropped} 个；尺寸 宽 ${size[0]} × 高 ${size[1]} × 深 ${size[2]}（游戏里再放大 ${res.gameScale} 倍）`);
 if (errors.length) console.log('  页面报错：' + errors.slice(0, 3).join(' | '));
-const br = await connect(ver.webSocketDebuggerUrl); br.send('Browser.close'); await sleep(1500);
+} finally {
 try { proc.kill(); } catch {}
+await sleep(500);
 try { fs.rmSync(prof, { recursive: true, force: true }); } catch {}
-process.exit(0);
+}

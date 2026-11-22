@@ -199,6 +199,287 @@
    "file":"art-src/tripo/run3/furnace-tripo.glb",
    "qc":"原模 39321 面，宽×深×高 0.9808×0.9804×0.8892 m；规范化 2.7699×2.7688×2.511 m，三级 39321/15727/4717 面，1 张 2048² 底色图。",
    "status":"Blender 回读通过；Unity 白盒办公室截图验收通过（不透明 + 双面，金属度 0.25 / 光滑度 0.32）"
+  },
+  {
+   "id":"batch1_desk_set",
+   "name":"工位桌组",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10；左右视图上传约定弄反导致前后镜像，Blender 镜像修正（不花积分）",
+   "credits":40,
+   "file":"art-src/tripo/batch1/desk_set/tripo.glb",
+   "qc":"下载件 31191 面，宽深高 0.9809×0.5076×0.8163 m；深度镜像通过；LOD 14999/5999/1796",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_office_chair",
+   "name":"办公椅",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10",
+   "credits":40,
+   "file":"art-src/tripo/batch1/office_chair/tripo.glb",
+   "qc":"下载件 38334 面，宽深高 0.5744×0.5596×0.9787 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_server_rack",
+   "name":"服务器机柜",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10；正面密集网格被做成噪点几何，贴图后像 LED，质量存疑；AI 外壳 + 程序化修补；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch1/server_rack/repaired.glb",
+   "qc":"修补件 11012 面，宽深高 0.6999×0.9945×2.1 m；通过；LOD 11011/5998/2061",
+   "status":"本地修补及三级回读通过；待 Unity 人工验收"
+  },
+  {
+   "id":"batch1_tv_wall",
+   "name":"壁挂数据屏",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10；平板变成凹凸板，表面有一圈多余轮廓；贴图有假 UI 字样，质量存疑；AI 外壳 + 程序化修补；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch1/tv_wall/repaired.glb",
+   "qc":"修补件 8114 面，宽深高 2.2×0.15×1.3 m；通过；LOD 8114/3254/986",
+   "status":"本地修补及三级回读通过；待 Unity 人工验收"
+  },
+  {
+   "id":"batch1_chat_sign",
+   "name":"聊天气泡灯牌",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10；面板多出一圈轮廓，贴图后看不出",
+   "credits":40,
+   "file":"art-src/tripo/batch1/chat_sign/tripo.glb",
+   "qc":"下载件 36946 面，宽深高 0.6846×0.2193×0.9798 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_rubber_duck",
+   "name":"调试小黄鸭",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 2 次；几何30+文字贴图10×2（两次身体都是灰色，不听提示词）+图片贴图10（用游戏原色渲染图，成功）",
+   "credits":60,
+   "file":"art-src/tripo/batch1/rubber_duck/tripo.glb",
+   "qc":"下载件 38856 面，宽深高 0.8192×0.9358×0.979 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_plush_bear",
+   "name":"陪伴玩具熊",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10",
+   "credits":40,
+   "file":"art-src/tripo/batch1/plush_bear/tripo.glb",
+   "qc":"下载件 39872 面，宽深高 0.7233×0.5893×0.9816 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_film_set",
+   "name":"影视拍摄组",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10；左右约定弄反导致镜像，Blender 修正",
+   "credits":40,
+   "file":"art-src/tripo/batch1/film_set/tripo.glb",
+   "qc":"下载件 35590 面，宽深高 0.8813×0.5927×0.9791 m；深度镜像通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_bunk_bed",
+   "name":"上下铺",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10",
+   "credits":40,
+   "file":"art-src/tripo/batch1/bunk_bed/tripo.glb",
+   "qc":"下载件 31721 面，宽深高 0.9796×0.4995×0.9441 m；通过；LOD 14999/5999/1799",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_camp_bed",
+   "name":"折叠行军床",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10",
+   "credits":40,
+   "file":"art-src/tripo/batch1/camp_bed/tripo.glb",
+   "qc":"下载件 35633 面，宽深高 0.9794×0.422×0.2487 m；通过；LOD 14999/5999/1798",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_office_egg",
+   "name":"套壳派的蛋",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30+文字贴图10",
+   "credits":40,
+   "file":"art-src/tripo/batch1/office_egg/tripo.glb",
+   "qc":"下载件 38600 面，宽深高 0.9786×0.9788×0.9788 m；通过；LOD 38600/15440/4632",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch1_elevator_car",
+   "name":"观光电梯轿厢",
+   "source":"Tripo Studio 网页（H3.1，私有四视图）",
+   "method":"返工 0 次；几何30；玻璃轿厢被做成实心盒子，判定不适合 AI，不贴图，保留程序模型",
+   "credits":30,
+   "qc":"未下载，未做网格质检",
+   "status":"不适合 AI（玻璃），保留程序模型"
+  },
+  {
+   "id":"batch2_water_tank",
+   "name":"不锈钢水箱",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/water_tank/tripo.glb",
+   "qc":"下载件 37578 面，宽深高 0.6503×0.6489×0.9783 m；通过；LOD 14998/5998/1798",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_water_tower_wood",
+   "name":"木制水塔",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/water_tower_wood/tripo.glb",
+   "qc":"下载件 32943 面，宽深高 0.5377×0.5269×0.9782 m；通过；LOD 15000/5999/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_bollard",
+   "name":"隔离桩",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/bollard/tripo.glb",
+   "qc":"下载件 36770 面，宽深高 0.2518×0.254×0.9796 m；通过；LOD 6000/2400/720",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_parcels",
+   "name":"快递包裹",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/parcels/tripo.glb",
+   "qc":"下载件 37131 面，宽深高 0.9799×0.6582×0.6932 m；通过；LOD 14998/5998/1798",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_trash_public",
+   "name":"分类垃圾桶",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/trash_public/tripo.glb",
+   "qc":"下载件 36596 面，宽深高 0.6172×0.5026×0.98 m；通过；LOD 14998/5998/1798",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_power_box",
+   "name":"配电箱",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/power_box/tripo.glb",
+   "qc":"下载件 36560 面，宽深高 0.7069×0.3583×0.9793 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_planter_box",
+   "name":"街边花箱",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/planter_box/tripo.glb",
+   "qc":"下载件 35511 面，宽深高 0.9806×0.3512×0.5327 m；通过；LOD 14999/5998/1798",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_bench",
+   "name":"长椅",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/bench/tripo.glb",
+   "qc":"下载件 31346 面，宽深高 0.9799×0.3217×0.5194 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_fire_hydrant",
+   "name":"消火栓",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/fire_hydrant/tripo.glb",
+   "qc":"下载件 39249 面，宽深高 0.4672×0.4647×0.9789 m；通过；LOD 14999/5999/1799",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_traffic_cone",
+   "name":"路锥",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/traffic_cone/tripo.glb",
+   "qc":"下载件 38991 面，宽深高 0.6758×0.676×0.9808 m；通过；LOD 5999/2399/718",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_mailbox",
+   "name":"信箱",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/mailbox/tripo.glb",
+   "qc":"下载件 36916 面，宽深高 0.4239×0.3393×0.9796 m；通过；LOD 6000/2400/719",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_fire_extinguisher",
+   "name":"灭火器",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/fire_extinguisher/tripo.glb",
+   "qc":"下载件 37616 面，宽深高 0.4273×0.3181×0.9781 m；通过；LOD 6000/2400/720",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_ac_split",
+   "name":"分体空调",
+   "method":"返工 0 次；首版正面多了深色假图案，重做几何 30 + 贴图 10；两版各 40",
+   "credits":80,
+   "file":"art-src/tripo/batch2/ac_split/tripo.glb",
+   "qc":"下载件 32161 面，宽深高 0.9798×0.3476×0.3416 m；通过；LOD 5999/2398/718",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_sofa",
+   "name":"沙发",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/sofa/tripo.glb",
+   "qc":"下载件 37718 面，宽深高 0.9788×0.484×0.4163 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_bean_bag",
+   "name":"懒人沙发",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/bean_bag/tripo.glb",
+   "qc":"下载件 37876 面，宽深高 0.9789×0.9802×0.8083 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_sat_dish",
+   "name":"卫星碟",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/sat_dish/tripo.glb",
+   "qc":"下载件 39030 面，宽深高 0.8724×0.7107×0.9792 m；通过；LOD 15000/6000/1800",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_boxes",
+   "name":"搬家纸箱",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/boxes/tripo.glb",
+   "qc":"下载件 37089 面，宽深高 0.9796×0.6478×0.7751 m；通过；LOD 14999/5999/1798",
+   "status":"FBX 回读通过；待 Unity 验收"
+  },
+  {
+   "id":"batch2_roof_vent",
+   "name":"屋顶风帽",
+   "method":"返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch2/roof_vent/tripo.glb",
+   "qc":"下载件 37340 面，宽深高 0.8764×0.8792×0.9786 m；通过；LOD 5999/2399/718",
+   "status":"FBX 回读通过；待 Unity 验收"
   }
  ]
 }

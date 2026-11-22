@@ -105,9 +105,10 @@ namespace Liandan.EditorTools
 
         [MenuItem("Liandan/Build Game")]
         public static void BuildGame() => Player(ScriptingImplementation.Mono2x, "Game");
+        public static void BuildArtProbe() => Player(ScriptingImplementation.Mono2x,"ArtProbe",BuildOptions.Development);
         [MenuItem("Liandan/Build Game IL2CPP")]
         public static void BuildGameIl2cpp() => Player(ScriptingImplementation.IL2CPP, "GameIl2cpp");
-        private static void Player(ScriptingImplementation backend, string folder)
+        private static void Player(ScriptingImplementation backend, string folder, BuildOptions options=BuildOptions.None)
         {
             Parity.ConfigureUrp();
             SetupUi();
@@ -116,7 +117,7 @@ namespace Liandan.EditorTools
             try
             {
                 PlayerSettings.SetScriptingBackend(target, backend);
-                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { Scene }, target = BuildTarget.StandaloneWindows64, locationPathName = "Build/" + folder + "/Liandan.exe" });
+                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes = new[] { Scene }, target = BuildTarget.StandaloneWindows64, options=options, locationPathName = "Build/" + folder + "/Liandan.exe" });
                 if (report.summary.result != BuildResult.Succeeded) throw new IOException("游戏构建失败：" + report.summary.result);
                 Debug.Log("Liandan build OK: " + folder);
             }
