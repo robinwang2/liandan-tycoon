@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Liandan.Shell;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -10,7 +11,37 @@ namespace Liandan.EditorTools
 {
     public static class FurnaceShots
     {
-        internal static void WriteShot(Camera camera,string folder,string name,Func<Texture2D,bool>? ready=null)
+        // 新场景的第一个离屏请求也会初始化 URP。同机位、同姿势连续两帧稳定才写首图。
+        internal static void WriteFirstShot(Camera camera,string folder,string name)
+        {
+            byte[] previous=Array.Empty<byte>();
+            bool Stable(Texture2D frame)
+            {
+                var current=frame.GetRawTextureData(); // 独立的 RGB24 副本，下一次 ReadPixels 不会覆盖它。
+                var last=previous;
+                previous=current;
+                if(last.Length==0) return false;
+                // 容许少量边缘像素抖动；车身整体变色时须重新渲染。
+                int changed=0, limit=frame.width*frame.height/1000;
+                for(int i=0;i<current.Length;i+=3)
+                {
+                    if(Math.Abs(current[i]-last[i])<=2 && Math.Abs(current[i+1]-last[i+1])<=2 &&
+                        Math.Abs(current[i+2]-last[i+2])<=2) continue;
+                    if(++changed>limit) return false;
+                }
+                return true;
+            }
+
+            bool allowAsync=ShaderUtil.allowAsyncCompilation;
+            try
+            {
+                ShaderUtil.allowAsyncCompilation=false;
+                WriteShot(camera,folder,name,Stable,"连续两帧静止画面稳定");
+            }
+            finally { ShaderUtil.allowAsyncCompilation=allowAsync; }
+        }
+
+        internal static void WriteShot(Camera camera,string folder,string name,Func<Texture2D,bool>? ready=null,string condition="截图验收")
             {
                 var target = RenderTexture.GetTemporary(1280,720,24,RenderTextureFormat.ARGB32);
                 var previous = RenderTexture.active;
@@ -31,9 +62,9 @@ namespace Liandan.EditorTools
                             File.WriteAllBytes(Path.Combine(folder,name+".png"),pixels.EncodeToPNG());
                             return;
                         }
-                        Debug.LogWarning(name+"：未读到全部 12 行琥珀灯，丢弃本帧");
+                        Debug.Log(name+"：本帧未满足「"+condition+"」，丢弃本帧");
                     }
-                    throw new InvalidOperationException(name+"：连续三帧未通过截图验收，没有写入 PNG");
+                    throw new InvalidOperationException(name+"：三帧内未满足「"+condition+"」，没有写入 PNG");
                 }
                 finally
                 {
