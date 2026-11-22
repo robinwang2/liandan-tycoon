@@ -12,7 +12,7 @@ src = argv[0]
 opt = {}
 i = 1
 while i < len(argv):
-    if argv[i] in ('--flat','--rack-clearance'): opt[argv[i][2:]] = True; i += 1; continue
+    if argv[i] in ('--flat','--rack-clearance','--tight-frame'): opt[argv[i][2:]] = True; i += 1; continue
     opt[argv[i].lstrip('-')] = argv[i + 1]; i += 2
 out = opt.get('out', os.path.splitext(src)[0] + '_qc')
 os.makedirs(out, exist_ok=True)
@@ -155,6 +155,11 @@ span = max(size.x, size.y, size.z) or 1
 dist = span * 4
 DIRS = {'front': Vector((0, -1, 0)), 'back': Vector((0, 1, 0)), 'left': Vector((-1, 0, 0)), 'right': Vector((1, 0, 0)), 'top': Vector((0, 0, 1)), 'persp': Vector((0.75, -1, 0.65))}
 renders = {}
+tight = opt.get('tight-frame', False)
+if tight:
+    # 方形画幅每边留 3% 空白。四向共用最长轴，真实的窄侧面不会被单独放大。
+    fill = .94
+    report.update(tightFrame=True, orthoScale=span/fill)
 for v in sorted(views, key=lambda view: view == 'color'):
     # 彩图用 glTF 原材质节点（含顶点色与底色纹理），灰模仍走工作台。
     if 'color' in views:
@@ -165,7 +170,17 @@ for v in sorted(views, key=lambda view: view == 'color'):
         sc.cycles.samples = 12
         sc.cycles.use_denoising = True
         world.use_nodes = True
-        world.node_tree.nodes.get('Background').inputs['Color'].default_value = (0.85, 0.85, 0.85, 1)
+        background = world.node_tree.nodes.get('Background').inputs['Color']
+        background.default_value = (0.85, 0.85, 0.85, 1)
+        if tight:
+            # 只压暗相机看到的底色，白家电的轮廓清楚，环境照明仍保持中性。
+            tree = world.node_tree
+            ray = tree.nodes.new('ShaderNodeLightPath')
+            mix = tree.nodes.new('ShaderNodeMixRGB')
+            mix.inputs[1].default_value = background.default_value
+            mix.inputs[2].default_value = (0.26, 0.26, 0.26, 1)
+            tree.links.new(ray.outputs['Is Camera Ray'], mix.inputs[0])
+            tree.links.new(mix.outputs[0], background)
         light = bpy.data.lights.new('柔光', 'AREA')
         light.energy, light.shape, light.size = 55 * span**2, 'DISK', 2 * span
         lamp = bpy.data.objects.new('柔光', light)
@@ -177,10 +192,24 @@ for v in sorted(views, key=lambda view: view == 'color'):
     cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
     if v in ('persp','color'):
         cam_data.type = 'PERSP'; cam_data.lens = 70; cam.location = center + d * span * 3.2
-        cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
+        if tight:
+            # 在相机坐标里计算每个顶点所需的距离，同时平移取景中心，给不对称模型留相等的边距。
+            rotation = cam.rotation_euler.to_quaternion()
+            right, up = rotation @ Vector((1, 0, 0)), rotation @ Vector((0, 1, 0))
+            slope = cam_data.sensor_width / (2 * cam_data.lens) * fill
+            points = [obj.matrix_world @ vertex.co - center for obj in meshes for vertex in obj.data.vertices]
+            def limits(axis):
+                return (max(p.dot(axis) + slope*p.dot(d) for p in points),
+                        min(p.dot(axis) - slope*p.dot(d) for p in points))
+            x1, x0 = limits(right)
+            y1, y0 = limits(up)
+            distance = max(x1-x0, y1-y0) / (2*slope)
+            cam.location = center + d*distance + right*((x1+x0)/2) + up*((y1+y0)/2)
+        else:
+            cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
     else:
         cam_data.type = 'ORTHO'
-        cam_data.ortho_scale = span * 1.12
+        cam_data.ortho_scale = span / fill if tight else span * 1.12
     cam_data.clip_end = dist * 4
     sc.render.filepath = os.path.join(out, v + '.png')
     bpy.ops.render.render(write_still=True)

@@ -132,7 +132,7 @@
   {"id":"led_ticker","w":2.4,"d":0.12,"h":0.35,"tris":1848,"budget":6000,"mats":8,"anim":true,"status":"程序生成"},
   {"id":"parts_shelf","w":1.4,"d":0.45,"h":1.9,"tris":6336,"budget":15000,"mats":10,"status":"程序生成"},
   {"id":"plastic_stools","w":1.6,"d":1.6,"h":0.8,"tris":5640,"budget":15000,"mats":15,"status":"程序生成"},
-  {"id":"shoe_rack","w":0.8,"d":0.3,"h":0.9,"tris":5004,"budget":6000,"mats":9,"status":"程序生成"},
+  {"id":"shoe_rack","w":0.8,"d":0.3,"h":0.9,"tris":5004,"budget":15000,"mats":9,"status":"程序生成"},
   {"id":"chat_sign","w":1.1,"d":0.35,"h":1.6,"tris":695,"budget":15000,"mats":4,"anim":true,"status":"程序生成"},
   {"id":"rubber_duck","w":0.8,"d":0.9,"h":0.9,"tris":4868,"budget":15000,"mats":5,"status":"程序生成"},
   {"id":"plush_bear","w":0.9,"d":0.8,"h":1.1,"tris":3648,"budget":15000,"mats":4,"status":"程序生成"},
@@ -494,6 +494,143 @@
   {"id":"batch3_ac_unit","name":"空调外机","method":"四向灰模生成外壳：箱体、支脚及侧百叶；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
   {"id":"batch3_news_rack","name":"报刊箱","method":"四向灰模生成外壳：空柜、立柱及把手，正面留出能看见报纸的开口；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
   {"id":"batch3_lucky_cat","name":"招财猫","method":"四向灰模生成外壳：底座和猫身；招手一侧留肩部接口；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
-  {"id":"batch3_road_barrier","name":"施工警示护栏","method":"四向灰模生成外壳：条纹横板、支架及黑色灯座；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"}
+  {"id":"batch3_road_barrier","name":"施工警示护栏","method":"四向灰模生成外壳：条纹横板、支架及黑色灯座；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
+  {
+   "id":"batch4_bookshelf",
+   "name":"书架",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/bookshelf/tripo.glb",
+   "qc":"下载件 33884 面，宽深高 0.7096×0.195×0.9804 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_plastic_stools",
+   "name":"小吃摊桌凳",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/plastic_stools/tripo.glb",
+   "qc":"下载件 37675 面，宽深高 0.9802×0.9787×0.5156 m；通过；LOD 14995/5997/1799",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_coffee_table",
+   "name":"客厅矮茶几",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/coffee_table/tripo.glb",
+   "qc":"下载件 36992 面，宽深高 0.9789×0.6042×0.4004 m；通过；LOD 6000/2400/720",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_pantry",
+   "name":"茶水间柜组",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/pantry/tripo.glb",
+   "qc":"下载件 29448 面，宽深高 0.9803×0.2823×0.878 m；通过；LOD 14999/5999/1798",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_coffee_bar",
+   "name":"咖啡吧台",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/coffee_bar/tripo.glb",
+   "qc":"下载件 36426 面，宽深高 0.98×0.3966×0.7027 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_tea_table",
+   "name":"功夫茶桌",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/tea_table/tripo.glb",
+   "qc":"下载件 36507 面，宽深高 0.9807×0.4875×0.456 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_printer",
+   "name":"办公室打印机",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/printer/tripo.glb",
+   "qc":"下载件 37431 面，宽深高 0.7101×0.6745×0.9797 m；通过；LOD 14999/5999/1798",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_kombucha",
+   "name":"康普茶桶",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/kombucha/tripo.glb",
+   "qc":"下载件 35250 面，宽深高 0.4086×0.4383×0.9803 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_statue_founder",
+   "name":"创始人雕像",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/statue_founder/tripo.glb",
+   "qc":"下载件 36604 面，宽深高 0.4119×0.4052×0.9791 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_water_cooler",
+   "name":"立式净水机",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/water_cooler/tripo.glb",
+   "qc":"下载件 36738 面，宽深高 0.3078×0.3213×0.9795 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_water_dispenser",
+   "name":"桶装饮水机",
+   "source":"AI 外壳＋程序部件",
+   "method":"四向灰模生成外壳：机身、冷热出水口、接水盘和桶座；参考原色图贴图，程序件从游戏原模回装；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10；AI 外壳＋程序部件；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch4/water_dispenser/repaired.glb",
+   "qc":"修补件 14858 面，宽深高 0.36×0.381×1.09 m；通过；LOD 14858/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_parts_shelf",
+   "name":"元器件货架",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/parts_shelf/tripo.glb",
+   "qc":"下载件 32665 面，宽深高 0.7181×0.2303×0.9789 m；通过；LOD 14999/5999/1798",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_workbench",
+   "name":"车库工作台",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/workbench/tripo.glb",
+   "qc":"下载件 35234 面，宽深高 0.9282×0.3778×0.9803 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_guitar_stand",
+   "name":"木吉他与琴架",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/guitar_stand/tripo.glb",
+   "qc":"下载件 38322 面，宽深高 0.3956×0.3399×0.9799 m；通过；LOD 6000/2400/720",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch4_shoe_rack",
+   "name":"门口鞋架",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch4/shoe_rack/tripo.glb",
+   "qc":"下载件 38034 面，宽深高 0.8056×0.3031×0.9785 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {"id":"batch4_garage_shelf","name":"车库置物架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"}
  ]
 }

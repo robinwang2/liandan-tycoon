@@ -6,29 +6,36 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeKit } from '../../src/scene3a/kit.js';
 import { PROPS } from '../../src/scene3a/props.js';
+import { batchOptions } from './batch-options.mjs';
 
 // Node 提供 Blob；此导出器在写二进制时只需要 FileReader 的这一项。
 globalThis.FileReader ??= class {
   async readAsArrayBuffer(blob) { this.result = await blob.arrayBuffer(); this.onloadend(); }
 };
-const [id, dir] = process.argv.slice(2);
-const {props} = JSON.parse(fs.readFileSync(new URL('../../unity/Game/Assets/Shell/Resources/PropPolicyBatch3.json', import.meta.url)));
+// 兼容原先直接调用此脚本时默认只导出第 3 批外壳的用法。
+const argv = process.argv.slice(2);
+const { args:[id, dir], policy, batchName } = batchOptions(argv.includes('--batch') ? argv : [...argv,'--batch','batch3']);
+const {props} = JSON.parse(fs.readFileSync(new URL('../../unity/Game/Assets/Shell/Resources/'+policy+'.json', import.meta.url)));
 const spec = props.find(item => item.id === id);
-const root = PROPS[id].build(makeKit(), {seed:0});
+if (!spec) throw Error(batchName+' 未收录：'+id);
+const parts = spec.parts ?? [];
+const root = PROPS[id].build(makeKit(), batchName === 'batch3' ? {seed:0} : {seed:0,brand:'#3d968d'});
 root.updateMatrixWorld(true);
 const bins = new Map(), names = new Map(), guards = new Set(), counts = {};
 root.traverse(node => {
   if (!node.userData.dynamic) return;
   let name = node.name;
+  // 这两款设备的摆放只用默认固定面板。其余可替换表面和活动组仍须逐件登记。
+  if (spec.fixedSurfaces?.includes(name)) return;
   if (name === 'wheel' || name === 'fan') {
     counts[name] = (counts[name] ?? 0) + 1;
     if (name === 'fan') guards.add(node.parent);
     name += '_' + counts[name];
   }
-  if (!spec.parts.includes(name)) throw Error('未登记的活动组：' + name);
+  if (!parts.includes(name)) throw Error('未登记的活动组：' + name);
   names.set(node, name);
 });
-const glass = mat => mat.transparent || ['192f3e','253946'].includes(mat.color.getHexString());
+const glass = mat => mat.transparent || (batchName === 'batch3' && ['192f3e','253946'].includes(mat.color.getHexString()));
 root.traverse(mesh => {
   if (!mesh.isMesh) return;
   const mat = mesh.material, color = mat.color.getHexString();
@@ -41,7 +48,8 @@ root.traverse(mesh => {
   if (part === 'Shell') {
     if (glass(mat)) part = 'Glass';
     else if (id === 'news_rack' && ['e4ddcb','4a5160'].includes(color)) part = 'Papers';
-    else if (mat.emissive?.getHex() && spec.parts.includes('Lights')) part = 'Lights';
+    else if (spec.partColors?.[color]) part = spec.partColors[color];
+    else if (mat.emissive?.getHex() && parts.includes('Lights')) part = 'Lights';
   }
   if (glass(mat)) mat.name = 'M_' + id + '_Glass';
   if (!bins.has(part)) bins.set(part, {pivot, materials:new Map()});
@@ -51,7 +59,7 @@ root.traverse(mesh => {
   geo.applyMatrix4(new Matrix4().makeTranslation(-pivot.x,-pivot.y,-pivot.z).multiply(mesh.matrixWorld));
   bucket.get(mat).push(geo);
 });
-if ([...bins.keys()].sort().join() !== ['Shell',...spec.parts].sort().join()) throw Error(id+' 分件不匹配：'+[...bins.keys()]);
+if ([...bins.keys()].sort().join() !== ['Shell',...parts].sort().join()) throw Error(id+' 分件不匹配：'+[...bins.keys()]);
 const model = new Group();
 for (const [name,{pivot,materials}] of bins) {
   const chunks = [...materials.values()].map(list => mergeGeometries(list));
@@ -65,6 +73,8 @@ async function write(name) {
   fs.writeFileSync(path.join(dir,name),Buffer.from(bytes));
 }
 await write('game.glb');
-for (const node of model.children) node.visible = node.name === 'Shell';
-await write('shell.glb');
+if (parts.length) {
+  for (const node of model.children) node.visible = node.name === 'Shell';
+  await write('shell.glb');
+}
 console.log(id+'：'+[...bins.keys()].join('、'));

@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { batchConfig } from '../art/batch-options.mjs';
 import { summarizeDraws } from './art-ab-summary.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -12,9 +13,6 @@ const player = join(project, 'Build/ParityProbe/ParityProbe.exe');
 const methods = new Map([
   ['compile', 'ConfigureUrp'],
   ['art-furnace', 'Capture'],
-  ['art-batch1', 'Capture'],
-  ['art-batch2', 'CaptureBatch2'],
-  ['art-batch3', 'CaptureBatch3'],
   ['art-repair', 'CaptureRepair'],
   ['build-game-art','BuildArtProbe'],
   ['editor-parity', 'RunEditor'],
@@ -25,10 +23,12 @@ const methods = new Map([
   ['build-game-il2cpp', 'BuildGameIl2cpp'],
 ]);
 const [mode, input, ...extra] = process.argv.slice(2);
-const shotBatch = /^art-(batch[123])$/.exec(mode)?.[1];
+const shotBatch = /^art-(batch[1-9]\d*)$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
 function run() {
+  const resource = shotBatch && batchConfig(shotBatch).resource;
+  if (shotBatch) methods.set(mode, 'CaptureSelectedBatch');
   const gamePath = folder => join(project, 'Build', folder, 'Liandan.exe');
   const testPlayer = process.env.LIANDAN_PLAYER ? resolve(process.env.LIANDAN_PLAYER) : gamePath('Game');
   function checkMix(shots) {
@@ -105,7 +105,7 @@ function run() {
     checkMix(shots); return;
   }
   if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
-    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | art-batch1 | art-batch2 | art-batch3 | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
+    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | art-batchN | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
   mkdirSync(logs, { recursive: true });
@@ -115,6 +115,7 @@ function run() {
   if(shotBatch || mode==='art-repair') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
   if (methods.has(mode))
     args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (shotBatch||mode==='art-repair'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
+  if (shotBatch) args.push('-artSelection', resource);
   if (checking) {
     const bits = input ? resolve(input) : join(logs, 'math-bits.bin');
     if (!input && (mode === 'editor-parity' || !existsSync(bits))) {

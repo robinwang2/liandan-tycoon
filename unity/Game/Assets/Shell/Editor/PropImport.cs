@@ -12,8 +12,7 @@ namespace Liandan.EditorTools
     {
         const string Folder = "Assets/Art/Props/Furnace/Resources/Furnaces/";
         bool Furnace => assetPath.StartsWith(Folder, StringComparison.Ordinal);
-        bool Hybrid => assetPath.Contains("/Resources/Batch3/");
-        bool Batch => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && (assetPath.Contains("/Resources/Batch1/") || assetPath.Contains("/Resources/Batch2/") || Hybrid);
+        bool Batch => System.Text.RegularExpressions.Regex.IsMatch(assetPath,@"^Assets/Art/Props/[^/]+/Resources/Batch[1-9]\d*/");
         bool Reference => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Editor/RepairReference/");
         bool InPackage => Furnace || Batch || Reference;
         string Sibling(string file) => assetPath.Substring(0, assetPath.LastIndexOf('/')+1) + file;
@@ -149,7 +148,7 @@ namespace Liandan.EditorTools
                 return tex!;
             }
             if (finish.baseColor.Length == 4) material.SetColor("_BaseColor", new Color(finish.baseColor[0],finish.baseColor[1],finish.baseColor[2],1).gamma);
-            if (Hybrid && finish.glass)
+            if (Batch && finish.glass)
             {
                 var tint=material.GetColor("_BaseColor"); tint.a=finish.baseColor[3];
                 material.SetColor("_BaseColor",tint);
@@ -251,7 +250,7 @@ namespace Liandan.EditorTools
                 }
                 if (level==0) { var box = root.AddComponent<BoxCollider>(); box.center=bounds.center; box.size=bounds.size; }
             }
-            if(Hybrid) CheckAssembly(root,lods,selectionItem,Sibling("report.json"));
+            if(selectionItem?.parts?.Length>0) CheckAssembly(root,lods,selectionItem,Sibling("report.json"));
             group.SetLODs(lods); group.RecalculateBounds();
         }
     }
