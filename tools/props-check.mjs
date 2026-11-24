@@ -26,7 +26,7 @@ const source = readFileSync(new URL('../src/scene3a/props.js', import.meta.url),
 assert(!/Math\.random\s*\(/.test(source), 'nondeterministic random');
 assert(!/new\s+(?:\w+\.)*(?:\w*Light|\w*Texture|Mesh\w*Material)\s*\(/.test(source), 'props must use kit materials and no lights/textures');
 const small = new Set('plant_small trash_bin coffee_table desk_lamp pendant_lamp wall_clock fire_extinguisher ac_split poster_frame neon_slogan bollard parking_meter manhole roof_vent skateboard surfboard lucky_cat traffic_cone mailbox flower_bed'.split(' '));
-for (const name of 'picket_fence news_rack kick_scooter guitar_stand pizza_stack string_lights led_ticker manhole_steam road_barrier hand_truck'.split(' ')) small.add(name);
+for (const name of 'picket_fence news_rack kick_scooter guitar_stand pizza_stack string_lights led_ticker manhole_steam road_barrier'.split(' ')) small.add(name);
 const budget = n => ['crane_tower','glass_room','roof_garden','scaffold'].includes(n) ? 40000 : /^(car|robotaxi|van_|bus_city|scooter|food_truck)/.test(n) ? 20000 : /tree|bush|plant_tall/.test(n) ? 14000 : small.has(n) ? 6000 : 15000;
 const errors = [], rows = [], k = makeKit();
 function stats(g) {

@@ -128,7 +128,7 @@
   {"id":"flag_row","w":2.4,"d":0.5,"h":4.2,"tris":1176,"budget":15000,"mats":6,"anim":true,"status":"程序生成"},
   {"id":"standing_banner","w":0.8,"d":0.4,"h":2,"tris":848,"budget":15000,"mats":7,"status":"程序生成"},
   {"id":"display_counter","w":1.6,"d":0.6,"h":1,"tris":4664,"budget":15000,"mats":16,"status":"程序生成"},
-  {"id":"hand_truck","w":0.6,"d":0.7,"h":1.3,"tris":1748,"budget":6000,"mats":7,"status":"程序生成"},
+  {"id":"hand_truck","w":0.6,"d":0.7,"h":1.3,"tris":1748,"budget":15000,"mats":7,"status":"程序生成"},
   {"id":"led_ticker","w":2.4,"d":0.12,"h":0.35,"tris":1848,"budget":6000,"mats":8,"anim":true,"status":"程序生成"},
   {"id":"parts_shelf","w":1.4,"d":0.45,"h":1.9,"tris":6336,"budget":15000,"mats":10,"status":"程序生成"},
   {"id":"plastic_stools","w":1.6,"d":1.6,"h":0.8,"tris":5640,"budget":15000,"mats":15,"status":"程序生成"},
@@ -631,6 +631,19 @@
    "qc":"下载件 38034 面，宽深高 0.8056×0.3031×0.9785 m；通过；LOD 15000/6000/1800",
    "status":"Unity 已生成截图；待人工验收"
   },
-  {"id":"batch4_garage_shelf","name":"车库置物架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"}
+  {"id":"batch4_garage_shelf","name":"车库置物架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_kiosk","name":"街边售卖亭","method":"四向灰模生成外壳：亭身、顶棚、柜台饮品和背墙货架（两侧敞开）；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_meeting_table","name":"六人会议桌椅","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_hand_truck","name":"载货手推车","method":"四向灰模生成外壳：三层纸箱、封条与绿色捆带；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_vending","name":"自动售货机","method":"四向灰模生成外壳：机身、按键、货道饮料与取物口（前窗敞开）；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_standing_desk","name":"站立办公桌","method":"四向灰模生成外壳：桌架、桌面用品及显示器壳体；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_money_tree","name":"发财树","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_locker","name":"员工储物柜","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_arcade","name":"摇杆街机","method":"四向灰模生成外壳：机柜、屏框、摇杆、按钮和投币口；参考原色图贴图，程序件从游戏原模回装","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_reception","name":"大堂前台","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_gong","name":"庆功铜锣","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_clothes_rack","name":"挂衣架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_garage_shelf","name":"车库置物架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {"id":"batch5_fridge","name":"贴便签的冰箱","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"}
  ]
 }

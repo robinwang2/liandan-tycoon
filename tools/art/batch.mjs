@@ -56,7 +56,8 @@ function manifest() {
     const lines = ['# '+batchName+' 网页上传清单', '', '私有 · H3.1 多视图。先核对几何正反与轮廓，再选图片贴图，上传彩色参考。'];
     if (selection.creditLimit) {
       const first = batch.filter(item=>!item.reserve).length;
-      lines.push('', `首轮 ${first} 件 × 40＝${first*40} 分（几何 30＋图片贴图 10）。候补与返工共用剩余 ${selection.creditLimit-first*40} 分，全批上限 ${selection.creditLimit}。`);
+      const remaining = first < batch.length ? '候补与返工共用剩余' : '返工可用';
+      lines.push('', `首轮 ${first} 件 × 40＝${first*40} 分（几何 30＋图片贴图 10）。${remaining} ${selection.creditLimit-first*40} 分，全批上限 ${selection.creditLimit}。`);
     }
     for (const entry of entries) {
       entry.color = path.join(paths(entry.id).ref,'color.png');
