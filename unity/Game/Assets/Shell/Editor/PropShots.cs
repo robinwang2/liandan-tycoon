@@ -110,6 +110,14 @@ namespace Liandan.EditorTools
         public static void Capture() => CaptureBatch("Batch1");
         public static void CaptureBatch2() => CaptureBatch("Batch2");
         public static void CaptureBatch3() => CaptureBatch("Batch3");
+        public static void CaptureSelectedBatch()
+        {
+            var args=Environment.GetCommandLineArgs();
+            int i=Array.IndexOf(args,"-artSelection");
+            if(i<0 || i+1>=args.Length || !System.Text.RegularExpressions.Regex.IsMatch(args[i+1],@"^Batch[1-9]\d*$"))
+                throw new ArgumentException("缺少有效的美术批次");
+            CaptureBatch(args[i+1]);
+        }
 
         static void SetLamp(Transform node,float intensity)
         {
@@ -135,12 +143,13 @@ namespace Liandan.EditorTools
             var failures=new List<string>();var skipped=new List<string>();int passed=0;
             foreach(var item in PropBatch.Selection(resource).props)
             {
+                bool hybrid=item.parts?.Length>0;
                 string id=item.id, source=$"Assets/Art/Props/{id}/Resources/{resource}/{id}/SM_{id}.fbx";
                 GameObject copy=null!;
                 try
                 {
                     File.Delete(Path.Combine(folder,id+".json"));File.Delete(Path.Combine(folder,id+".png"));
-                    if(resource=="Batch3") File.Delete(Path.Combine(folder,id+"-action.png"));
+                    if(hybrid) File.Delete(Path.Combine(folder,id+"-action.png"));
                     for (int level = 1; level <= 2; level++)
                         File.Delete(Path.Combine(folder, $"{id}-lod{level}.png"));
                     if(!File.Exists(source)){skipped.Add(id);continue;}
@@ -159,7 +168,7 @@ namespace Liandan.EditorTools
                     group.ForceLOD(0);var bounds=box.bounds;camera.transform.position=bounds.center+new Vector3(.65f,.5f,1)*bounds.size.magnitude*2;camera.transform.LookAt(bounds.center);camera.orthographicSize=bounds.extents.magnitude*1.08f;
                     var levels=group.GetLODs();
                     float xSign=1;
-                    if(resource=="Batch3")
+                    if(hybrid)
                     {
                         xSign=PropImport.CheckAssembly(copy,levels,item,Path.Combine(Path.GetDirectoryName(source)!,"report.json"));
                         float front=-xSign;
@@ -171,14 +180,14 @@ namespace Liandan.EditorTools
                                 SetLamp(PropBatch.Part(levels[level],id,pose.node,level),pose.rest);
                     }
                     using var sha=SHA256.Create();var digest=BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(source)!,"report.json")))).Replace("-","").ToLowerInvariant();
-                    if(resource=="Batch3" && passed==0) FurnaceShots.WriteFirstShot(camera,folder,id);
+                    if(resource!="Batch1" && resource!="Batch2" && passed==0) FurnaceShots.WriteFirstShot(camera,folder,id);
                     else FurnaceShots.WriteShot(camera,folder,id);
                     for (int level = 1; level < group.lodCount; level++)
                     {
                         group.ForceLOD(level);
                         FurnaceShots.WriteShot(camera, folder, $"{id}-lod{level}");
                     }
-                    if(resource=="Batch3" && item.actions.Length>0)
+                    if(hybrid && item.actions.Length>0)
                     {
                         // 旋转轴为轴向量，左右手坐标互转时须再变一次符号。截图只动展位副本。
                         group.ForceLOD(0);

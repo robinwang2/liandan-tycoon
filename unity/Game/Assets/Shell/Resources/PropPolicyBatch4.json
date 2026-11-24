@@ -1,0 +1,21 @@
+{
+  "creditLimit": 800,
+  "props": [
+    {"id":"bookshelf","name":"书架","origin":"bottom","x":-5,"y":0.06,"z":-4},
+    {"id":"plastic_stools","name":"小吃摊桌凳","origin":"bottom","x":-1.7,"y":0.06,"z":-4},
+    {"id":"coffee_table","name":"客厅矮茶几","origin":"bottom","x":1.7,"y":0.06,"z":-4},
+    {"id":"pantry","name":"茶水间柜组","origin":"bottom","x":5,"y":0.06,"z":-4},
+    {"id":"coffee_bar","name":"咖啡吧台","origin":"bottom","x":-5,"y":0.06,"z":-1.4},
+    {"id":"tea_table","name":"功夫茶桌","origin":"bottom","x":-1.7,"y":0.06,"z":-1.4},
+    {"id":"printer","fixedSurfaces":["screen-surface"],"name":"办公室打印机","origin":"bottom","x":1.7,"y":0.06,"z":-1.4},
+    {"id":"kombucha","name":"康普茶桶","origin":"bottom","x":5,"y":0.06,"z":-1.4},
+    {"id":"statue_founder","name":"创始人雕像","origin":"bottom","x":-5,"y":0.06,"z":1.2},
+    {"id":"water_cooler","fixedSurfaces":["screen-surface"],"name":"立式净水机","origin":"bottom","x":-1.7,"y":0.06,"z":1.2},
+    {"id":"water_dispenser","name":"桶装饮水机","origin":"bottom","x":1.7,"y":0.06,"z":1.2,"shell":"机身、冷热出水口、接水盘和桶座","parts":["Glass","Bands"],"partColors":{"8ccaff":"Bands"},"actions":[]},
+    {"id":"parts_shelf","name":"元器件货架","origin":"bottom","x":5,"y":0.06,"z":1.2},
+    {"id":"workbench","name":"车库工作台","origin":"bottom","x":-5,"y":0.06,"z":3.8},
+    {"id":"guitar_stand","name":"木吉他与琴架","origin":"bottom","x":-1.7,"y":0.06,"z":3.8},
+    {"id":"shoe_rack","name":"门口鞋架","origin":"bottom","x":1.7,"y":0.06,"z":3.8},
+    {"id":"garage_shelf","name":"车库置物架","origin":"bottom","x":5,"y":0.06,"z":3.8,"reserve":true}
+  ]
+}

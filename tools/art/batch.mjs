@@ -9,7 +9,9 @@ import { writeSources } from './batch-ledger.mjs';
 const root = path.resolve(import.meta.dirname,'../..');
 const { args: [command,...args], batchName, resource, policy } = batchOptions(process.argv.slice(2));
 const withColor = batchName !== 'batch1';
-const hybrid = batchName === 'batch3';
+// 前三批沿用原先的取景和下载件处理，以便复现已交付结果。
+const legacyBatch = ['batch1','batch2','batch3'].includes(batchName);
+const isHybrid = item => !!item.parts?.length;
 const local = path.join(root,'art-src/tripo',batchName), assets = path.join(root,'unity/Game/Assets/Art/Props');
 const read = file => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,'utf8')) : null;
 function save(file,value) {
@@ -19,7 +21,8 @@ function save(file,value) {
 }
 const hash = file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const specs = read(path.join(root,'src/data/tables/art.json')).PROPS;
-const batch = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json')).props.map(entry=>{
+const selection = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json'));
+const batch = selection.props.map(entry=>{
   const spec = {...entry,...specs.find(row=>row.id===entry.id)};
   if (![spec.w,spec.d,spec.h,spec.budget].every(num=>num>0)) throw Error('缺少道具规格：'+entry.id);
   return spec;
@@ -38,23 +41,32 @@ function tool(script,...params) {
   if(result.error || result.status!==0) throw result.error??Error(script+' 未完成');
 }
 function chosen(id) { const item=batch.find(prop=>prop.id===id); if(!item) throw Error(batchName+' 未收录：'+id); return item; }
-function prepared(p) {
+function prepared(item,p) {
   const report = read(path.join(p.ref,'report.json'));
   const shell = path.join(p.dir,'shell.glb');
   return fs.existsSync(p.game) && views.every(view=>fs.existsSync(path.join(p.ref,view+'.png'))) &&
     (!withColor || fs.existsSync(path.join(p.ref,'color.png'))) && report?.sha===hash(p.game) &&
-    (!hybrid || (fs.existsSync(shell) && report.shellSha===hash(shell)));
+    (legacyBatch || report.tightFrame === true) &&
+    (!isHybrid(item) || (fs.existsSync(shell) && report.shellSha===hash(shell)));
 }
 function manifest() {
-  const entries=batch.filter(item=>prepared(paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
+  const entries=batch.filter(item=>prepared(item,paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
     views:Object.fromEntries(views.map(view=>[view,path.join(paths(id).ref,view+'.png')])),tripoSlots:{正面:'front.png',左侧:'right.png',右侧:'left.png',背面:'back.png'},settings:'按 tripoSlots 填网页格子，不按文件名同名上传。私有；H3.1 四视图，正面 +Z；先审轮廓，再生成微缩玩具风底色，普通 1K / 大件最多 2K；下载 GLB。不要烘焙文字或灯光。'}));
   if (withColor) {
     const lines = ['# '+batchName+' 网页上传清单', '', '私有 · H3.1 多视图。先核对几何正反与轮廓，再选图片贴图，上传彩色参考。'];
+    if (selection.creditLimit) {
+      const first = batch.filter(item=>!item.reserve).length;
+      lines.push('', `首轮 ${first} 件 × 40＝${first*40} 分（几何 30＋图片贴图 10）。候补与返工共用剩余 ${selection.creditLimit-first*40} 分，全批上限 ${selection.creditLimit}。`);
+    }
     for (const entry of entries) {
       entry.color = path.join(paths(entry.id).ref,'color.png');
       lines.push('', '## '+entry.name+'（'+entry.id+'）','');
-      if(hybrid) {
-        const item=chosen(entry.id);
+      const item=chosen(entry.id);
+      if(selection.creditLimit) {
+        entry.reserve=!!item.reserve;
+        lines.push(item.reserve ? '候补，首轮请跳过。' : '首轮上传。', '');
+      }
+      if(isHybrid(item)) {
         entry.shell=item.shell;
         lines.push('仅生成一件：'+item.shell+'。四张灰图用于几何，彩图用于图片贴图。','');
       }
@@ -68,6 +80,7 @@ function manifest() {
   save(path.join(local,'upload.json'),entries);
 }
 function state(item) {
+  const hybrid=isHybrid(item);
   const original=paths(item.id), report=read(original.report), download=read(path.join(original.dir,'download.json'));
   const assembly=hybrid && read(path.join(original.dir,'assembly.json'));
   const repaired=hybrid ? !!assembly && !!download && assembly.originalSha===download.sha && assembly.refSha===download.refSha : report?.source==='repaired.glb';
@@ -77,10 +90,11 @@ function state(item) {
   const normal=inspected && qc.pass && report?.sha===stamp.sha && report.refSha===qc.refSha && !!qc.mirrorDepth===!!report.mirrorDepth &&
     (!hybrid || (repaired && report.originalSha===download.sha)) && fs.existsSync(path.join(p.dest,report.model));
   const receipt=normal && read(path.join(shots,item.id+'.json'));
-  return {prep:prepared(p),downloaded, qc:inspected?qc:null,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png')) && (!hybrid || !item.actions.length || fs.existsSync(path.join(shots,item.id+'-action.png')))};
+  return {prep:prepared(item,p),downloaded, qc:inspected?qc:null,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png')) && (!hybrid || !item.actions.length || fs.existsSync(path.join(shots,item.id+'-action.png')))};
 }
 async function ingest(item,file,mirrorDepth) {
-  const repaired=path.basename(file)==='repaired.glb', p=paths(item.id,repaired); if(!prepared(p)) throw Error('请先 prep '+item.id);
+  const hybrid=isHybrid(item);
+  const repaired=path.basename(file)==='repaired.glb', p=paths(item.id,repaired); if(!prepared(item,p)) throw Error('请先 prep '+item.id);
   const incoming=path.resolve(file); if(path.extname(incoming).toLowerCase()!=='.glb' || !fs.statSync(incoming).isFile()) throw Error('需要下载的 GLB 文件');
   const sha=hash(incoming), refSha=hash(p.game);
   const assemblyFile=path.join(p.dir,'assembly.json');
@@ -95,11 +109,11 @@ async function ingest(item,file,mirrorDepth) {
     if(fs.existsSync(p.source)) fs.renameSync(p.source,path.join(p.dir,'previous-'+randomUUID()+'.glb'));
     fs.copyFileSync(incoming,p.source,fs.constants.COPYFILE_EXCL);
     if(hash(p.source)!==sha) throw Error('下载件复制校验失败，保留原件');
-    if(!hybrid) fs.unlinkSync(incoming);
+    if(legacyBatch && !hybrid) fs.unlinkSync(incoming);
   }
   if(!repaired) save(path.join(p.dir,'download.json'),{sha,refSha});
   const referenceDir=hybrid && repaired ? path.join(p.dir,'game-ref') : p.ref;
-  if(hybrid && repaired) tool('qc',p.game,'--out',referenceDir,'--flat','--bg',1,'--views',views.join(','));
+  if(hybrid && repaired) tool('qc',p.game,...(legacyBatch?[]:['--tight-frame']),'--out',referenceDir,'--flat','--bg',1,'--views',views.join(','));
   try { tool('qc',p.source,'--out',p.qc,'--ref',referenceDir,'--height',item.h,'--silhouette',...(repaired?['--budget',item.budget]:[]),...(repaired&&item.id==='server_rack'?['--rack-clearance']:[]),...(mirrorDepth?['--mirror-depth']:[])); }
   catch(error) {save(path.join(p.qc,'report.json'),{sha,refSha,pass:false,problems:['模型读取或四视图渲染失败：'+error.message]});throw error;}
   const result=read(path.join(p.qc,'report.json')), reference=read(path.join(referenceDir,'report.json'));
@@ -124,6 +138,7 @@ async function ingest(item,file,mirrorDepth) {
   deliver(item,p,mirrorDepth,sha,refSha);
 }
 function deliver(item,p,mirrorDepth,sha,refSha,previous=null) {
+  const hybrid=isHybrid(item);
   const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
   // 旧版已经交付的混合件在 reexport 时复现原配方。重新 ingest 则使用独立程序件预算。
   const legacy = hybrid && previous && (previous.legacyHybridRecipe ?? !previous.lods[0].partRatios);
@@ -151,9 +166,10 @@ try {
     if(!fs.existsSync(ledgerFile)) save(ledgerFile,{});
     for(const item of args.length?args.map(chosen):batch) {
       const p=paths(item.id), shell=path.join(p.dir,'shell.glb');
-      if(hybrid) tool('hybrid-export',item.id,p.dir);
+      const hybrid=isHybrid(item);
+      if(hybrid || !legacyBatch) tool('hybrid-export',item.id,p.dir,'--batch',batchName);
       else tool('export-scene-glb',item.id,p.game);
-      tool('qc',hybrid?shell:p.game,'--out',p.ref,'--flat','--bg',1,'--views',(withColor?[...views,'color']:views).join(','));
+      tool('qc',hybrid?shell:p.game,...(legacyBatch?[]:['--tight-frame']),'--out',p.ref,'--flat','--bg',1,'--views',(withColor?[...views,'color']:views).join(','));
       const reportFile=path.join(p.ref,'report.json');
       save(reportFile,{...read(reportFile),sha:hash(p.game),...(hybrid?{shellSha:hash(shell)}:{})});manifest();
     }
@@ -181,22 +197,23 @@ try {
   } else if(command==='credit' && args.length>=2) {
     const {id}=chosen(args[0]), points=Number(args[1]); if(!/^\d+$/.test(args[1])||!Number.isSafeInteger(points)) throw Error('积分须为非负整数（累计实耗）');
     ledger[id]={reworks:0,...ledger[id],credits:points,...(args.length>2?{note:args.slice(2).join(' ')}:{})}; save(ledgerFile,ledger);
-  } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry)};}));
+  } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry,item)};}));
   else if(command==='ledger') {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
-      const method=[e.method,hybrid?'四向灰模生成外壳：'+item.shell+'；参考原色图贴图，程序件从游戏原模回装':null,
+      const hybrid=isHybrid(item);
+      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+'；参考原色图贴图，程序件从游戏原模回装':null,
         e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?(hybrid?'AI 外壳＋程序部件':'AI 外壳 + 程序化修补')+'；本地追加 0 积分':null].filter(Boolean).join('；');
       return {id:batchName+'_'+id,name,source:hybrid && repaired?'AI 外壳＋程序部件':e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
         file:s.downloaded?`art-src/tripo/${batchName}/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,
-        qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e)};
+        qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e,item)};
     });
     await writeSources(path.join(root,'tables/美术.xlsx'),rows);
-  } else throw Error('用法：batch.mjs [--batch batch1|batch2|batch3] prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
+  } else throw Error('用法：batch.mjs [--batch batchN] prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
-function deliveryStatus(s,entry) {
-  if(hybrid && s.accepted) return 'Unity 已生成截图；待人工验收';
+function deliveryStatus(s,entry,item) {
+  if(isHybrid(item) && s.accepted) return 'Unity 已生成截图；待人工验收';
   if(s.report?.source==='repaired.glb') return '本地修补及三级回读通过；待 Unity 人工验收';
   return entry?.status ?? (s.accepted?'Unity 已生成截图；待人工验收':s.report?'FBX 回读通过；待 Unity 验收':s.qc?.pass?'下载件通过；尚无匹配的正式 FBX':s.downloaded?'已下载':s.prep?'已备上传图':'计划中');
 }
