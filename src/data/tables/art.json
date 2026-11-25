@@ -128,7 +128,7 @@
   {"id":"flag_row","w":2.4,"d":0.5,"h":4.2,"tris":1176,"budget":15000,"mats":6,"anim":true,"status":"程序生成"},
   {"id":"standing_banner","w":0.8,"d":0.4,"h":2,"tris":848,"budget":15000,"mats":7,"status":"程序生成"},
   {"id":"display_counter","w":1.6,"d":0.6,"h":1,"tris":4664,"budget":15000,"mats":16,"status":"程序生成"},
-  {"id":"hand_truck","w":0.6,"d":0.7,"h":1.3,"tris":1748,"budget":6000,"mats":7,"status":"程序生成"},
+  {"id":"hand_truck","w":0.6,"d":0.7,"h":1.3,"tris":1748,"budget":15000,"mats":7,"status":"程序生成"},
   {"id":"led_ticker","w":2.4,"d":0.12,"h":0.35,"tris":1848,"budget":6000,"mats":8,"anim":true,"status":"程序生成"},
   {"id":"parts_shelf","w":1.4,"d":0.45,"h":1.9,"tris":6336,"budget":15000,"mats":10,"status":"程序生成"},
   {"id":"plastic_stools","w":1.6,"d":1.6,"h":0.8,"tris":5640,"budget":15000,"mats":15,"status":"程序生成"},
@@ -631,6 +631,130 @@
    "qc":"下载件 38034 面，宽深高 0.8056×0.3031×0.9785 m；通过；LOD 15000/6000/1800",
    "status":"Unity 已生成截图；待人工验收"
   },
-  {"id":"batch4_garage_shelf","name":"车库置物架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"}
+  {"id":"batch4_garage_shelf","name":"车库置物架","method":"四向灰模生成整件；原色 3/4 图贴图","qc":"待检","status":"已备上传图"},
+  {
+   "id":"batch5_kiosk",
+   "name":"街边售卖亭",
+   "source":"AI 外壳＋程序部件",
+   "method":"四向灰模生成外壳：亭身、顶棚、柜台饮品和背墙货架（两侧敞开）；参考原色图贴图，程序件从游戏原模回装；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10；AI 外壳＋程序部件；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch5/kiosk/repaired.glb",
+   "qc":"修补件 14851 面，宽深高 1.99×1.98×2.5 m；通过；LOD 14851/5999/1798",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_meeting_table",
+   "name":"六人会议桌椅",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/meeting_table/tripo.glb",
+   "qc":"下载件 34585 面，宽深高 0.98×0.9776×0.3443 m；通过；LOD 14999/5998/1797",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_hand_truck",
+   "name":"载货手推车",
+   "source":"AI 外壳＋程序部件",
+   "method":"四向灰模生成外壳：三层纸箱、封条与绿色捆带；参考原色图贴图，程序件从游戏原模回装；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10；AI 外壳＋程序部件；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch5/hand_truck/repaired.glb",
+   "qc":"修补件 14855 面，宽深高 0.58×0.66×1.287 m；通过；LOD 14855/5998/1799",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_vending",
+   "name":"自动售货机",
+   "source":"AI 外壳＋程序部件",
+   "method":"四向灰模生成外壳：机身、按键、货道饮料与取物口（前窗敞开）；参考原色图贴图，程序件从游戏原模回装；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10；AI 外壳＋程序部件；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch5/vending/repaired.glb",
+   "qc":"修补件 14850 面，宽深高 0.89×0.7875×1.9 m；通过；LOD 14850/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_standing_desk",
+   "name":"站立办公桌",
+   "source":"AI 外壳＋程序部件",
+   "method":"四向灰模生成外壳：桌架、桌面用品及显示器壳体；参考原色图贴图，程序件从游戏原模回装；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10；AI 外壳＋程序部件；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch5/standing_desk/repaired.glb",
+   "qc":"修补件 14848 面，宽深高 1.5×0.75×1.4891 m；通过；LOD 14848/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_money_tree",
+   "name":"发财树",
+   "source":"ficus by Herberhold，BlendSwap 23125，CC0；文件取自 NeRF 合成数据集（Hugging Face wengflow/robust-e-nerf scenes/ficus.blend，CC-BY-4.0），致谢 Herberhold 与 NeRF（Mildenhall 等）作者",
+   "method":"Blender 后台脚本 ficus_prep.py：去相机与地面片，Mapping 烘进 UV；等比缩放到 1.6 m 高，盆约 0.44 m 宽，树冠伸出 0.7 m（约 0.66×1.06 m），占地与碰撞按表内 0.7×0.7；LOD0 精模，LOD1/2 为 6 cm/9 cm 分块凸包树冠（叶片平均色）＋同一盆茎；散叶植物按件放宽 LOD 轮廓门槛 0.55/0.52、漏像素 ≤10%；不花 Tripo 积分，原 Tripo 版（已付 40 分）留作备份",
+   "credits":0,
+   "license":"CC0（原作）；数据集 CC-BY-4.0，已致谢",
+   "file":"art-src/ficus/src/ficus.blend",
+   "qc":"精模 13990 面，宽深高 0.665×1.058×1.6 m；LOD 13990/5577/1522；远级轮廓 IoU 门槛 0.55/0.52",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_locker",
+   "name":"员工储物柜",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/locker/tripo.glb",
+   "qc":"下载件 34319 面，宽深高 0.6468×0.2577×0.9795 m；通过；LOD 14999/5999/1799",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_arcade",
+   "name":"摇杆街机",
+   "source":"AI 外壳＋程序部件",
+   "method":"四向灰模生成外壳：机柜、屏框、摇杆、按钮和投币口；参考原色图贴图，程序件从游戏原模回装；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10；AI 外壳＋程序部件；本地追加 0 积分",
+   "credits":40,
+   "file":"art-src/tripo/batch5/arcade/repaired.glb",
+   "qc":"修补件 14850 面，宽深高 0.78×0.743×1.8 m；通过；LOD 14850/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_reception",
+   "name":"大堂前台",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/reception/tripo.glb",
+   "qc":"下载件 34187 面，宽深高 0.9792×0.3655×0.3977 m；通过；LOD 14999/5999/1799",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_gong",
+   "name":"庆功铜锣",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/gong/tripo.glb",
+   "qc":"下载件 38238 面，宽深高 0.6921×0.3232×0.9781 m；通过；LOD 15000/6000/1800",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_clothes_rack",
+   "name":"挂衣架",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/clothes_rack/tripo.glb",
+   "qc":"下载件 35574 面，宽深高 0.8553×0.2393×0.978 m；通过；LOD 14998/5998/1798",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_garage_shelf",
+   "name":"车库置物架",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/garage_shelf/tripo.glb",
+   "qc":"下载件 36700 面，宽深高 0.8055×0.2674×0.9801 m；通过；LOD 15000/5999/1799",
+   "status":"Unity 已生成截图；待人工验收"
+  },
+  {
+   "id":"batch5_fridge",
+   "name":"贴便签的冰箱",
+   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
+   "credits":40,
+   "file":"art-src/tripo/batch5/fridge/tripo.glb",
+   "qc":"下载件 37315 面，宽深高 0.4236×0.3843×0.9803 m；通过；LOD 14999/5999/1798",
+   "status":"Unity 已生成截图；待人工验收"
+  }
  ]
 }

@@ -50,6 +50,9 @@ def assemble(folder, item, budget, mirror):
         alpha = shader.inputs['Alpha']
         if alpha.default_value >= 1:
             alpha.default_value = .62
+        # 选件表可按件压低玻璃不透明度，让柜内货品颜色透出来。
+        if 'glassAlpha' in item:
+            alpha.default_value = float(item['glassAlpha'])
         glass.diffuse_color = (*shader.inputs['Base Color'].default_value[:3], alpha.default_value)
 
     pieces = import_meshes(folder/'tripo.glb')

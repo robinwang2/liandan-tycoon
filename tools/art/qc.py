@@ -110,7 +110,15 @@ if opt.get('lod') in ('1', '2'):
     if not base:
         problems.append('缺少用于比较覆盖率的 LOD0')
     else:
-        integrity = report['lodIntegrity'] = compare(base, meshes)
+        # 规范化报告若为该件放宽了门槛（散叶植物），沿用同一门槛；其余道具用默认值。
+        overrides = {}
+        sibling = os.path.join(os.path.dirname(os.path.abspath(src)), 'report.json')
+        if os.path.exists(sibling):
+            with open(sibling, encoding='utf8') as fh:
+                recorded = next((lod.get('lodIntegrity') for lod in json.load(fh).get('lods', []) if str(lod.get('level')) == opt['lod']), None)
+            if recorded:
+                overrides = dict(min_iou=recorded['minIoU'], max_interior_loss=recorded['maxInteriorLoss'])
+        integrity = report['lodIntegrity'] = compare(base, meshes, **overrides)
         for view, metrics in integrity['views'].items():
             if metrics['interiorLoss'] > integrity['maxInteriorLoss']:
                 problems.append(f"{view} 内部漏像素 {metrics['interiorLoss']:.2%} 超过 {integrity['maxInteriorLoss']:.2%}")

@@ -186,7 +186,7 @@ namespace Liandan.EditorTools
             foreach (var child in root.GetComponentsInChildren<LODGroup>(true))
                 if (child.gameObject != root) UnityEngine.Object.DestroyImmediate(child);
             var group = root.GetComponent<LODGroup>() ?? root.AddComponent<LODGroup>();
-            Policy policy; string origin="bottom"; PropBatch.Config config=null!; PropBatch.Item selectionItem=null!;
+            Policy policy; Vector3 footprint=Vector3.zero; string origin="bottom"; PropBatch.Config config=null!; PropBatch.Item selectionItem=null!;
             if (Batch)
             {
                 context.DependsOnSourceAsset(PropBatch.PolicyPath);
@@ -203,6 +203,9 @@ namespace Liandan.EditorTools
                     item=JsonUtility.FromJson<PropBatch.Table>(File.ReadAllText(art)).PROPS.Single(prop=>prop.id==item.id);
                 }
                 policy=new Policy { thresholds=config.thresholds,size=new Vector3(item.w,item.h,item.d),budgets=config.lodRules.Select(rule=>(item.budget*rule.budgetPercent+99)/100).ToArray() };
+                // 树冠可伸出占地（散叶盆栽）：尺寸按选件表的树冠宽深验，碰撞仍按表内占地。
+                footprint=policy.size;
+                if(selectionItem.canopyW>0) policy.size=new Vector3(selectionItem.canopyW,item.h,selectionItem.canopyD);
             }
             else { context.DependsOnSourceAsset(PolicyPath); policy=JsonUtility.FromJson<Policy>(File.ReadAllText(PolicyPath)); }
             var renderers = root.GetComponentsInChildren<MeshRenderer>(true);
@@ -248,7 +251,11 @@ namespace Liandan.EditorTools
                     string reason=$"{assetPath} LOD{level}：{count}/{policy.budgets[level]} 三角面，尺寸 {bounds.size}，原点 {origin}，范围 {bounds}";
                     Debug.LogWarning(reason);
                 }
-                if (level==0) { var box = root.AddComponent<BoxCollider>(); box.center=bounds.center; box.size=bounds.size; }
+                if (level==0)
+                {
+                    var box = root.AddComponent<BoxCollider>(); box.center=bounds.center; box.size=bounds.size;
+                    if(footprint!=Vector3.zero && footprint!=policy.size) { box.center=new Vector3(0,bounds.center.y,0); box.size=new Vector3(footprint.x,bounds.size.y,footprint.z); }
+                }
             }
             if(selectionItem?.parts?.Length>0) CheckAssembly(root,lods,selectionItem,Sibling("report.json"));
             group.SetLODs(lods); group.RecalculateBounds();

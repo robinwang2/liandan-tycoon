@@ -158,27 +158,31 @@ namespace Liandan.EditorTools
                         if(errors.Length>0)throw new InvalidDataException(string.Join("；",errors));}
                     var placed=PropBatch.PlaceItem(item,resource);
                     if(!placed)throw new InvalidDataException("FBX 已安装，但无法加载："+source);
-                    copy=UnityEngine.Object.Instantiate(placed,new Vector3(100,0,100),Quaternion.identity);
+                    copy=UnityEngine.Object.Instantiate(placed,new Vector3(100,0,100),placed.transform.rotation);
                     var group=copy.GetComponent<LODGroup>();var box=copy.GetComponent<BoxCollider>();
                     if(!group || group.lodCount!=3)throw new InvalidDataException("缺少完整三级 LODGroup");
                     if(!box)throw new InvalidDataException("缺少 BoxCollider");
                     foreach(var lod in group.GetLODs())
                         if(lod.renderers.Length==0 || lod.renderers.Any(renderer=>!renderer || renderer.sharedMaterials.Length==0 || renderer.sharedMaterials.Any(mat=>!mat || mat.shader.name!="Universal Render Pipeline/Lit")))throw new InvalidDataException("LOD 缺少渲染器或 URP/Lit 材质");
                     if(!group.GetLODs()[0].renderers.SelectMany(renderer=>renderer.sharedMaterials).Any(mat=>mat.GetTexture("_BaseMap")))throw new InvalidDataException("LOD0 缺少底色图");
-                    group.ForceLOD(0);var bounds=box.bounds;camera.transform.position=bounds.center+new Vector3(.65f,.5f,1)*bounds.size.magnitude*2;camera.transform.LookAt(bounds.center);camera.orthographicSize=bounds.extents.magnitude*1.08f;
+                    group.ForceLOD(0);
                     var levels=group.GetLODs();
                     float xSign=1;
                     if(hybrid)
                     {
                         xSign=PropImport.CheckAssembly(copy,levels,item,Path.Combine(Path.GetDirectoryName(source)!,"report.json"));
-                        float front=-xSign;
-                        if(id=="news_rack") front=Mathf.Sign(PropBatch.Part(levels[0],id,"Glass",0).GetComponent<Renderer>().bounds.center.z-bounds.center.z);
-                        camera.transform.position=bounds.center+new Vector3(.9f,.55f,front)*bounds.size.magnitude*2;
-                        camera.transform.LookAt(bounds.center);
                         foreach(var pose in item.actions.Where(action=>action.axis=="emission"))
                             for(int level=0;level<levels.Length;level++)
                                 SetLamp(PropBatch.Part(levels[level],id,pose.node,level),pose.rest);
                     }
+                    // 与 Blender QC 彩图同侧：Blender 的 (0.75, -1, 0.65) 在标准 FBX 导入后为局部 (0.75, 0.65, -1)。
+                    // 混合件按回读枢轴确定轴向。只在静止姿态取景一次，远级和动作图共用同一变换与画幅。
+                    var center=box.transform.TransformPoint(box.center);
+                    var diagonal=Vector3.Scale(box.size,box.transform.lossyScale).magnitude;
+                    var direction=copy.transform.TransformDirection(new Vector3(.75f*xSign,.65f,-xSign)).normalized;
+                    camera.transform.position=center+direction*diagonal*2;
+                    camera.transform.LookAt(center);
+                    camera.orthographicSize=diagonal*.5f*1.08f;
                     using var sha=SHA256.Create();var digest=BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(source)!,"report.json")))).Replace("-","").ToLowerInvariant();
                     if(resource!="Batch1" && resource!="Batch2" && passed==0) FurnaceShots.WriteFirstShot(camera,folder,id);
                     else FurnaceShots.WriteShot(camera,folder,id);

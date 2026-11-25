@@ -1,0 +1,23 @@
+{
+  "creditLimit": 570,
+  "props": [
+    {"id":"kiosk","name":"街边售卖亭","origin":"bottom","x":-5.4,"y":0.06,"z":-4,"shell":"亭身、顶棚、柜台饮品和背墙货架（两侧敞开）","parts":["Glass"],"actions":[]},
+    {"id":"meeting_table","name":"六人会议桌椅","origin":"bottom","x":-1.7,"y":0.06,"z":-4},
+    {"id":"hand_truck","name":"载货手推车","origin":"bottom","x":1.8,"y":0.06,"z":-4,"shell":"三层纸箱、封条与绿色捆带","parts":["Frame"],"partColors":{"22252d":"Frame","aeb6c2":"Frame","6f8586":"Frame"},"actions":[]},
+    {"id":"vending","name":"自动售货机","origin":"bottom","x":5.2,"y":0.06,"z":-4,"shell":"机身、按键、货道饮料与取物口（前窗敞开）","parts":["Glass"],"glassAlpha":0.15,"actions":[]},
+    {"id":"standing_desk","name":"站立办公桌","origin":"bottom","x":-5.4,"y":0.06,"z":-1.1,"shell":"桌架、桌面用品及显示器壳体","parts":["screen-surface"],"actions":[]},
+    {"id":"money_tree","name":"发财树","origin":"bottom","x":-1.7,"y":0.06,"z":-1.1,"canopyW":0.6647,"canopyD":1.0584,
+     "replacement":{"name":"ficus","blend":"art-src/ficus/src/ficus.blend","blendSha":"063a1c7088b006f497d6517c5bc330ea58d6b49ce1442aaa7a0cba617560c0d8","prep":"tools/art/ficus_prep.py",
+       "minIoU":[0.55,0.52],"maxInteriorLoss":0.10,
+       "source":"ficus by Herberhold，BlendSwap 23125，CC0；文件取自 NeRF 合成数据集（Hugging Face wengflow/robust-e-nerf scenes/ficus.blend，CC-BY-4.0），致谢 Herberhold 与 NeRF（Mildenhall 等）作者",
+       "license":"CC0（原作）；数据集 CC-BY-4.0，已致谢",
+       "method":"Blender 后台脚本 ficus_prep.py：去相机与地面片，Mapping 烘进 UV；等比缩放到 1.6 m 高，盆约 0.44 m 宽，树冠伸出 0.7 m（约 0.66×1.06 m），占地与碰撞按表内 0.7×0.7；LOD0 精模，LOD1/2 为 6 cm/9 cm 分块凸包树冠（叶片平均色）＋同一盆茎；散叶植物按件放宽 LOD 轮廓门槛 0.55/0.52、漏像素 ≤10%；不花 Tripo 积分，原 Tripo 版（已付 40 分）留作备份"}},
+    {"id":"locker","name":"员工储物柜","origin":"bottom","x":1.8,"y":0.06,"z":-1.1},
+    {"id":"arcade","name":"摇杆街机","origin":"bottom","x":5.2,"y":0.06,"z":-1.1,"shell":"机柜、屏框、摇杆、按钮和投币口","parts":["screen-surface"],"actions":[]},
+    {"id":"reception","name":"大堂前台","origin":"bottom","x":-5.4,"y":0.06,"z":1.5},
+    {"id":"gong","name":"庆功铜锣","origin":"bottom","x":-1.7,"y":0.06,"z":1.5},
+    {"id":"clothes_rack","name":"挂衣架","origin":"bottom","x":1.8,"y":0.06,"z":1.5},
+    {"id":"garage_shelf","name":"车库置物架","origin":"bottom","x":5.2,"y":0.06,"z":1.5},
+    {"id":"fridge","name":"贴便签的冰箱","origin":"bottom","x":-5.4,"y":0.06,"z":4}
+  ]
+}
