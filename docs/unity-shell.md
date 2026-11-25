@@ -136,6 +136,10 @@ dotnet run --no-build -c Release --project unity/KernelCli -- trace tools/parity
 
 图形验收由本机执行：`node tools/unity/run.mjs build-game`，随后 `node tools/unity/run.mjs autoplay 42 unity/Game/Build/shots-B-42`（新目录）。请回传该目录的 `player.log` 和截图；静态编译、轨迹比对均不能代替此项。
 
+**主题切换过场**：旧主题在帧末截屏，新主题随即生效。独立的 `UIDocument` 共享 `ShellPanel`，排序高于主界面且不接收点击；`Draw()` 重建控件不会清掉它。旧截图按约 16 物理像素一格的顶点透明度揭开，火线、扫描线和藤蔓按面板逻辑像素绘制。辉光用普通透明度描边近似网页的模糊和加色混合。「设置 → 显示 → 主题切换过场动效」默认开启；关闭只影响画面，不关闭主题音效。读档、新局、回标题直接换主题。
+
+普通 autoplay 截图不播过场，不改玩家偏好。专项用例对 `burn`、`frost`、`bloom` 各按总时长的 25%、55%、85% 钉帧，输出 `theme-fx-{burn,frost,bloom}-{1,2,3}.png`，再各自完整实播一次。`player.log` 须出现三行 `Liandan theme fx <kind>: worst frame <ms> ms over <frames> frames`，跳过抓图后的首帧，不含钉帧截图。可用 `node tools/unity/run.mjs autoplay 42 unity/Game/Build/themefx-1080 1920x1080` 验收；重点对照顶栏、底栏是否倒置或错位，以及动效中按钮是否可点。
+
 页签排版回归：重新 `build-game` 后，用同一种子跑以下两次。目录须全新或为空；脚本核对每张 PNG 的实际像素尺寸。对照 `action-ideo.png`、`side-log.png` 和 `03-month-1.png`：左右页签的图标、文字和角标应在同一按钮内横排；空间不足时整颗按钮移到下一行。顶栏允许整项换行，不应盖住正文；行动卡的长说明仍应自然折行。
 
 ```powershell

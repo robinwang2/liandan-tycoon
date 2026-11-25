@@ -10,6 +10,7 @@ const easeInOut = k => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
 
 let running = null;
 export const themeFxRunning = () => !!running;
+export const stopThemeFx = () => running?.stop();
 
 export function playThemeFx(kind, ui) {
   const make = FX[kind];

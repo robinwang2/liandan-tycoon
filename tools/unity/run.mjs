@@ -75,11 +75,11 @@ function run() {
     checkMix(shots); return;
   }
   if (mode === 'autoplay') {
-    const size = extra.length > 1 && ['1280x720', '1600x900'].includes(extra.at(-1)) ? extra.pop() : '1600x900';
+    const size = extra.length > 1 && ['1280x720', '1600x900', '1920x1080'].includes(extra.at(-1)) ? extra.pop() : '1600x900';
     const [width, height] = size.split('x');
     const [shotsArg, months] = extra;
     if (!/^-?\d+$/.test(input || '') || Number(input) < -2147483648 || Number(input) > 2147483647 || !shotsArg || extra.length > 2 || (months !== undefined && (!/^\d+$/.test(months) || Number(months) < 1 || Number(months) > 2147483647)))
-      throw new Error('用法：autoplay <整数种子> <全新或空截图目录> [月数] [1280x720|1600x900]');
+      throw new Error('用法：autoplay <整数种子> <全新或空截图目录> [月数] [1280x720|1600x900|1920x1080]');
     const shots = resolve(shotsArg), exe = testPlayer;
     if (!existsSync(exe)) throw new Error('请先 build-game：' + exe);
     mkdirSync(shots, { recursive: true });
@@ -92,6 +92,11 @@ function run() {
     const failure = output.match(/^Liandan autoplay FAILED:.*$/m);
     if (failure) throw new Error(failure[0] + '\n' + log);
     const required = ['01-title','02-wizard','03-month-1','04-event','05-result','menu','settings','theme-default','theme-soviet','theme-rose','theme-cold','tutorial-tip','illustrated-event'];
+    for (const kind of ['burn','frost','bloom']) {
+      required.push(...[1,2,3].map(index=>`theme-fx-${kind}-${index}`));
+      if (!new RegExp(`^Liandan theme fx ${kind}: worst frame [0-9]+\\.[0-9] ms over [1-9][0-9]* frames`, 'm').test(output))
+        throw new Error(`缺少 ${kind} 实播帧耗时记录：${log}`);
+    }
     required.push(...['board','chain','team','safe','perks','fin','log'].map(key=>'side-'+key),
       ...['rd','team','cap','pr','ops','ideo'].map(key=>'action-'+key),'dialog-recruit','dialog-policy-work','employee-hover');
     if (!months) required.push('07-ending');
@@ -105,7 +110,7 @@ function run() {
     checkMix(shots); return;
   }
   if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
-    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | art-batchN | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900]');
+    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | art-batchN | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900|1920x1080]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
   mkdirSync(logs, { recursive: true });

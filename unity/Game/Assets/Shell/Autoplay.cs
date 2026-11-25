@@ -23,6 +23,9 @@ namespace Liandan.Shell
         private bool employeeVisible, hiredVisible, hiring, inspectAction;
         private GameState? realState;
         private int fixture;
+#nullable enable
+        private IEnumerator? fxFixture;
+#nullable restore
         private void ThemeShot(string name){if(!game.Root.ClassListContains("theme-"+name))throw new InvalidOperationException("主题未切换："+name);Shot("theme-"+name);}
         private bool ThemeFixtures(){
             if(fixture>4)return false;
@@ -30,8 +33,28 @@ namespace Liandan.Shell
             else if(fixture==1){if(!game.Controls.ContainsKey("tip"))throw new InvalidOperationException("教学气泡未出现");Shot("tutorial-tip");game.State.Snapshot.Remove("tut");game.State.Snapshot["ideo"]=new JsonObject{["v"]="cn",["result"]="red"};}
             else if(fixture==2){ThemeShot("soviet");game.State.Snapshot["ideo"]!["v"]="us";}
             else if(fixture==3){ThemeShot("rose");game.State.Snapshot["ideo"]!["result"]="cap";}
-            else {ThemeShot("cold");game.State=realState!;game.Tab="rd";game.Side="board";}
+            else {ThemeShot("cold");game.State=realState!;game.Tab="rd";game.Side="board";fxFixture=ThemeFxFixtures();}
             fixture++;game.Draw();return true;
+        }
+        // 每次 MoveNext 都由 Run 在帧末调用；yield 后才截，避免读到 Pin 前的画面。
+        private IEnumerator ThemeFxFixtures(){
+            var root=game.Root;var fx=game.Transition;var original=root.GetClasses().Single(name=>name.StartsWith("theme-"));
+            foreach(var (kind,target) in new[]{("burn","theme-soviet"),("frost","theme-cold"),("bloom","theme-rose")}){
+                try {
+                    for(int pass=0;pass<2;pass++){
+                        var shot=ScreenCapture.CaptureScreenshotAsTexture();root.RemoveFromClassList(original);root.AddToClassList(target);
+                        fx.Play(kind,shot);
+                        if(pass==0){
+                            int sample=0;foreach(float fraction in new[]{.25f,.55f,.85f}){
+                                float expected=fx.Total*fraction;fx.Pin(expected);yield return null;
+                                if(!Mathf.Approximately(fx.PaintedTime,expected))throw new InvalidOperationException($"过场未画到指定时刻：{kind} {expected}");
+                                Shot($"theme-fx-{kind}-{++sample}");
+                            }
+                        }else while(fx.Playing)yield return null;
+                        fx.Stop();root.RemoveFromClassList(target);root.AddToClassList(original);yield return null;
+                    }
+                }finally{fx.Stop();root.RemoveFromClassList(target);root.AddToClassList(original);}
+            }
         }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void WatchStartup()
@@ -87,6 +110,7 @@ namespace Liandan.Shell
         private string Pick(IEnumerable<string> items) { var choices=items.ToArray(); return choices[(int)(game.RandomValue()*choices.Length)]; }
         private bool Tick()
         {
+            if(fxFixture!=null){if(fxFixture.MoveNext())return false;fxFixture=null;}
             switch(game.ScreenId)
             {
                 case "title": Shot("01-title");Click("menu");break;
