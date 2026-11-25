@@ -43,6 +43,7 @@ namespace Liandan.Shell
                 if(args.Contains("-art-batch1-ab")){enabled=false;return;}
                 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
                 if (args.Contains("-audiotest") || args.Contains("-audiotest-readback")) { StartAudioTest(args); return; }
+                if (args.Contains("-avatar-test")) { Look.SelfTest(); Application.Quit(0); return; }
                 string? eggShots = EggTestDirectory(args);
                 bool gallery = eggShots != null || args.Contains("-eggs");
                 var driver = auto && !gallery ? new Autoplay(this, args) : null;
@@ -75,7 +76,7 @@ namespace Liandan.Shell
                 Draw(); if (eggShots != null) StartCoroutine(RunEggTest(eggShots, saveDirectory));
                 if (driver != null) { UnlockSound(); StartCoroutine(driver.Run()); }
             }
-            catch (Exception error) { Debug.LogException(error); if (auto || args.Contains("-eggs-test") || args.Contains("-audiotest") || args.Contains("-audiotest-readback")) Application.Quit(1); }
+            catch (Exception error) { Debug.LogException(error); if (auto || args.Contains("-eggs-test") || args.Contains("-audiotest") || args.Contains("-audiotest-readback") || args.Contains("-avatar-test")) Application.Quit(1); }
         }
         internal static VisualElement Box(VisualElement parent, string style)
         { var box = new VisualElement(); box.AddToClassList(style); parent.Add(box); return box; }
@@ -107,13 +108,13 @@ namespace Liandan.Shell
         internal void Local(string id, Action<VisualElement> body) { LocalId=id; localBody=body; ScreenId="local"; Draw(); }
         internal void CloseLocal() { ScreenId="main"; Draw(); }
         private VisualElement? bubble;
-        internal void Hover(VisualElement anchor, Func<string> message, string? id=null)
+        internal void Hover(VisualElement anchor, Func<string> message, string? id=null, Action<VisualElement>? header=null)
         {
             void Hide() { bubble?.RemoveFromHierarchy(); bubble=null; }
             void Show()
             {
                 Hide(); var content=message(); if(content.Length==0)return;
-                bubble=Box(Root,"bubble"); bubble.pickingMode=PickingMode.Ignore;
+                bubble=Box(Root,"bubble"); bubble.pickingMode=PickingMode.Ignore; header?.Invoke(bubble);
                 Label(bubble,content).pickingMode=PickingMode.Ignore;
                 var bounds=anchor.worldBound; var origin=Root.worldBound;
                 bubble.style.left=Math.Max(0,bounds.xMax-origin.x+320<origin.width ? bounds.xMax-origin.x+4 : bounds.xMin-origin.x-324);
