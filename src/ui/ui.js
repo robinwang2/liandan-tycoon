@@ -10,7 +10,7 @@ import { artURL, ENDING_ART } from './art.js';
 import { avatarSVG } from './avatar.js';
 import { advanceTutorial, currentTip, dismissTip, isOpen, actOpen, ltabOpen, rtabOpen, gaugeOpen, chipOpen, rightOpen } from './tutorial.js';
 import { icon } from './icons.js';
-import { playThemeFx } from './themefx.js';
+import { playThemeFx, stopThemeFx } from './themefx.js';
 import { createAudio } from '../audio/audio.js';
 import { text, fill, TEXT } from '../data/text.js';
 
@@ -355,6 +355,7 @@ function settingsHTML() {
   <h4>${uh('ui.set.sound')}</h4>${row('master', uh('ui.set.vol.master'))}${row('music', uh('ui.set.vol.music'))}${row('sfx', uh('ui.set.vol.sfx'))}${row('amb', uh('ui.set.vol.amb'))}
   <label class="chk"><input type="checkbox" data-s="mute" ${muted ? 'checked' : ''}> ${uh('ui.set.mute')}</label>
   <h4>${uh('ui.set.display')}</h4><label class="chk"><input type="checkbox" data-s="hints" ${V.hintsOff ? '' : 'checked'}> ${uh('ui.set.hints')}</label><label class="chk"><input type="checkbox" data-s="fps" ${V.fps ? 'checked' : ''}> ${uh('ui.set.showFps')}</label>
+  <label class="chk"><input type="checkbox" data-s="themefx" ${V.themeFxOff ? '' : 'checked'}> ${uh('ui.set.themefx')}</label>
   <div class="row"><button class="btn go" data-a="settings:close">${uh('ui.set.done')}</button></div></section></div>`;
 }
 function setting(s, el) {
@@ -366,6 +367,7 @@ function setting(s, el) {
   }
   else if (s === 'hints') { V.hintsOff = !el.checked; try { localStorage.setItem('ldt_hints', V.hintsOff ? '0' : '1'); } catch { /* 存不了就算了 */ } render(); }
   else if (s === 'fps') { V.fps = el.checked; try { localStorage.setItem('ldt_fps', V.fps ? '1' : '0'); } catch { /* 存不了就算了 */ } render(); }
+  else if (s === 'themefx') { V.themeFxOff = !el.checked; if (V.themeFxOff) stopThemeFx(); try { localStorage.setItem('ldt_themefx', el.checked ? '1' : '0'); } catch { /* 存不了就算了 */ } }
   else if (s.startsWith('vol:')) {
     audio.setVolume({ [s.slice(4)]: +el.value / 100 }); if (el.nextElementSibling) el.nextElementSibling.textContent = el.value;
     try { localStorage.setItem('ldt_audio_v1', JSON.stringify(audio.getState().volume)); } catch { /* 存不了就算了 */ }
@@ -490,7 +492,7 @@ function render() {
   // 刚走完的时候等结局窗弹出来再换，放一段过场；读档、开新局、回标题直接换
   const want = themeWanted();
   if (want !== V.theme && (V.theme === undefined || !V.res)) {
-    if (V.theme !== undefined && want && V.screen === 'play' && playThemeFx(THEME_FX[want][0], ui)) sfx(THEME_FX[want][1]);
+    if (V.theme !== undefined && want && V.screen === 'play' && (V.themeFxOff || playThemeFx(THEME_FX[want][0], ui))) sfx(THEME_FX[want][1]);
     V.theme = want;
   }
   for (const th of Object.keys(THEME_FX)) ui.classList.toggle(th, V.theme === th);
@@ -787,7 +789,7 @@ export function boot(root, scene) {
   addEventListener('pointerdown', unlock, true); addEventListener('keydown', unlock, true);
   let hoverEl = null;
   ui.addEventListener('pointerover', e => { const el = e.target.closest?.('.opt, .act, .tab, .pcard'); if (el !== hoverEl) { hoverEl = el; if (el && !el.disabled) sfx('hover'); } });
-  try { V.fps = localStorage.getItem('ldt_fps') === '1'; V.hintsOff = localStorage.getItem('ldt_hints') === '0'; } catch { /* 读不到就用默认 */ }
+  try { V.fps = localStorage.getItem('ldt_fps') === '1'; V.hintsOff = localStorage.getItem('ldt_hints') === '0'; V.themeFxOff = localStorage.getItem('ldt_themefx') === '0'; } catch { /* 读不到就用默认 */ }
   setInterval(() => {
     audio.setScene(sceneAudio());
     const f = ui.querySelector('.fps'); if (f) f.textContent = fpsText();

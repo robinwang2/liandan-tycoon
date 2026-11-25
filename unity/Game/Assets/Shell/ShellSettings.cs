@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,6 +16,12 @@ namespace Liandan.Shell
         private JsonObject prefs=null!,audio=null!;
         internal JsonObject BrandData=null!;
         private string prefPath="",theme="";
+        internal ThemeFx Transition = null!;
+        internal bool SuppressThemeFx;
+#nullable enable
+        private string? pendingTheme;
+        private Coroutine? themeCapture;
+#nullable restore
         private readonly Dictionary<string,Texture2D> textures=new Dictionary<string,Texture2D>();
         private int effectiveTier,frames;
         private float elapsed,slowTime;
@@ -60,7 +67,7 @@ namespace Liandan.Shell
             // 使用当前 URP 实例的渲染比例，不改变窗口和 UI 的分辨率。
             var pipeline=GraphicsSettings.currentRenderPipeline; if(pipeline!=null)pipeline.GetType().GetProperty("renderScale")?.SetValue(pipeline,Mathf.Clamp(Pref("scale",100),50,150)/100f);
         }
-        private void Update(){PumpRecording();if(Root==null)return;if(Input.anyKeyDown)UnlockSound();if(Time.unscaledTimeAsDouble>=sceneAt)UpdateSoundScene();HandleKeys();elapsed+=Time.unscaledDeltaTime;frames++;if(elapsed<1)return;float fps=frames/elapsed;
+        private void Update(){PumpRecording();if(Root==null)return;Transition.Tick();if(Input.anyKeyDown)UnlockSound();if(Time.unscaledTimeAsDouble>=sceneAt)UpdateSoundScene();HandleKeys();elapsed+=Time.unscaledDeltaTime;frames++;if(elapsed<1)return;float fps=frames/elapsed;
             if(fpsLabel?.panel!=null)fpsLabel.text=Mathf.RoundToInt(fps)+" FPS";
             if(ScreenId=="main" && Pref("auto",1)!=0 && fps<23)slowTime+=elapsed;else slowTime=0;
             if(slowTime>=5 && effectiveTier>0){ApplyGraphics(effectiveTier-1);slowTime=0;}frames=0;elapsed=0;
@@ -84,16 +91,36 @@ namespace Liandan.Shell
             SliderPref("scale",Text("ui.set.scale")+" %",50,150,Pref("scale",100),()=>ApplyGraphics(),10);Label(body,Text("ui.set.fps"));var caps=Box(body,"row");foreach(int cap in new[]{-1,30,60,0})Button(caps,"cap:"+cap,cap==-1?"自动":cap==0?"不限":cap.ToString(),()=>{SetPref("cap",cap);ApplyGraphics();Draw();},true,Pref("cap",-1)==cap);
             TogglePref("auto",Text("ui.set.auto"),1,()=>ApplyGraphics());Label(body,SystemInfo.graphicsDeviceName+" · "+Screen.width+" × "+Screen.height);
             Label(body,Text("ui.set.sound"),"section");foreach(var pair in audio["VOLUMES"]!.AsObject())SliderPref(pair.Key,Text("ui.set.vol."+pair.Key)+" %",0,100,Volume(pair.Key),ApplyVolume);
-            TogglePref("mute",Text("ui.set.mute"),0,ApplyVolume);TogglePref("hints",Text("ui.set.hints"),1);TogglePref("fps",Text("ui.set.showFps"),0);Button(panel,"back",Text("ui.set.done"),OpenMenu);}
-        private void ApplyTheme(){var next=State==null || ScreenId=="wizard" || ScreenId=="title"?"default":ScreenId=="result" && theme!=""?theme:State.InterfaceTheme;
+            TogglePref("mute",Text("ui.set.mute"),0,ApplyVolume);Label(body,Text("ui.set.display"),"section");TogglePref("hints",Text("ui.set.hints"),1);TogglePref("fps",Text("ui.set.showFps"),0);
+            TogglePref("themefx",Text("ui.set.themefx"),1,ApplyTheme);Button(panel,"back",Text("ui.set.done"),OpenMenu);}
+        private void ApplyTheme(){var next=State==null || ScreenId=="wizard" || ScreenId=="title"?"default":ScreenId=="result" && theme!=""?(pendingTheme??theme):State.InterfaceTheme;
             bool effect=!quietTheme;quietTheme=false;
-            if(next==theme)return;
-            if(theme!=""){
-                Root.RemoveFromClassList("theme-"+theme);
-                if(effect && State!=null && AudioPlayPage(ScreenId) && next!="default") Cue(next=="soviet"?"burn":next=="cold"?"freeze":"bloom");
+            bool audible=theme!="" && effect && State!=null && AudioPlayPage(ScreenId) && next!="default";
+            bool animate=audible && !SuppressThemeFx && Pref("themefx",1)!=0;
+            if(!animate || next==theme){
+                if(themeCapture!=null){StopCoroutine(themeCapture);themeCapture=null;pendingTheme=null;}
+                if(!animate)Transition.Stop();
+                if(next!=theme)CommitTheme(next,audible);
+                return;
             }
-            theme=next;Root.AddToClassList("theme-"+next);ThemeChanged?.Invoke(next);}
-        private void OnDestroy(){audit?.Dispose();if(soundSource!=null)soundSource.Stop();if(soundClip!=null)Destroy(soundClip);foreach(var texture in textures.Values)Destroy(texture);}
+            pendingTheme=next;
+            if(themeCapture==null){Transition.Stop();themeCapture=StartCoroutine(CaptureTheme());}
+        }
+        private IEnumerator CaptureTheme(){
+            // Draw 只清子元素，旧主题类留在文档根上，直到这一帧真正画完。
+            yield return new WaitForEndOfFrame();
+            var next=pendingTheme!;themeCapture=null;pendingTheme=null;
+            var shot=ScreenCapture.CaptureScreenshotAsTexture();
+            CommitTheme(next,true);SendSound(s=>s.SetFlavor(next));
+            if(shot!=null)Transition.Play(FxKind(next),shot);
+        }
+        private static string FxKind(string name)=>name=="soviet"?"burn":name=="cold"?"frost":"bloom";
+        private void CommitTheme(string next,bool audible){
+            if(theme!="")Root.RemoveFromClassList("theme-"+theme);
+            theme=next;Root.AddToClassList("theme-"+next);ThemeChanged?.Invoke(next);
+            if(audible)Cue(next=="cold"?"freeze":FxKind(next));
+        }
+        private void OnDestroy(){Transition?.Stop();audit?.Dispose();if(soundSource!=null)soundSource.Stop();if(soundClip!=null)Destroy(soundClip);foreach(var texture in textures.Values)Destroy(texture);}
         private void HandleKeys(){
             if(Input.GetKeyDown(KeyCode.Escape)){if(ScreenId=="main" || ScreenId=="settings" || ScreenId=="ach" || ScreenId=="ends" || ScreenId=="meta")OpenMenu();else if(ScreenId=="menu")Page(State==null?"title":"main");else if(ScreenId=="local")CloseLocal();return;}
             if(ScreenId!="main")return;bool up=Input.GetKeyDown(KeyCode.UpArrow)||Input.GetKeyDown(KeyCode.PageUp),down=Input.GetKeyDown(KeyCode.DownArrow)||Input.GetKeyDown(KeyCode.PageDown),all=Input.GetKeyDown(KeyCode.Home);
