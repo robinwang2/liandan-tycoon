@@ -14,7 +14,7 @@ if (mode === '--procedural') {
 }
 
 async function exportProcedural(id, output) {
-  const { Group, Mesh, Matrix4, Vector3 } = await import('three');
+  const { Group, Mesh, Matrix4, Vector3, Float32BufferAttribute } = await import('three');
   const { mergeGeometries, mergeVertices } = await import('three/addons/utils/BufferGeometryUtils.js');
   const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
   const { makeKit } = await import('../../src/scene3a/kit.js');
@@ -25,7 +25,7 @@ async function exportProcedural(id, output) {
   const root=cabin ? (await import('../../src/scene3a/office.js')).buildElevatorCabin(kit,'#ff6b4a').car
     : (await import('../../src/scene3a/props.js')).PROPS[id].build(kit,{seed:0});
   root.updateMatrixWorld(true);
-  const bins=new Map(), model=new Group(); let wheels=0;
+  const bins=new Map(), model=new Group(); let wheels=0, piece=0;
   function walk(node, owner, pivot) {
     if(node.name==='wheel' && node.userData.dynamic) owner='wheel_'+(++wheels);
     else if(spec.parts.includes(node.name)) owner=node.name;
@@ -43,6 +43,7 @@ async function exportProcedural(id, output) {
       if(!slots.has(mat)) slots.set(mat,[]);
       const geo=node.geometry.index?node.geometry.clone():mergeVertices(node.geometry,1e-7);
       geo.applyMatrix4(new Matrix4().makeTranslation(-pivot.x,-pivot.y,-pivot.z).multiply(node.matrixWorld));
+      geo.setAttribute('_PIECE',new Float32BufferAttribute(new Float32Array(geo.attributes.position.count).fill(++piece),1));
       slots.get(mat).push(geo);
     }
     for(const child of node.children) walk(child,owner,pivot);

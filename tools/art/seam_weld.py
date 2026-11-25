@@ -6,11 +6,13 @@ import bmesh
 
 def stitch_boundaries(bm):
     pairs = defaultdict(list)
+    piece = bm.verts.layers.float.get('_PIECE')
     for edge in bm.edges:
         if edge.is_boundary:
             loop = edge.link_loops[0]
             a, b = loop.vert, loop.link_loop_next.vert
-            pairs[tuple(sorted((tuple(a.co), tuple(b.co))))].append((a, b))
+            key = tuple(sorted((tuple(a.co), tuple(b.co))))
+            pairs[(a[piece] if piece is not None else None, key)].append((a, b))
     parent = {}
 
     def root(vertex):

@@ -253,6 +253,52 @@ def reduce(obj, ratio):
         obj.data.validate(clean_customdata=False)
 
 
+def piece_ids(mesh):
+    attribute = mesh.attributes['_PIECE'].data
+    return {round(attribute[face.vertices[0]].value) for face in mesh.polygons}
+
+
+def reduce_procedural(obj, ratio):
+    source = obj.data
+    expected = piece_ids(source)
+    target = math.ceil(triangles(obj)*ratio)
+    obj.data = source.copy()
+    reduce(obj, ratio)
+    fixed = expected - piece_ids(obj.data)
+
+    def subset(include_fixed):
+        result = bmesh.new()
+        result.from_mesh(source)
+        tag = result.verts.layers.float['_PIECE']
+        excluded = [v for v in result.verts if (int(v[tag]) in fixed) != include_fixed]
+        bmesh.ops.delete(result, geom=excluded, context='VERTS')
+        return result
+
+    while fixed:
+        discarded = obj.data
+        obj.data = source.copy()
+        bpy.data.meshes.remove(discarded)
+        kept = subset(True)
+        rest = subset(False)
+        rest.to_mesh(obj.data)
+        rest.free()
+        reserved = sum(len(face.verts)-2 for face in kept.faces)
+        remaining = triangles(obj)
+        if remaining:
+            reduce(obj, min(1., max(1, target-reserved)/remaining))
+        missing = expected - fixed - piece_ids(obj.data) if remaining else set()
+        if not missing:
+            if remaining:
+                kept.from_mesh(obj.data)
+            kept.to_mesh(obj.data)
+        kept.free()
+        if not missing:
+            break
+        fixed.update(missing)
+    bpy.data.meshes.remove(source)
+    return sorted(fixed)
+
+
 def hybrid_reduction(counts, goal, limit, legacy):
     if legacy:
         # 只用于复现修复前已经交付的 FBX。
@@ -498,14 +544,15 @@ limits = [args.budget, *map(int, args.lod_limits.split(','))] if args.lod_limits
 targets = [0, *map(int, args.lod_targets.split(','))]
 for level, ratio in enumerate([1,.4,.12]):
     group = []
+    protected = {}
     goal = targets[level]
     procedural = args.hybrid and args.source.name == 'game.glb'
     if procedural and level:
-        fixed = {name for name in part_names if counts[name] <= 32 or (name not in ('Shell','Glass') and not name.startswith('wheel_'))}
+        fixed = {name for name in part_names if counts[name] <= 32 or (name != 'Shell' and not name.startswith('wheel_'))}
         reserved = sum(counts[name] for name in fixed)
         reducible = sum(counts.values()) - reserved
         goal = goal or min(limits[level], reserved + math.ceil(reducible*(.62 if level == 1 else .25)))
-        ratio = min(1., (goal-reserved)/max(1,reducible))
+        ratio = min(1., (goal-reserved-2*(len(part_names)-len(fixed)))/max(1,reducible))
         if ratio <= 0:
             raise ValueError('活动件没有足够的 LOD 预算')
         part_ratios = {name: 1. if name in fixed else ratio for name in part_names}
@@ -527,7 +574,10 @@ for level, ratio in enumerate([1,.4,.12]):
             if args.hybrid:
                 part_ratio = part_ratios[part_names[index]]
                 if part_ratio < 1:
-                    reduce(obj,part_ratio)
+                    if procedural:
+                        protected[part_names[index]] = reduce_procedural(obj,part_ratio)
+                    else:
+                        reduce(obj,part_ratio)
                     lo, hi = bounds([obj])
                     base, top = part_boxes[index]
                     if np.any((top-base > 1e-7) & (hi-lo < 1e-8)):
@@ -550,6 +600,8 @@ for level, ratio in enumerate([1,.4,.12]):
         suffix = '' if len(objects)==1 else ('_'+part_names[index] if args.hybrid or repair_rack or part_names[index] in ('Upper','Lower','Fish') else f'_Part{index+1:02}')
         obj.name = f'SM_{args.name}{suffix}_LOD{level}'
         obj.data.name = obj.name
+        if procedural and piece_ids(obj.data) != piece_ids(original.data):
+            raise ValueError('减面丢失原始程序件：'+obj.name)
         group.append(obj)
     count = sum(map(triangles,group))
     if count > args.budget or not count:
@@ -585,6 +637,9 @@ for level, ratio in enumerate([1,.4,.12]):
     floor, ceiling = bounds(group)
     lods.append(dict(level=level, triangles=count, size=dimensions(floor,ceiling), origin=list(anchor(floor,ceiling)), parts=[obj.name for obj in group]))
     lods[-1]['budget'] = limits[level]
+    if procedural:
+        lods[-1]['sourcePieces'] = dict(zip(part_names, (len(piece_ids(obj.data)) for obj in group)))
+        lods[-1]['rescuedPieceIds'] = {name: ids for name, ids in protected.items() if ids}
     lods[-1]['targetTriangles'] = goal or count
     lods[-1]['retainedRatio'] = count / sum(counts.values())
     if args.hybrid:

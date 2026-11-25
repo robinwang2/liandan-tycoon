@@ -26,6 +26,13 @@ function save(file,value) {
   fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n'); fs.renameSync(temp,file);
 }
 const hash = file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+function proceduralRecipe({id,w,d,h,budget,origin,parts}) {
+  const files=['src/scene3a/'+(id==='elevator_car'?'office':'props')+'.js','src/scene3a/kit.js',
+    ...['export-scene-glb.mjs','normalize.mjs','normalize.py','seam_weld.py','prop-geometry.mjs','lod_integrity.py','qc.mjs','qc.py'].map(name=>'tools/art/'+name)];
+  const digest=createHash('sha256').update(JSON.stringify([id,w,d,h,budget,origin,parts]));
+  for(const file of files) digest.update('\0'+file+'\0'+fs.readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
+  return digest.digest('hex');
+}
 const sourceHash = file=>eggs && file.endsWith('.py') ? createHash('sha256').update(fs.readFileSync(file,'utf8').replaceAll('\r\n','\n')).digest('hex') : hash(file);
 const specs = read(path.join(root,'src/data/tables/art.json')).PROPS;
 const selection = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json'));
@@ -135,7 +142,7 @@ function replace(item) {
 function state(item) {
   if(item.procedural) {
     const p=paths(item.id), report=read(p.report), prep=fs.existsSync(p.game);
-    const valid=report?.procedural && prep && report.sha===hash(p.game) && fs.existsSync(path.join(p.dest,report.model));
+    const valid=report?.procedural && prep && report.recipeSha===proceduralRecipe(item) && report.sha===hash(p.game) && fs.existsSync(path.join(p.dest,report.model)) && report.modelSha===hash(path.join(p.dest,report.model));
     const accepted=!!valid && read(path.join(shots,item.id+'.json'))?.reportSha===hash(p.report) && ['', '-action','-lod1','-lod2'].every(s=>fs.existsSync(path.join(shots,item.id+s+'.png')));
     return {prep,downloaded:false,qc:valid?{pass:true}:null,report:valid?report:null,accepted};
   }
@@ -239,7 +246,7 @@ try {
       tool('qc',p.game,'--tight-frame','--views','color','--out',preview,'--res',768);
       const colorCheck=read(path.join(preview,'report.json'));
       if(!colorCheck?.pass || !fs.existsSync(path.join(preview,'color.png'))) throw Error('原模预览质检未通过：'+item.id);
-      save(path.join(stage,'report.json'),{...report,procedural:true,credits:0,sha:hash(p.game)});
+      save(path.join(stage,'report.json'),{...report,procedural:true,credits:0,sha:hash(p.game),recipeSha:proceduralRecipe(item),modelSha:hash(path.join(stage,report.model))});
       fs.mkdirSync(p.dest,{recursive:true});
       for(const name of [...fs.readdirSync(stage).filter(name=>name!==report.model),report.model]) fs.copyFileSync(path.join(stage,name),path.join(p.dest,name));
     }

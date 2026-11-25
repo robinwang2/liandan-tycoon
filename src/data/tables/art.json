@@ -1035,7 +1035,7 @@
    "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
    "credits":0,
    "file":"art-src/tripo/batch7/elevator_car/game.glb",
-   "qc":"LOD 3122/2404/2266",
+   "qc":"LOD 3122/2402/2264",
    "status":"Blender 已验；待 Unity 截图"
   },
   {
@@ -1045,7 +1045,7 @@
    "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
    "credits":0,
    "file":"art-src/tripo/batch7/car_pickup/game.glb",
-   "qc":"LOD 12264/7742/2728",
+   "qc":"LOD 13716/8386/2747",
    "status":"Blender 已验；待 Unity 截图"
   },
   {
@@ -1055,7 +1055,7 @@
    "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
    "credits":0,
    "file":"art-src/tripo/batch7/car_taxi/game.glb",
-   "qc":"LOD 11728/7450/2722",
+   "qc":"LOD 12644/8146/2623",
    "status":"Blender 已验；待 Unity 截图"
   },
   {
@@ -1065,7 +1065,7 @@
    "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
    "credits":0,
    "file":"art-src/tripo/batch7/robotaxi/game.glb",
-   "qc":"LOD 12668/8084/2718",
+   "qc":"LOD 12146/8058/2749",
    "status":"Blender 已验；待 Unity 截图"
   },
   {
@@ -1075,7 +1075,7 @@
    "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
    "credits":0,
    "file":"art-src/tripo/batch7/van_delivery/game.glb",
-   "qc":"LOD 12124/7660/2732",
+   "qc":"LOD 12810/8208/2771",
    "status":"Blender 已验；待 Unity 截图"
   },
   {
@@ -1085,7 +1085,7 @@
    "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
    "credits":0,
    "file":"art-src/tripo/batch7/bus_city/game.glb",
-   "qc":"LOD 13854/8390/2724",
+   "qc":"LOD 12748/8382/2719",
    "status":"Blender 已验；待 Unity 截图"
   }
  ]
