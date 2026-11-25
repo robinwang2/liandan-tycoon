@@ -110,7 +110,9 @@ namespace Liandan.Shell
             pen.lineJoin = LineJoin.Miter; pen.lineCap = LineCap.Butt;
             RoundRect(pen, 0, 0, 64, 64, 0); Fill(pen, Tint(k.Trim, 0.76f));
             if (HairBack.TryGetValue(k.Style, out var back)) { Path(pen, back); Fill(pen, Hex(k.Hair)); }
-            Path(pen, "M9 66Q9 45 32 45Q55 45 55 66Z"); Fill(pen, Hex(k.Outfit)); Stroke(pen, Line, 1.6f);
+            // 网页身体路径到 y=66（画框外，被圆角裁掉）；Painter2D 对框外顶点填充出错，收到 64 内，描边只描肩线。
+            Path(pen, "M9 64L9 63.4Q9 45 32 45Q55 45 55 63.4L55 64Z"); Fill(pen, Hex(k.Outfit));
+            Path(pen, "M9 64L9 63.4Q9 45 32 45Q55 45 55 63.4L55 64"); Stroke(pen, Line, 1.6f);
             switch (k.Role)
             {
                 case "res": pen.lineJoin = LineJoin.Round; Path(pen, "M25 46L32 57L39 46"); Stroke(pen, k.Trim, 3.2f); pen.lineJoin = LineJoin.Miter; break;
