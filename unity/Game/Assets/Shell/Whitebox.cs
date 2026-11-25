@@ -29,8 +29,11 @@ namespace Liandan.Shell
             }
             if (eggRows > 0)
             {
-                Block("Egg Gallery Floor", new Vector3(0,-.15f,0), new Vector3(12,.3f,eggRows * 2.5f + 1), new Color(.37f,.46f,.49f));
-                camera.transform.position = new Vector3(0,12,-7); camera.transform.LookAt(Vector3.zero);
+                float floorDepth = (eggRows - 1) * GameShell.EggRowSpacing + 3;
+                Block("Egg Gallery Floor", new Vector3(0,-.15f,0), new Vector3(12,.3f,floorDepth), new Color(.37f,.46f,.49f));
+                camera.transform.rotation = Quaternion.Euler(32, 192, 0);
+                camera.transform.position = -camera.transform.forward * (20 + floorDepth);
+                light.transform.rotation = Quaternion.Euler(44, 155, 0);
                 return camera;
             }
             bool original = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-furnace-original") >= 0;

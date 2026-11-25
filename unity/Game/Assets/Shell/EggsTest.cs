@@ -38,6 +38,23 @@ namespace Liandan.Shell
             void Check(bool ok, string message) { if (!ok) throw new InvalidOperationException(message); }
             void Shot(string name)
             {
+                Physics.SyncTransforms();
+                var stage = eggStage.worldBound;
+                var onStage = new System.Collections.Generic.List<(string id, Rect rect)>();
+                foreach (var egg in exhibits)
+                {
+                    var minimum = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+                    var maximum = new Vector2(float.NegativeInfinity, float.NegativeInfinity);
+                    foreach (var corner in EggCorners(egg.Hit.bounds))
+                    {
+                        var point = RuntimePanelUtils.CameraTransformWorldToPanel(Root.panel, corner, eggCamera);
+                        minimum = Vector2.Min(minimum, point); maximum = Vector2.Max(maximum, point);
+                    }
+                    var rect = Rect.MinMaxRect(minimum.x, minimum.y, maximum.x, maximum.y);
+                    Check(stage.Contains(minimum) && stage.Contains(maximum), $"{name}：{egg.Id} 超出展示区 {rect} / {stage}");
+                    foreach (var previous in onStage) Check(!rect.Overlaps(previous.rect), $"{name}：{egg.Id} 和 {previous.id} 的投影重叠");
+                    onStage.Add((egg.Id, rect));
+                }
                 var texture = ScreenCapture.CaptureScreenshotAsTexture();
                 try { File.WriteAllBytes(Path.Combine(shots, name + ".png"), texture.EncodeToPNG()); }
                 finally { Destroy(texture); }

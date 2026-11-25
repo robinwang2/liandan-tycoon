@@ -30,6 +30,8 @@ namespace Liandan.Shell
         private float hideEggAt;
         private bool eggTesting;
         private const int EggColumns = 4;
+        internal const float EggRowSpacing = 5.4f;
+        private Bounds eggViewBounds;
 
         private void CreateEggGallery()
         {
@@ -65,15 +67,30 @@ namespace Liandan.Shell
                 model.transform.localPosition = Vector3.zero;
                 Physics.SyncTransforms();
                 var bounds = hit.bounds;
-                float scale = 1.65f / Mathf.Max(.01f, bounds.size.x, bounds.size.y, bounds.size.z);
+                float longest = Mathf.Max(.01f, bounds.size.x, bounds.size.y, bounds.size.z);
+                float scale = (bounds.size.y < longest * .25f ? 1.95f : 1.65f) / longest;
                 model.transform.localScale *= scale;
                 model.transform.localPosition -= new Vector3(bounds.center.x, bounds.min.y, bounds.center.z) * scale;
-                var origin = new Vector3((index % EggColumns - (EggColumns - 1) / 2f) * 2.7f, 0, ((rows - 1) / 2f - index / EggColumns) * 2.5f);
+                var origin = new Vector3(((EggColumns - 1) / 2f - index % EggColumns) * 2.7f, 0, ((rows - 1) / 2f - index / EggColumns) * EggRowSpacing);
                 pivot.position = origin;
                 exhibits.Add(new Exhibit { Id = row["id"]!.ToString(), Name = row["name"]!.ToString(), Description = row["desc"]!.ToString(),
                     Credit = row["credit"]!.ToString(), Pivot = pivot, Hit = hit, Origin = origin });
             }
             Physics.SyncTransforms();
+            var toView = Quaternion.Inverse(eggCamera.transform.rotation);
+            foreach (var egg in exhibits)
+            {
+                var bounds = egg.Hit.bounds;
+                if (egg == exhibits[0]) eggViewBounds = new Bounds(toView * bounds.center, Vector3.zero);
+                foreach (var corner in EggCorners(bounds)) eggViewBounds.Encapsulate(toView * corner);
+            }
+        }
+
+        private static IEnumerable<Vector3> EggCorners(Bounds bounds)
+        {
+            for (int index = 0; index < 8; index++)
+                yield return new Vector3((index & 1) == 0 ? bounds.min.x : bounds.max.x,
+                    (index & 2) == 0 ? bounds.min.y : bounds.max.y, (index & 4) == 0 ? bounds.min.z : bounds.max.z);
         }
 
         private Label AddEggCounter(VisualElement parent)
@@ -97,13 +114,18 @@ namespace Liandan.Shell
         {
             var area = eggStage.worldBound;
             var screen = Root.worldBound;
-            if (!(area.height > 0 && screen.height > 0)) return;
-            float available = area.height / screen.height;
-            float rows = Mathf.Ceil(exhibits.Count / (float)EggColumns);
-            eggCamera.orthographicSize = Mathf.Max(5.8f / eggCamera.aspect, (rows * 1.25f + 1) / available);
-            var focus = Vector3.up * .65f + eggCamera.transform.up * ((area.center.y - screen.center.y) / screen.height * 2 * eggCamera.orthographicSize);
-            eggCamera.transform.position = focus - eggCamera.transform.forward * (20 + rows * 2);
-            eggCamera.farClipPlane = 100 + rows * 4;
+            if (!(area.height > 0 && area.width > 0 && screen.height > 0 && screen.width > 0)) return;
+            var extent = eggViewBounds.extents;
+            const float margin = .4f;
+            float halfHeight = Mathf.Max((extent.x + margin) / (eggCamera.aspect * area.width / screen.width),
+                (extent.y + margin) / (area.height / screen.height));
+            eggCamera.orthographicSize = halfHeight;
+            var center = eggViewBounds.center;
+            center.x += (screen.center.x - area.center.x) / screen.width * 2 * halfHeight * eggCamera.aspect;
+            center.y += (area.center.y - screen.center.y) / screen.height * 2 * halfHeight;
+            center.z = eggViewBounds.min.z - 12;
+            eggCamera.transform.position = eggCamera.transform.rotation * center;
+            eggCamera.farClipPlane = eggViewBounds.size.z + 32;
         }
 
         private VisualElement? EggPanelTarget(Vector2 screen)
