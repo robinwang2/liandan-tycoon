@@ -71,12 +71,12 @@ namespace Liandan.Shell
         {
             string uid=person["uid"]!.ToString(); var role=Def("ROLES")[person["role"]!.ToString()]!;
             var card=Box(list,"card"); var salary=State.Currency(State.MonthlySalary(person)); string quirk=person["quirk"]?.ToString()??"";
-            game.Picture(card,"avatar-"+person["role"],36,36);
+            var look=Look.Of(uid,person["role"]!.ToString()); game.Avatar(card,look,36);
             var trait=quirk==""?null:Def("STAFF_QUIRKS")[quirk];
             Label(card,person["name"]+"   "+role["name"]+"   "+trait?["name"],"section");
             if(Flag(person,"red") && Data["ideo"]!=null)Label(card,State.StoryText("ideo.page.redTag"));
             Label(card,new string('●',(int)Num(person,"skill"))+"   "+Text("ui.person.pay",("月薪",salary)));
-            game.Hover(card,()=>person["name"]+"\n"+Text("ui.pop.role",("图标",role["icon"]!),("岗位",role["name"]!),("能力",person["skill"]!))+"\n"+Text(hired?"ui.pop.now":"ui.pop.would")+"\n"+State.StaffImpact(person)+"\n"+Text(hired?"ui.pop.pay.hired":"ui.pop.pay.cand",("月薪",salary),("日期",Date(person,"since"))),"who:"+uid);
+            game.Hover(card,()=>person["name"]+"\n"+Text("ui.pop.role",("图标",role["icon"]!),("岗位",role["name"]!),("能力",person["skill"]!))+"\n"+Text(hired?"ui.pop.now":"ui.pop.would")+"\n"+State.StaffImpact(person)+"\n"+Text(hired?"ui.pop.pay.hired":"ui.pop.pay.cand",("月薪",salary),("日期",Date(person,"since"))),"who:"+uid,bubble=>game.Avatar(bubble,look,76).style.marginBottom=6);
             if(!hired){string? why=State.HireReason(person); game.Button(card,"hire:"+uid,Text("ui.cand.hire")+(why==null?"":" · "+why),()=>{
                 var result=State.Hire(uid);if(result==null)return;game.Cue(result["err"]==null?"hire":"error");game.ShowResult(result);
             },why==null);
@@ -167,7 +167,7 @@ namespace Liandan.Shell
         }
         void Cards()
         {
-            game.Picture(list,"founder-"+(Data["founder"]?["outfit"]?.ToString()??"turtleneck"),60,60);
+            game.Avatar(list,Look.Founder(Data["founder"]?["outfit"]?.ToString()??"turtleneck"),60);
             void Card(JsonNode row,string suffix=""){var card=Box(list,"card");Label(card,row["icon"]+"  "+row["name"]+suffix,"section");Label(card,row["desc"]?.ToString()??"");}
             if(Data["perks"]!.AsArray().Count==0)Label(list,Text("ui.perks.none"));foreach(var id in Data["perks"]!.AsArray())Card(game.Tables.Perk(id!.ToString()));
             if(Data["feats"]!.AsArray().Count>0)Heading(Text("ui.perks.feats"));foreach(var id in Data["feats"]!.AsArray())Card(game.Tables.Feature(id!.ToString()));

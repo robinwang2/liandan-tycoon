@@ -74,7 +74,7 @@ namespace Liandan.Shell
                 }
             }
             IEnumerable<JsonNode?> Values(string key) => defs[key].AsObject().Select(pair=>pair.Value);
-            if(Step==0)game.Picture(body,"founder-"+picks["outfit"],72,72);
+            if(Step==0)game.Avatar(body,Look.Founder(picks["outfit"]),72);
             if (Step == 0) { Field("name","ui.wiz.name.label",12); Choices("region",Values("REGIONS")); Choices("outfit",defs["OUTFITS"].AsArray()); Choices("motto",Eligible("motto")); }
             if (Step == 1)
             {
