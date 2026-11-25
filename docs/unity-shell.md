@@ -257,3 +257,18 @@ node tools/audio/build-size.mjs unity/Game/Build/GameIl2cpp
 node tools/audio/build-size.mjs D:/builds/before-audio/Game --save unity/Game/Logs/mono-before.json
 node tools/audio/build-size.mjs unity/Game/Build/Game --against unity/Game/Logs/mono-before.json
 ```
+
+## 彩蛋
+
+重新构建含新表的播放器（`npm run tables`，再运行 `node tools/unity/run.mjs build-game`）。在仓库根目录用 PowerShell 启动：
+
+```powershell
+& .\unity\Game\Build\Game\Liandan.exe -eggs
+& .\unity\Game\Build\Game\Liandan.exe -eggs-test "$PWD\unity\Game\Build\egg-shots" -logFile "$PWD\unity\Game\Build\eggs-test.log" -screen-fullscreen 0 -screen-width 1600 -screen-height 900
+```
+
+展示模式每行放四件，行数随 `设定.xlsx` 的「彩蛋」表增长。「摆放」列是未来办公室的锚点；当前按表顺序陈列。道具从 `Resources/B6/<道具>/SM_<道具>` 读取，缺件显示带名彩色方块。悬停后点击，卡片会显示典故和致谢；点空白处或等约四秒收起。
+
+手玩使用正常局外存档，首次发现在 `ldt_meta_v1.json` 的 `eggs` 写入 `{id: 1}`；没有该字段的老档视为空。重复点击只重放反馈。集齐时同时保存 `ach.egg_master`，不进入局内成就或结算奖励。普通模式的「菜单 → 成就」可查看计数与成就。
+
+测试需图形窗口（不要加 `-batchmode` 或 `-nographics`）。每次在截图目录下新建独立的 `save-<随机标识>`，不碰手玩进度；逐件投射屏幕射线，保存空场、发现、重复、关闭、重读存档的 PNG。建议每次指定新截图目录以保留上次截图。以退出码 0 和日志中的 `Liandan eggs OK: N/N` 为成功标志，N 为本次表内行数。

@@ -7,7 +7,11 @@ import { spawnSync } from 'node:child_process';
 import { writeSources } from './batch-ledger.mjs';
 
 const root = path.resolve(import.meta.dirname,'../..');
-const { args: [command,...args], batchName, resource, policy } = batchOptions(process.argv.slice(2));
+const argv = process.argv.slice(2), batchIndex = argv.indexOf('--batch');
+const eggs = batchIndex >= 0 && argv[batchIndex+1] === 'batch6';
+if (eggs) argv.splice(batchIndex,2);
+const { args: [command,...args], batchName, resource, policy } = eggs
+  ? {args:argv,batchName:'batch6',resource:'B6',policy:'PropPolicyBatch6'} : batchOptions(argv);
 const withColor = batchName !== 'batch1';
 // 前三批沿用原先的取景和下载件处理，以便复现已交付结果。
 const legacyBatch = ['batch1','batch2','batch3'].includes(batchName);
@@ -20,6 +24,7 @@ function save(file,value) {
   fs.writeFileSync(temp,JSON.stringify(value,null,2)+'\n'); fs.renameSync(temp,file);
 }
 const hash = file=>createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const sourceHash = file=>eggs && file.endsWith('.py') ? createHash('sha256').update(fs.readFileSync(file,'utf8').replaceAll('\r\n','\n')).digest('hex') : hash(file);
 const specs = read(path.join(root,'src/data/tables/art.json')).PROPS;
 const selection = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json'));
 const batch = selection.props.map(entry=>{
@@ -83,8 +88,10 @@ function manifest() {
 // 选件表 replacement：整件改用第三方模型（如 CC0 的 ficus），不走 Tripo 下载件。
 function replacementState(item) {
   const r=item.replacement, p=paths(item.id), report=read(p.report), blend=path.join(root,r.blend);
-  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && report.blendSha===hash(blend) &&
-    report.sha===hash(path.join(p.dir,r.name,'lod0.glb')) && fs.existsSync(path.join(p.dest,report.model));
+  const lod0=path.join(p.dir,r.name,'lod0.glb');
+  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && report.blendSha===sourceHash(blend) && report.blendSha===r.blendSha &&
+    (!r.prepSha || (report.prepSha===r.prepSha && sourceHash(path.join(root,r.prep))===r.prepSha)) &&
+    fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(p.dest,report.model));
   const qc=normal?{pass:true,triangles:report.lods[0].triangles,size:report.lods[0].size,problems:[]}:null;
   const receipt=normal && read(path.join(shots,item.id+'.json'));
   return {prep:true,downloaded:fs.existsSync(blend),qc,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png'))};
@@ -92,24 +99,25 @@ function replacementState(item) {
 function replace(item) {
   const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend), dir=path.join(p.dir,r.name);
   if(!fs.existsSync(blend)) throw Error('缺少第三方原件：'+blend);
-  if(hash(blend)!==r.blendSha) throw Error('第三方原件哈希与选件表不符：'+blend);
+  if(sourceHash(blend)!==r.blendSha) throw Error('原件哈希与选件表不符：'+blend);
+  if(r.prepSha && sourceHash(path.join(root,r.prep))!==r.prepSha) throw Error('prep 哈希与选件表不符：'+r.prep);
   // 下载的 .blend 可能带脚本，始终禁用自动执行。
   const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
-    ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',blend,'-P',path.join(root,r.prep),'--',dir],
+    ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',...(!eggs || blend.endsWith('.blend')?[blend]:[]),'-P',path.join(root,r.prep),'--',dir,...(eggs?[item.id,blend]:[])],
     {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
   if(run.error || run.status!==0) throw run.error??Error('第三方模型整理失败：'+item.id);
   const lods=[0,1,2].map(n=>path.join(dir,'lod'+n+'.glb')), ref=path.join(p.dir,r.name+'-ref');
   tool('qc',lods[0],'--tight-frame','--out',ref,'--flat','--bg',1,'--views',[...views,'color'].join(','));
   // 等比缩放到表内高度，树冠宽深须与选件表登记一致（Unity 按它验尺寸，按表内宽深放碰撞）。
   const size=read(path.join(ref,'report.json')).size, k=item.h/size.height;
-  const w=+(size.width*k).toFixed(4), d=+(size.depth*k).toFixed(4);
-  if(Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
+  const w=eggs?item.w:+(size.width*k).toFixed(4), d=eggs?item.d:+(size.depth*k).toFixed(4);
+  if(!eggs && (Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001)) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
   const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
   tool('normalize',lods[0],'--lod-sources',lods.slice(1).join(','),'--min-iou',r.minIoU.join(','),'--max-interior-loss',r.maxInteriorLoss,
     '--out',stage,'--name',item.id,'--width',w,'--depth',d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
   const report=read(path.join(stage,'report.json'));
-  if(!report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
-  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
+  if((!eggs || r.textured) && !report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
+  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
   // 原交付（Tripo 版）首次替换前整体留底；之后只覆盖。
   const backup=path.join(p.dir,'tripo-delivery');
   if(fs.existsSync(p.dest) && !fs.existsSync(backup) && read(p.report)?.replacement===undefined) fs.cpSync(p.dest,backup,{recursive:true});
@@ -245,12 +253,19 @@ try {
   } else if(command==='credit' && args.length>=2) {
     const {id}=chosen(args[0]), points=Number(args[1]); if(!/^\d+$/.test(args[1])||!Number.isSafeInteger(points)) throw Error('积分须为非负整数（累计实耗）');
     ledger[id]={reworks:0,...ledger[id],credits:points,...(args.length>2?{note:args.slice(2).join(' ')}:{})}; save(ledgerFile,ledger);
-  } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry,item)};}));
+  } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:eggs?0:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry,item)};}));
   else if(command==='ledger') {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
       if(item.replacement) {
         const r=item.replacement;
+        if(eggs && s.report){
+          const lods=s.report.lods, counts=lods.map(lod=>lod.triangles).join('/');
+          const dims=Object.values(lods[0].size).map(value=>+value.toFixed(5)).join('×');
+          const iou=lods.slice(1).map(lod=>Math.min(...Object.values(lod.lodIntegrity.views).map(view=>view.iou)).toFixed(4)).join('/');
+          return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
+            qc:`FBX 回读通过；LOD ${counts}；宽×深×高 ${dims} m；四向最低 IoU ${iou}`,status:s.accepted?'Unity 已生成截图；待人工验收':'Blender 已验；待 Unity 截图'};
+        }
         return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
           qc:s.report?`精模 ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).map(v=>+v.toFixed(3)).join('×')} m；LOD ${s.report.lods.map(lod=>lod.triangles).join('/')}；远级轮廓 IoU 门槛 ${r.minIoU.join('/')}`:'待替换',
           status:deliveryStatus(s,{},item)};
