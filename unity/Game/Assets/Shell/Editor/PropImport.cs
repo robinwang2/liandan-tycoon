@@ -29,7 +29,7 @@ namespace Liandan.EditorTools
             public float[] emission = Array.Empty<float>();
         }
         [Serializable] class Pivot { public string node=""; public float x,y,z; }
-        [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); public Pivot[] pivots=Array.Empty<Pivot>(); }
+        [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); public Pivot[] pivots=Array.Empty<Pivot>(); public bool procedural; }
 
         // 由实际 FBX 回读的枢轴确定横轴镜像方向。轮心、肩轴、双风扇均不在模型中心。
         internal static float CheckAssembly(GameObject root, LOD[] levels, PropBatch.Item item, string reportPath)
@@ -38,6 +38,7 @@ namespace Liandan.EditorTools
             var pivots=report.pivots;
             var baseMaps=report.materials.Where(m=>!string.IsNullOrEmpty(m.BaseColor)).ToDictionary(m=>m.name,m=>m.BaseColor);
             var assetDir=Path.GetDirectoryName(reportPath)!.Replace('\\','/');
+            if(report.procedural != assetDir.Contains("/Resources/Batch7/")) throw new InvalidDataException(item.id+" 的程序件标志与资源目录不一致");
             var emissiveNames=new HashSet<string>(report.materials.Where(m=>m.emission.Any(v=>v>0)).Select(m=>m.name));
             var animated=new HashSet<string>(item.actions.Select(action=>action.node));
             var lampNodes=new HashSet<string>(item.actions.Where(action=>action.axis=="emission").Select(action=>action.node)) { "Lights" };
@@ -59,7 +60,7 @@ namespace Liandan.EditorTools
                     var materials=node.GetComponent<Renderer>().sharedMaterials;
                     if(pivot.node=="Shell")
                     {
-                        if(!materials.Any(mat=>baseMaps.ContainsKey(mat.name)))
+                        if(!report.procedural && !materials.Any(mat=>baseMaps.ContainsKey(mat.name)))
                             throw new InvalidDataException($"{node.name} 缺少报告中带底色图的外壳材质");
                         foreach(var mat in materials)
                         {
@@ -78,6 +79,14 @@ namespace Liandan.EditorTools
                     if(pivot.node=="Glass" && !materials.Any(m=>
                         m.name==$"M_{item.id}_Glass" && m.GetFloat("_Surface")==1 && m.GetColor("_BaseColor").a<1))
                         throw new InvalidDataException(item.id+" 的玻璃专槽未使用透明材质");
+                    if(report.procedural && (pivot.node=="Glass" || pivot.node.StartsWith("door_")))
+                    {
+                        bool door=pivot.node.StartsWith("door_");
+                        string slot=$"M_{item.id}_"+(door?"DoorGlass":"Glass");
+                        float alpha=door ? .36f : item.id=="elevator_car" ? .28f : .62f;
+                        if(!materials.Any(m=>m.name==slot && m.GetFloat("_Surface")==1 && Mathf.Abs(m.GetColor("_BaseColor").a-alpha)<.001f))
+                            throw new InvalidDataException($"{node.name} 缺少透明度 {alpha} 的 {slot}");
+                    }
                     foreach(var mat in materials)
                     {
                         if(!emissiveNames.Contains(mat.name) && !lampNodes.Contains(pivot.node)) continue;

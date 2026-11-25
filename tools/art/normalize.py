@@ -224,6 +224,24 @@ def triangles(obj):
     return len(obj.data.loop_triangles)
 
 
+def components(mesh):
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    pending = set(bm.faces)
+    count = 0
+    while pending:
+        count += 1
+        stack = [pending.pop()]
+        while stack:
+            for edge in stack.pop().edges:
+                for face in edge.link_faces:
+                    if face in pending:
+                        pending.remove(face)
+                        stack.append(face)
+    bm.free()
+    return count
+
+
 def reduce(obj, ratio):
     if ratio < 1:
         bpy.context.view_layer.objects.active = obj
@@ -443,7 +461,7 @@ for index, mat in enumerate(materials):
     records.append(textures(mat, stem))
     if extra_levels and 'baseMapEmission' in mat and records[-1].get('BaseColor'):
         records[-1]['baseMapEmission'] = float(mat['baseMapEmission'])
-    if (args.hybrid and mat.name == 'M_'+args.name+'_Glass') or (extra_levels and mat.get('transparentProp')):
+    if (args.hybrid and mat.name in ('M_'+args.name+'_Glass','M_'+args.name+'_DoorGlass')) or (extra_levels and mat.get('transparentProp')):
         bsdf = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
         records[-1]['baseColor'][3] = bsdf.inputs['Alpha'].default_value
         records[-1]['glass'] = True
@@ -481,7 +499,17 @@ targets = [0, *map(int, args.lod_targets.split(','))]
 for level, ratio in enumerate([1,.4,.12]):
     group = []
     goal = targets[level]
-    if args.hybrid and level:
+    procedural = args.hybrid and args.source.name == 'game.glb'
+    if procedural and level:
+        fixed = {name for name in part_names if counts[name] <= 32 or (name not in ('Shell','Glass') and not name.startswith('wheel_'))}
+        reserved = sum(counts[name] for name in fixed)
+        reducible = sum(counts.values()) - reserved
+        goal = goal or min(limits[level], reserved + math.ceil(reducible*(.62 if level == 1 else .25)))
+        ratio = min(1., (goal-reserved)/max(1,reducible))
+        if ratio <= 0:
+            raise ValueError('活动件没有足够的 LOD 预算')
+        part_ratios = {name: 1. if name in fixed else ratio for name in part_names}
+    elif args.hybrid and level:
         # 首轮保留原常用的 40% / 12% 目标，重试只增加外壳预算。
         goal = goal or min(limits[level], math.ceil(args.budget * ratio))
         part_ratios, goal = hybrid_reduction(counts, goal, limits[level], args.legacy_hybrid and not targets[level])
@@ -598,12 +626,18 @@ for lod in lods:
     lod['fbxSurfaceAnchorMeters'] = measured
     if args.hybrid:
         lod['partPivotsBlender'] = {}
+        if procedural:
+            lod['partComponents'] = {}
         for name, pivot in expected_pivots.items():
             obj = next(o for o in group if o.name == f"SM_{args.name}_{name}_LOD{lod['level']}")
             actual = obj.matrix_world.translation
             if (actual-Vector(pivot)).length > 1e-4 or triangles(obj) == 0:
                 raise ValueError('FBX 回读枢轴或几何不匹配：'+obj.name)
             lod['partPivotsBlender'][name] = list(actual)
+            if procedural:
+                lod['partComponents'][name] = components(obj.data)
+                if lod['partComponents'][name] != lods[0]['partComponents'][name]:
+                    raise ValueError('FBX 回读连通部件数量改变：'+obj.name)
     if repair_rack:
         front = next(obj for obj in group if '_Front_LOD' in obj.name)
         signature = panel_signature(front)

@@ -9,9 +9,11 @@ import { writeSources } from './batch-ledger.mjs';
 const root = path.resolve(import.meta.dirname,'../..');
 const argv = process.argv.slice(2), batchIndex = argv.indexOf('--batch');
 const eggs = batchIndex >= 0 && argv[batchIndex+1] === 'batch6';
-if (eggs) argv.splice(batchIndex,2);
-const { args: [command,...args], batchName, resource, policy } = eggs
-  ? {args:argv,batchName:'batch6',resource:'B6',policy:'PropPolicyBatch6'} : batchOptions(argv);
+const procedural = batchIndex >= 0 && argv[batchIndex+1] === 'batch7';
+if (eggs || procedural) argv.splice(batchIndex,2);
+const { args: [command,...args], batchName, resource, policy } = procedural
+  ? {args:argv,batchName:'batch7',resource:'Batch7',policy:'PropPolicyBatch7'} : eggs
+    ? {args:argv,batchName:'batch6',resource:'B6',policy:'PropPolicyBatch6'} : batchOptions(argv);
 const withColor = batchName !== 'batch1';
 // 前三批沿用原先的取景和下载件处理，以便复现已交付结果。
 const legacyBatch = ['batch1','batch2','batch3'].includes(batchName);
@@ -131,6 +133,12 @@ function replace(item) {
   console.log('已替换为 '+r.name+'：'+p.dest+'；原交付留底 '+backup);
 }
 function state(item) {
+  if(item.procedural) {
+    const p=paths(item.id), report=read(p.report), prep=fs.existsSync(p.game);
+    const valid=report?.procedural && prep && report.sha===hash(p.game) && fs.existsSync(path.join(p.dest,report.model));
+    const accepted=!!valid && read(path.join(shots,item.id+'.json'))?.reportSha===hash(p.report) && ['', '-action','-lod1','-lod2'].every(s=>fs.existsSync(path.join(shots,item.id+s+'.png')));
+    return {prep,downloaded:false,qc:valid?{pass:true}:null,report:valid?report:null,accepted};
+  }
   if(item.replacement) return replacementState(item);
   const hybrid=isHybrid(item);
   const original=paths(item.id), report=read(original.report), download=read(path.join(original.dir,'download.json'));
@@ -213,7 +221,29 @@ function deliver(item,p,mirrorDepth,sha,refSha,previous=null) {
   console.log('已规范化：'+p.dest);
 }
 try {
-  if(command==='prep' && args.join(' ')==='--manifest-only') manifest();
+  if(procedural && !['replace','reexport','ledger','status'].includes(command)) throw Error('纯程序批次只支持 replace、reexport、ledger、status');
+  if(procedural && ['replace','reexport'].includes(command)) {
+    for(const item of args.length?args.map(chosen):batch) {
+      if(!item.procedural) throw Error('缺少 procedural 标志：'+item.id);
+      const p=paths(item.id);
+      tool('export-scene-glb',item.id,p.game,'--procedural');
+      const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
+      tool('normalize',p.game,'--hybrid','--name',item.id,'--out',stage,'--width',item.w,'--depth',item.d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,'lod-qc'),'--res',512);
+      const report=read(path.join(stage,'report.json'));
+      if(report.pivots.map(p=>p.node).sort().join()!==['Shell',...item.parts].sort().join()) throw Error('FBX 回读分件与选件表不符：'+item.id);
+      const glazes=report.materials.filter(mat=>mat.glass);
+      const expected=item.id==='elevator_car'?{Glass:.28,DoorGlass:.36}:{Glass:.62};
+      for(const [suffix,alpha] of Object.entries(expected)) if(!glazes.some(mat=>mat.name===`M_${item.id}_${suffix}` && Math.abs(mat.baseColor[3]-alpha)<.001)) throw Error('缺少透明材质：'+suffix);
+      if(!report.materials.some(mat=>mat.emission?.some(value=>value>0))) throw Error('缺少发光材质：'+item.id);
+      const preview=path.join(p.dir,'preview');
+      tool('qc',p.game,'--tight-frame','--views','color','--out',preview,'--res',768);
+      const colorCheck=read(path.join(preview,'report.json'));
+      if(!colorCheck?.pass || !fs.existsSync(path.join(preview,'color.png'))) throw Error('原模预览质检未通过：'+item.id);
+      save(path.join(stage,'report.json'),{...report,procedural:true,credits:0,sha:hash(p.game)});
+      fs.mkdirSync(p.dest,{recursive:true});
+      for(const name of [...fs.readdirSync(stage).filter(name=>name!==report.model),report.model]) fs.copyFileSync(path.join(stage,name),path.join(p.dest,name));
+    }
+  } else if(command==='prep' && args.join(' ')==='--manifest-only') manifest();
   else if(command==='prep') {
     if(!fs.existsSync(ledgerFile)) save(ledgerFile,{});
     for(const item of args.length?args.map(chosen):batch) {
@@ -253,10 +283,14 @@ try {
   } else if(command==='credit' && args.length>=2) {
     const {id}=chosen(args[0]), points=Number(args[1]); if(!/^\d+$/.test(args[1])||!Number.isSafeInteger(points)) throw Error('积分须为非负整数（累计实耗）');
     ledger[id]={reworks:0,...ledger[id],credits:points,...(args.length>2?{note:args.slice(2).join(' ')}:{})}; save(ledgerFile,ledger);
-  } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:eggs?0:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry,item)};}));
+  } else if(command==='status' && !args.length) console.table(batch.map(item=>{const s=state(item), entry=ledger[item.id]; return {id:item.id,底图:s.prep,下载:s.downloaded,质检:s.qc?(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；')):'—',规范化:!!s.report,Unity:s.accepted,积分:eggs||procedural?0:entry?.credits??'—',返工:entry?.reworks??'—',状态:deliveryStatus(s,entry,item)};}));
   else if(command==='ledger') {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
+      if(item.procedural) {
+        if(!s.report) throw Error('请先 replace '+id);
+        return {id:batchName+'_'+id,name,source:'程序生成 · 0 积分',method:'游戏原模 → 焊缝 → 三级 LOD → FBX 回读',credits:0,file:`art-src/tripo/${batchName}/${id}/game.glb`,qc:'LOD '+s.report.lods.map(l=>l.triangles).join('/'),status:s.accepted?'Unity 已生成截图；待人工验收':'Blender 已验；待 Unity 截图'};
+      }
       if(item.replacement) {
         const r=item.replacement;
         if(eggs && s.report){
@@ -282,6 +316,7 @@ try {
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
 function deliveryStatus(s,entry,item) {
+  if(item.procedural) return s.accepted?'Unity 已生成截图；待人工验收':s.report?'Blender 已验；待 Unity 截图':'待生成程序件';
   if(isHybrid(item) && s.accepted) return 'Unity 已生成截图；待人工验收';
   if(s.report?.source==='repaired.glb') return '本地修补及三级回读通过；待 Unity 人工验收';
   return entry?.status ?? (s.accepted?'Unity 已生成截图；待人工验收':s.report?'FBX 回读通过；待 Unity 验收':s.qc?.pass?'下载件通过；尚无匹配的正式 FBX':s.downloaded?'已下载':s.prep?'已备上传图':'计划中');

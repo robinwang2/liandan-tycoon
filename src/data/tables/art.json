@@ -74,11 +74,71 @@
   {"id":"car_sedan","w":1.5,"d":3.3,"h":1.2,"tris":11884,"budget":20000,"mats":12,"status":"程序生成"},
   {"id":"car_suv","w":1.6,"d":3.5,"h":1.45,"tris":12100,"budget":20000,"mats":12,"status":"程序生成"},
   {"id":"car_hatch","w":1.45,"d":2.9,"h":1.25,"tris":11884,"budget":20000,"mats":12,"status":"程序生成"},
-  {"id":"car_pickup","w":1.7,"d":4,"h":1.5,"tris":13072,"budget":20000,"mats":12,"status":"程序生成"},
-  {"id":"car_taxi","w":1.5,"d":3.3,"h":1.35,"tris":12232,"budget":20000,"mats":14,"status":"程序生成"},
-  {"id":"robotaxi","w":1.6,"d":3.5,"h":1.75,"tris":13124,"budget":20000,"mats":12,"anim":true,"status":"程序生成"},
-  {"id":"van_delivery","w":1.7,"d":4.2,"h":2.1,"tris":12580,"budget":20000,"mats":12,"status":"程序生成"},
-  {"id":"bus_city","w":2.2,"d":8,"h":2.6,"tris":14502,"budget":20000,"mats":13,"status":"程序生成"},
+  {
+   "id":"car_pickup",
+   "w":1.7,
+   "d":4,
+   "h":1.5,
+   "tris":13072,
+   "budget":20000,
+   "mats":12,
+   "anim":true,
+   "status":"程序生成",
+   "src":"程序生成 · 0 积分",
+   "note":"第 7 批：三级 LOD、FBX 回读见素材来源 batch7_car_pickup。"
+  },
+  {
+   "id":"car_taxi",
+   "w":1.5,
+   "d":3.3,
+   "h":1.35,
+   "tris":12232,
+   "budget":20000,
+   "mats":14,
+   "anim":true,
+   "status":"程序生成",
+   "src":"程序生成 · 0 积分",
+   "note":"第 7 批：三级 LOD、FBX 回读见素材来源 batch7_car_taxi。"
+  },
+  {
+   "id":"robotaxi",
+   "w":1.6,
+   "d":3.5,
+   "h":1.75,
+   "tris":13124,
+   "budget":20000,
+   "mats":12,
+   "anim":true,
+   "status":"程序生成",
+   "src":"程序生成 · 0 积分",
+   "note":"第 7 批：三级 LOD、FBX 回读见素材来源 batch7_robotaxi。"
+  },
+  {
+   "id":"van_delivery",
+   "w":1.7,
+   "d":4.2,
+   "h":2.1,
+   "tris":12580,
+   "budget":20000,
+   "mats":12,
+   "anim":true,
+   "status":"程序生成",
+   "src":"程序生成 · 0 积分",
+   "note":"第 7 批：三级 LOD、FBX 回读见素材来源 batch7_van_delivery。"
+  },
+  {
+   "id":"bus_city",
+   "w":2.2,
+   "d":8,
+   "h":2.6,
+   "tris":14502,
+   "budget":20000,
+   "mats":13,
+   "anim":true,
+   "status":"程序生成",
+   "src":"程序生成 · 0 积分",
+   "note":"第 7 批：三级 LOD、FBX 回读见素材来源 batch7_bus_city。"
+  },
   {"id":"scooter_delivery","w":0.7,"d":1.7,"h":1.5,"tris":5600,"budget":20000,"mats":16,"status":"程序生成"},
   {"id":"traffic_light","w":0.5,"d":2.6,"h":4.2,"tris":1587,"budget":15000,"mats":5,"anim":true,"status":"程序生成"},
   {"id":"billboard","w":6,"d":0.6,"h":5.2,"tris":2030,"budget":15000,"mats":5,"status":"程序生成"},
@@ -191,7 +251,20 @@
   },
   {"id":"egg_parrot","w":0.35,"d":0.3,"h":0.8,"budget":8000,"status":"待做·下月 Tripo","note":"随机鹦鹉（stochastic parrot）｜摆放：会议室｜要点：站架上的彩色鹦鹉"},
   {"id":"egg_shoggoth","w":0.35,"d":0.3,"h":0.3,"budget":8000,"status":"待做·下月 Tripo","note":"戴笑脸面具的修格斯毛绒｜摆放：工程师工位｜要点：原创造型的触手团毛绒，前面挂一张黄色笑脸面具"},
-  {"id":"egg_alpaca","w":0.4,"d":0.25,"h":0.45,"budget":8000,"status":"待做·下月 Tripo","note":"羊驼毛绒（LLaMA/Alpaca 梗）｜摆放：休息区沙发｜要点：不带任何公司标志"}
+  {"id":"egg_alpaca","w":0.4,"d":0.25,"h":0.45,"budget":8000,"status":"待做·下月 Tripo","note":"羊驼毛绒（LLaMA/Alpaca 梗）｜摆放：休息区沙发｜要点：不带任何公司标志"},
+  {
+   "id":"elevator_car",
+   "w":1.62,
+   "d":1.72,
+   "h":2.57,
+   "tris":3122,
+   "budget":40000,
+   "mats":9,
+   "anim":true,
+   "status":"程序生成",
+   "src":"程序生成 · 0 积分",
+   "note":"第 7 批：三级 LOD、FBX 回读见素材来源 batch7_elevator_car。"
+  }
  ],
  "ART":[
   {"id":"anomaly","file":"src/assets/art/anomaly.webp","uses":6},
@@ -953,6 +1026,66 @@
    "license":"原创",
    "file":"tools/art/eggs_display_prep.py",
    "qc":"FBX 回读通过；LOD 846/398/174；宽×深×高 1.4×0.55×1.8 m；四向最低 IoU 0.9945/0.9867",
+   "status":"Blender 已验；待 Unity 截图"
+  },
+  {
+   "id":"batch7_elevator_car",
+   "name":"观光电梯轿厢",
+   "source":"程序生成 · 0 积分",
+   "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
+   "credits":0,
+   "file":"art-src/tripo/batch7/elevator_car/game.glb",
+   "qc":"LOD 3122/2404/2266",
+   "status":"Blender 已验；待 Unity 截图"
+  },
+  {
+   "id":"batch7_car_pickup",
+   "name":"皮卡",
+   "source":"程序生成 · 0 积分",
+   "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
+   "credits":0,
+   "file":"art-src/tripo/batch7/car_pickup/game.glb",
+   "qc":"LOD 12264/7742/2728",
+   "status":"Blender 已验；待 Unity 截图"
+  },
+  {
+   "id":"batch7_car_taxi",
+   "name":"出租车",
+   "source":"程序生成 · 0 积分",
+   "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
+   "credits":0,
+   "file":"art-src/tripo/batch7/car_taxi/game.glb",
+   "qc":"LOD 11728/7450/2722",
+   "status":"Blender 已验；待 Unity 截图"
+  },
+  {
+   "id":"batch7_robotaxi",
+   "name":"无人出租车",
+   "source":"程序生成 · 0 积分",
+   "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
+   "credits":0,
+   "file":"art-src/tripo/batch7/robotaxi/game.glb",
+   "qc":"LOD 12668/8084/2718",
+   "status":"Blender 已验；待 Unity 截图"
+  },
+  {
+   "id":"batch7_van_delivery",
+   "name":"配送面包车",
+   "source":"程序生成 · 0 积分",
+   "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
+   "credits":0,
+   "file":"art-src/tripo/batch7/van_delivery/game.glb",
+   "qc":"LOD 12124/7660/2732",
+   "status":"Blender 已验；待 Unity 截图"
+  },
+  {
+   "id":"batch7_bus_city",
+   "name":"城市公交",
+   "source":"程序生成 · 0 积分",
+   "method":"游戏原模 → 焊缝 → 三级 LOD → FBX 回读",
+   "credits":0,
+   "file":"art-src/tripo/batch7/bus_city/game.glb",
+   "qc":"LOD 13854/8390/2724",
    "status":"Blender 已验；待 Unity 截图"
   }
  ]

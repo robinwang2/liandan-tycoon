@@ -7,7 +7,57 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const [what = 'furnace', outFile = 'art-src/tripo/ref/furnace-game.glb'] = process.argv.slice(2);
+const [what = 'furnace', outFile = 'art-src/tripo/ref/furnace-game.glb', mode] = process.argv.slice(2);
+if (mode === '--procedural') {
+  await exportProcedural(what, outFile);
+  process.exit(0);
+}
+
+async function exportProcedural(id, output) {
+  const { Group, Mesh, Matrix4, Vector3 } = await import('three');
+  const { mergeGeometries, mergeVertices } = await import('three/addons/utils/BufferGeometryUtils.js');
+  const { GLTFExporter } = await import('three/addons/exporters/GLTFExporter.js');
+  const { makeKit } = await import('../../src/scene3a/kit.js');
+  const policy = JSON.parse(fs.readFileSync(new globalThis.URL('../../unity/Game/Assets/Shell/Resources/PropPolicyBatch7.json',import.meta.url)));
+  const spec = policy.props.find(prop=>prop.id===id && prop.procedural);
+  if (!spec) throw Error('未登记程序件：'+id);
+  const kit=makeKit(), cabin=id==='elevator_car';
+  const root=cabin ? (await import('../../src/scene3a/office.js')).buildElevatorCabin(kit,'#ff6b4a').car
+    : (await import('../../src/scene3a/props.js')).PROPS[id].build(kit,{seed:0});
+  root.updateMatrixWorld(true);
+  const bins=new Map(), model=new Group(); let wheels=0;
+  function walk(node, owner, pivot) {
+    if(node.name==='wheel' && node.userData.dynamic) owner='wheel_'+(++wheels);
+    else if(spec.parts.includes(node.name)) owner=node.name;
+    else if(node.userData.dynamic) throw Error('未登记活动件：'+node.name);
+    if(node.userData.dynamic || spec.parts.includes(node.name)) pivot=node.getWorldPosition(new Vector3());
+    if(node.isMesh) {
+      const mat=node.material, glass=mat.transparent || (!cabin && ['192f3e','253946'].includes(mat.color.getHexString()));
+      const part=owner ?? (glass?'Glass':mat.emissive?.getHex()?'Lights':'Shell');
+      if(glass) {
+        mat.name='M_'+id+(owner?.startsWith('door_')?'_DoorGlass':'_Glass');
+        if(!cabin){mat.transparent=true; mat.opacity=.62;}
+      }
+      if(!bins.has(part)) bins.set(part,{pivot,slots:new Map()});
+      const slots=bins.get(part).slots;
+      if(!slots.has(mat)) slots.set(mat,[]);
+      const geo=node.geometry.index?node.geometry.clone():mergeVertices(node.geometry,1e-7);
+      geo.applyMatrix4(new Matrix4().makeTranslation(-pivot.x,-pivot.y,-pivot.z).multiply(node.matrixWorld));
+      slots.get(mat).push(geo);
+    }
+    for(const child of node.children) walk(child,owner,pivot);
+  }
+  walk(root,null,new Vector3());
+  if([...bins.keys()].sort().join()!==['Shell',...spec.parts].sort().join()) throw Error('分件与选件表不符：'+[...bins.keys()]);
+  for(const [name,{pivot,slots}] of bins) {
+    const mesh=new Mesh(mergeGeometries([...slots.values()].map(group=>mergeGeometries(group)),true),[...slots.keys()]);
+    mesh.name=name; mesh.position.copy(pivot); model.add(mesh);
+  }
+  globalThis.FileReader ??= class { async readAsArrayBuffer(blob){this.result=await blob.arrayBuffer(); this.onloadend();} };
+  fs.mkdirSync(path.dirname(output),{recursive:true});
+  fs.writeFileSync(output,Buffer.from(await new GLTFExporter().parseAsync(model,{binary:true})));
+  console.log(id+' → '+output+'：'+[...bins.keys()].join('、'));
+}
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const URL = process.env.GAME_URL || 'http://127.0.0.1:5173/';
 // 在页面里执行：返回要导出的那个物体（Object3D）
@@ -18,8 +68,8 @@ const PICK = {
 const art = JSON.parse(fs.readFileSync(new globalThis.URL('../../src/data/tables/art.json',import.meta.url)));
 const world = `stage.scene.children.find(o=>o.isGroup && o.children.filter(c=>c.isPointLight).length>=3)`;
 PICK.office_egg = `(()=>{const {room,stage}=__game.office.debug; room.sync({level:3,own:false}); return ${world}.children[3].children[0]})()`;
-PICK.elevator_car = `(()=>{const {room,stage}=__game.office.debug; room.sync({level:5,floor:0}); return ${world}.children[1].children.find(o=>Math.abs(o.position.x-room.L.W/2-.8)<.001 && o.children.length===3 && o.children[1].isMesh && o.children[2].isMesh)})()`;
-if (art.PROPS.some(prop=>prop.id===what)) PICK[what] = `(await import('/src/scene3a/props.js')).PROPS[${JSON.stringify(what)}].build(__game.office.debug.k,{seed:0,brand:'#3d968d'})`;
+PICK.elevator_car = `(()=>{const {room,stage}=__game.office.debug; room.sync({level:5,floor:0}); return ${world}.getObjectByName('elevator_car')})()`;
+if (!Object.hasOwn(PICK,what) && art.PROPS.some(prop=>prop.id===what)) PICK[what] = `(await import('/src/scene3a/props.js')).PROPS[${JSON.stringify(what)}].build(__game.office.debug.k,{seed:0,brand:'#3d968d'})`;
 if (!Object.hasOwn(PICK,what)) throw Error('未知道具：'+what);
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

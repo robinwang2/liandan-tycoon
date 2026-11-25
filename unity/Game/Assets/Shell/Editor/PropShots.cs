@@ -153,7 +153,7 @@ namespace Liandan.EditorTools
                     if(hybrid) File.Delete(Path.Combine(folder,id+"-action.png"));
                     for (int level = 1; level <= 2; level++)
                         File.Delete(Path.Combine(folder, $"{id}-lod{level}.png"));
-                    if(!File.Exists(source)){if(package=="B6")throw new FileNotFoundException(source);skipped.Add(id);continue;}
+                    if(!File.Exists(source)){if(package=="B6" || package=="Batch7")throw new FileNotFoundException(source);skipped.Add(id);continue;}
                     var log=AssetImporter.GetImportLog(source);
                     if(log!=null){var errors=log.logEntries.Where(entry=>(entry.flags & ImportLogFlags.Error)!=0).Select(entry=>entry.message).ToArray();
                         if(errors.Length>0)throw new InvalidDataException(string.Join("；",errors));}
@@ -166,7 +166,7 @@ namespace Liandan.EditorTools
                     if(id=="egg_blub_tank" && !copy.transform.Find("Fish"))throw new InvalidDataException("缺少可移动 Fish 节点");
                     foreach(var lod in group.GetLODs())
                         if(lod.renderers.Length==0 || lod.renderers.Any(renderer=>!renderer || renderer.sharedMaterials.Length==0 || renderer.sharedMaterials.Any(mat=>!mat || mat.shader.name!="Universal Render Pipeline/Lit")))throw new InvalidDataException("LOD 缺少渲染器或 URP/Lit 材质");
-                    bool needsMap=package!="B6" || !(new[]{"egg_teapot","egg_cornell","egg_paperclips"}.Contains(id));
+                    bool needsMap=package!="Batch7" && (package!="B6" || !(new[]{"egg_teapot","egg_cornell","egg_paperclips"}.Contains(id)));
                     if(needsMap && !group.GetLODs()[0].renderers.SelectMany(renderer=>renderer.sharedMaterials).Any(mat=>mat.GetTexture("_BaseMap")))throw new InvalidDataException("LOD0 缺少底色图");
                     group.ForceLOD(0);
                     var levels=group.GetLODs();
@@ -182,7 +182,8 @@ namespace Liandan.EditorTools
                     // 混合件按回读枢轴确定轴向。只在静止姿态取景一次，远级和动作图共用同一变换与画幅。
                     var center=box.transform.TransformPoint(box.center);
                     var diagonal=Vector3.Scale(box.size,box.transform.lossyScale).magnitude;
-                    var direction=copy.transform.TransformDirection(package=="B6"?new Vector3(.23f,.24f,1):new Vector3(.75f*xSign,.65f,-xSign)).normalized;
+                    bool doorView=package=="Batch7" && id=="elevator_car";
+                    var direction=copy.transform.TransformDirection(package=="B6"?new Vector3(.23f,.24f,1):doorView?new Vector3(-1.4f*xSign,.65f,xSign):new Vector3(.75f*xSign,.65f,-xSign)).normalized;
                     camera.transform.position=center+direction*diagonal*2;
                     camera.transform.LookAt(center);
                     camera.orthographicSize=diagonal*.5f*1.08f;
@@ -202,6 +203,7 @@ namespace Liandan.EditorTools
                         {
                             var node=PropBatch.Part(levels[0],id,pose.node,0);
                             if(pose.axis=="emission"){SetLamp(node,pose.peak);continue;}
+                            if(pose.axis=="slideZ"){node.position+=copy.transform.TransformVector(Vector3.back*xSign*pose.peak);continue;}
                             var axis=pose.axis switch { "x"=>Vector3.left*xSign, "y"=>Vector3.down,
                                 "z"=>Vector3.forward*xSign, _=>throw new InvalidDataException("未知动作轴："+pose.axis) };
                             node.Rotate(copy.transform.TransformDirection(axis),pose.degrees,Space.World);
@@ -215,11 +217,30 @@ namespace Liandan.EditorTools
             }
             try {PropBatch.Overview(camera);FurnaceShots.WriteShot(camera,folder,"office");}
             catch(Exception error){failures.Add("office："+error.Message);}
+            if(resource=="Batch7" && failures.Count==0) CaptureComparison(camera,folder);
             var summary=$"通过 {passed} 件，未安装 {skipped.Count} 件 [{string.Join(", ",skipped)}]，失败 {failures.Count} 项";
             Debug.Log($"Liandan {batch} shots: "+summary);
             foreach(var reason in failures)Debug.LogError($"Liandan {batch} FAIL: "+reason);
             if(failures.Count>0)throw new InvalidDataException(summary);
             Debug.Log($"Liandan {batch} shots OK: "+folder);
+        }
+
+        static void CaptureComparison(Camera camera,string folder)
+        {
+            var center=new Vector3(100,0,100);
+            int index=0;
+            foreach(var resource in new[]{"Batch7","Batch3"})
+                foreach(var item in PropBatch.Selection(resource).props)
+                {
+                    if(resource=="Batch3" && !new[]{"car_sedan","car_suv","car_hatch"}.Contains(item.id))continue;
+                    var asset=Resources.Load<GameObject>($"{resource}/{item.id}/SM_{item.id}");
+                    if(!asset)throw new FileNotFoundException($"九件同框缺少 {resource}/{item.id}");
+                    var obj=UnityEngine.Object.Instantiate(asset,center+new Vector3((index%3-1)*4,0,(index/3-1)*6.6f),Quaternion.Euler(0,25,0));
+                    obj.GetComponent<LODGroup>().ForceLOD(0);index++;
+                }
+            if(index!=9)throw new InvalidDataException("须有九件道具同框");
+            camera.transform.position=center+new Vector3(0,19,-23);camera.transform.LookAt(center);camera.orthographicSize=8.8f;
+            FurnaceShots.WriteShot(camera,folder,"comparison");
         }
     }
 }
