@@ -50,3 +50,5 @@ unity/Game/*.unitypackage
 unity/Game/Assets/StreamingAssets/
 unity/Game/Assets/StreamingAssets.meta
 art-out/
+# 第三方原件（BlendSwap 等下载件，许可记在美术.xlsx「素材来源」）
+art-src/ficus/

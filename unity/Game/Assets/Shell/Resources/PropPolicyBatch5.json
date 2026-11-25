@@ -4,7 +4,7 @@
     {"id":"kiosk","name":"街边售卖亭","origin":"bottom","x":-5.4,"y":0.06,"z":-4,"shell":"亭身、顶棚、柜台饮品和背墙货架（两侧敞开）","parts":["Glass"],"actions":[]},
     {"id":"meeting_table","name":"六人会议桌椅","origin":"bottom","x":-1.7,"y":0.06,"z":-4},
     {"id":"hand_truck","name":"载货手推车","origin":"bottom","x":1.8,"y":0.06,"z":-4,"shell":"三层纸箱、封条与绿色捆带","parts":["Frame"],"partColors":{"22252d":"Frame","aeb6c2":"Frame","6f8586":"Frame"},"actions":[]},
-    {"id":"vending","name":"自动售货机","origin":"bottom","x":5.2,"y":0.06,"z":-4,"shell":"机身、按键、货道饮料与取物口（前窗敞开）","parts":["Glass"],"actions":[]},
+    {"id":"vending","name":"自动售货机","origin":"bottom","x":5.2,"y":0.06,"z":-4,"shell":"机身、按键、货道饮料与取物口（前窗敞开）","parts":["Glass"],"glassAlpha":0.15,"actions":[]},
     {"id":"standing_desk","name":"站立办公桌","origin":"bottom","x":-5.4,"y":0.06,"z":-1.1,"shell":"桌架、桌面用品及显示器壳体","parts":["screen-surface"],"actions":[]},
     {"id":"money_tree","name":"发财树","origin":"bottom","x":-1.7,"y":0.06,"z":-1.1},
     {"id":"locker","name":"员工储物柜","origin":"bottom","x":1.8,"y":0.06,"z":-1.1},
