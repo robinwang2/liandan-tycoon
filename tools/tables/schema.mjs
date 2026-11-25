@@ -244,6 +244,18 @@ const DEFS = {
     { name: '黑料', about: '黑料的种类。「涉嫌违法」填 1 = 曝光多了会惊动经侦。', cols: C([ID, NAME, ['严重度', 'sev', '小数', { w: 8 }], ['涉嫌违法', 'crime', '整数', { w: 9 }], ['曝光时的文案', 'blurb', '文本', { long: true, w: 80 }]]), ...map('DIRT') },
     { name: '结局', about: '所有结局。「好结局」1 / 0；基础分用来算局外的人脉点。文案里 {co} 是公司名、{model} 是模型名、{pay} 是到手的钱。', cols: C([ID, NAME, ICON, ['好结局', 'good', '整数', { w: 7 }], ['基础分', 'base', '小数', { w: 8 }], ['文案', 'text', '文本', { long: true, w: 90 }]]), ...map('ENDINGS') },
     { name: '成就', about: '成就。达成条件在代码里，这里是名字和说明。', cols: C([ID, NAME, ICON, DESC]), ...map('ACHIEVEMENTS') },
+    { name: '彩蛋', about: '办公室里的跨局收藏。摆放列记录场景锚点。',
+      cols: C([ID, NAME, ['道具', 'prop', '标识'], ['摆放', 'anchor', '文本'], DESC, ['致谢', 'credit', '文本', { w: 56 }]]),
+      ...list('EASTER_EGGS'), unpack(rows, out, ctx) {
+        const ids = new Set();
+        for (const row of rows) {
+          for (const { key } of this.cols) if (!row[key]) ctx.fail(row, key, '必填，不能留空');
+          if (ids.has(row.id)) ctx.fail(row, 'id', `「${row.id}」重复了`);
+          if (row.prop && !row.prop.startsWith('egg_')) ctx.fail(row, 'prop', '道具 id 必须以 egg_ 开头');
+          ids.add(row.id);
+        }
+        out.EASTER_EGGS = rows.map(strip);
+      } },
     {
       name: '公司目标', about: '「意识形态」页显示的公司目标。走完路线之争以后会变，并带来长期修正。', cols: C([ID, ['名称', 'name', '文本', { w: 40 }], DESC, MODS]),
       pack: d => Object.entries(d.GOALS).map(([id, g]) => ({ id, ...g, desc: g.desc || undefined })),

@@ -43,12 +43,16 @@ namespace Liandan.Shell
                 if(args.Contains("-art-batch1-ab")){enabled=false;return;}
                 System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
                 if (args.Contains("-audiotest") || args.Contains("-audiotest-readback")) { StartAudioTest(args); return; }
-                var driver = auto ? new Autoplay(this, args) : null;
+                string? eggShots = EggTestDirectory(args);
+                bool gallery = eggShots != null || args.Contains("-eggs");
+                var driver = auto && !gallery ? new Autoplay(this, args) : null;
                 if (!auto) Seed = Environment.TickCount;
                 Tables = new Tables(Path.Combine(Application.streamingAssetsPath, "tables"));
                 Rows = Tables.GetActionRows().ToDictionary(row => row!["id"]!.ToString(), row => row!);
-                Store = new GameStore(driver?.SaveDirectory ?? Application.persistentDataPath, Tables); Meta = Store.LoadMeta();
-                if(args.Contains("-art-batch1") || args.Contains("-art-batch2"))
+                var saveDirectory = eggShots == null ? driver?.SaveDirectory ?? Application.persistentDataPath : Path.Combine(eggShots, "save-" + Guid.NewGuid().ToString("N"));
+                Store = new GameStore(saveDirectory, Tables); Meta = Store.LoadMeta();
+                if (gallery) CreateEggGallery();
+                else if(args.Contains("-art-batch1") || args.Contains("-art-batch2"))
                 {
                     Whitebox.Create(false,true);
                     PropBatch.Place(args.Contains("-art-batch2") ? "Batch2" : "Batch1");
@@ -63,12 +67,13 @@ namespace Liandan.Shell
                 ui.SetActive(true);
                 Root = doc.rootVisualElement;
                 captureDirectory=driver?.Shots;
-                InitSettings(auto);
+                InitSettings(auto || eggShots != null);
                 Root.styleSheets.Add(Required<StyleSheet>("Shell")); Root.AddToClassList("shell");
                 Root.style.unityFontDefinition = FontDefinition.FromSDFFont(Required<UnityEngine.TextCore.Text.FontAsset>("ShellFont"));
-                Draw(); if (driver != null) { UnlockSound(); StartCoroutine(driver.Run()); }
+                Draw(); if (eggShots != null) StartCoroutine(RunEggTest(eggShots, saveDirectory));
+                if (driver != null) { UnlockSound(); StartCoroutine(driver.Run()); }
             }
-            catch (Exception error) { Debug.LogException(error); if (auto || args.Contains("-audiotest") || args.Contains("-audiotest-readback")) Application.Quit(1); }
+            catch (Exception error) { Debug.LogException(error); if (auto || args.Contains("-eggs-test") || args.Contains("-audiotest") || args.Contains("-audiotest-readback")) Application.Quit(1); }
         }
         internal static VisualElement Box(VisualElement parent, string style)
         { var box = new VisualElement(); box.AddToClassList(style); parent.Add(box); return box; }
@@ -162,6 +167,7 @@ namespace Liandan.Shell
         internal void Draw()
         {
             Root.Clear(); bubble=null; Controls.Clear(); ApplyTheme(); SyncSound();
+            if (ScreenId == "eggs") { DrawEggGallery(); return; }
             if(State!=null && State.Snapshot["over"]==null && ScreenId!="wizard") PrepareTutorial();
             if (ScreenId == "main")
             {
@@ -173,7 +179,8 @@ namespace Liandan.Shell
             {
                 case "menu": DrawMenu(panel); break;
                 case "settings": DrawSettings(panel); break;
-                case "ach": case "ends": DrawCatalogue(panel); break;
+                case "ach": AddEggCounter(panel); DrawCatalogue(panel); break;
+                case "ends": DrawCatalogue(panel); break;
                 case "wizard": Wizard.Draw(panel); break;
                 case "local": localBody!(Scroll(panel)); Button(panel,"back",Text("ui.back"),CloseLocal); break;
                 case "event": case "result": EventPanel.Draw(this, panel); break;
