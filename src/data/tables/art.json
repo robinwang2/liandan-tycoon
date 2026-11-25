@@ -170,7 +170,28 @@
   {"id":"egg_gpu_ad","w":0.8,"d":0.4,"h":1.7,"tris":974,"budget":2000,"mats":2,"status":"程序生成","src":"batch6_egg_gpu_ad","note":"华强北「核弹」显卡广告"},
   {"id":"egg_bbb_poster","w":0.6,"d":0.04,"h":0.9,"tris":190,"budget":500,"mats":2,"status":"程序生成","src":"batch6_egg_bbb_poster","note":"《大雄兔》海报"},
   {"id":"egg_attention","w":0.5,"d":0.04,"h":0.7,"tris":190,"budget":500,"mats":2,"status":"程序生成","src":"batch6_egg_attention","note":"装裱的论文首页"},
-  {"id":"egg_whiteboard","w":1.4,"d":0.55,"h":1.8,"tris":846,"budget":3000,"mats":2,"status":"程序生成","src":"batch6_egg_whiteboard","note":"写满梗的白板"}
+  {"id":"egg_whiteboard","w":1.4,"d":0.55,"h":1.8,"tris":846,"budget":3000,"mats":2,"status":"程序生成","src":"batch6_egg_whiteboard","note":"写满梗的白板"},
+  {
+   "id":"egg_bunny",
+   "w":0.18,
+   "d":0.14,
+   "h":0.18,
+   "budget":8000,
+   "status":"待做·下月 Tripo",
+   "note":"致敬版陶瓷兔｜摆放：研发区书架｜要点：斯坦福兔子同款蹲姿，陶土/白釉，底部带扫描破洞；斯坦福原模型禁止商用，不能用原数据，只做原创致敬造型"
+  },
+  {
+   "id":"egg_whale_figure",
+   "w":0.15,
+   "d":0.15,
+   "h":0.25,
+   "budget":8000,
+   "status":"待做·下月 Tripo",
+   "note":"鲸鱼娘手办｜摆放：CEO 办公桌｜要点：原创蓝白鲸鱼主题少女手办，不带 DeepSeek 字样和标志"
+  },
+  {"id":"egg_parrot","w":0.35,"d":0.3,"h":0.8,"budget":8000,"status":"待做·下月 Tripo","note":"随机鹦鹉（stochastic parrot）｜摆放：会议室｜要点：站架上的彩色鹦鹉"},
+  {"id":"egg_shoggoth","w":0.35,"d":0.3,"h":0.3,"budget":8000,"status":"待做·下月 Tripo","note":"戴笑脸面具的修格斯毛绒｜摆放：工程师工位｜要点：原创造型的触手团毛绒，前面挂一张黄色笑脸面具"},
+  {"id":"egg_alpaca","w":0.4,"d":0.25,"h":0.45,"budget":8000,"status":"待做·下月 Tripo","note":"羊驼毛绒（LLaMA/Alpaca 梗）｜摆放：休息区沙发｜要点：不带任何公司标志"}
  ],
  "ART":[
   {"id":"anomaly","file":"src/assets/art/anomaly.webp","uses":6},
