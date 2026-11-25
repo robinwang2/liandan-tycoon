@@ -122,7 +122,7 @@ namespace Liandan.Shell
         private void ClickEgg(Vector2 screen)
         {
             var target = EggPanelTarget(screen);
-            if (eggCard != null && target != null && (target == eggCard || eggCard.Contains(target))) return;
+            if (target != null && target != eggFooter && eggFooter.Contains(target)) return;
             var egg = PickEgg(screen, target);
             if (egg == null) { HideEggCard(); return; }
             var found = Meta["eggs"] ??= new JsonObject();
@@ -141,15 +141,20 @@ namespace Liandan.Shell
             eggCounter.text = "彩蛋 " + progress;
             eggCounter.EnableInClassList("egg-complete", EggCount == EggRows.Count);
             HideEggCard();
+            if (award)
+            {
+                var awardCard = Box(eggFooter, "egg-award-card");
+                Label(awardCard, "解锁成就：彩蛋大师", "egg-award");
+                Label(awardCard, $"已找到全部 {EggRows.Count} 个彩蛋", "egg-award-detail");
+            }
             eggCard = Box(eggFooter, "egg-card");
             Label(eggCard, fresh ? "发现彩蛋！ " + progress : "已收集", "egg-status");
-            if (award) Label(eggCard, "解锁成就：彩蛋大师", "egg-award");
             Label(eggCard, egg.Name, "egg-name"); Label(eggCard, egg.Description);
             Label(eggCard, "致谢：" + egg.Credit, "egg-credit");
             hideEggAt = Time.unscaledTime + 4;
         }
 
-        private void HideEggCard() { eggCard?.RemoveFromHierarchy(); eggCard = null; }
+        private void HideEggCard() { eggFooter.Clear(); eggCard = null; }
 
         private void LateUpdate()
         {

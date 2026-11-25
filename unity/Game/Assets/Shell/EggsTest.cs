@@ -47,11 +47,31 @@ namespace Liandan.Shell
                 Physics.SyncTransforms();
                 ClickEgg(eggCamera.WorldToScreenPoint(egg.Hit.bounds.center));
             }
-            void CheckCard(Exhibit egg, string status)
+            void CheckInside(VisualElement child, VisualElement parent, string message)
+            {
+                var inner = child.worldBound; var outer = parent.worldBound;
+                const float tolerance = 1;
+                Check(inner.width > 0 && inner.height > 0 && inner.xMin >= outer.xMin - tolerance && inner.yMin >= outer.yMin - tolerance &&
+                    inner.xMax <= outer.xMax + tolerance && inner.yMax <= outer.yMax + tolerance, $"{message}（{Screen.width}×{Screen.height}）：{inner} / {outer}");
+            }
+            void CheckCard(Exhibit egg, string status, bool award = false)
             {
                 var labels = eggCard?.Query<Label>().ToList().Select(label => label.text).ToList();
                 Check(eggCard?.panel != null && labels != null && labels.Contains(status) && labels.Contains(egg.Name) &&
                     labels.Contains(egg.Description) && labels.Contains("致谢：" + egg.Credit), "卡片内容不对：" + egg.Id);
+                CheckInside(eggFooter, Root, "底栏超出屏幕");
+                var awardCard = eggFooter.Q(className: "egg-award-card");
+                Check((awardCard != null) == award, "成就卡时机不对");
+                if (awardCard != null)
+                {
+                    Check(awardCard.parent == eggFooter && awardCard.Q<Label>(className: "egg-award")?.text == "解锁成就：彩蛋大师", "缺少独立成就卡或标题");
+                    Check(awardCard.worldBound.yMax <= eggCard!.worldBound.yMin && awardCard.worldBound.width > eggCard.worldBound.width, "成就卡未放大或遮住了彩蛋详情");
+                }
+                foreach (var card in eggFooter.Children())
+                {
+                    CheckInside(card, eggFooter, "卡片超出底栏");
+                    foreach (var label in card.Query<Label>().ToList()) CheckInside(label, card, "卡片文字被裁切：" + label.text);
+                }
             }
             var frame = new WaitForEndOfFrame();
             yield return null; yield return frame;
@@ -62,12 +82,11 @@ namespace Liandan.Shell
             {
                 var egg = exhibits[index]; int count = index + 1;
                 Click(egg); yield return null; yield return frame;
-                CheckCard(egg, $"发现彩蛋！ {count}/{total}");
+                CheckCard(egg, $"发现彩蛋！ {count}/{total}", count == total);
                 Check(eggCounter.text == $"彩蛋 {count}/{total}" && EggCount == count, "计数不对：" + egg.Id);
                 var disk = JsonNode.Parse(File.ReadAllText(Path.Combine(saveDirectory, GameStore.MetaKey + ".json")))!;
                 Check(disk["eggs"]!.AsObject().Count == count && (int?)disk["eggs"]![egg.Id] == 1, "未即时保存：" + egg.Id);
                 Check(((int?)disk["ach"]!["egg_master"] == 1) == (count == total), "成就写入时机不对");
-                Check((eggCard!.Q<Label>(className: "egg-award")?.text == "解锁成就：彩蛋大师") == (count == total), "成就卡时机不对");
                 Shot(count.ToString("D2") + "-found");
                 if (index == 0 && total > 1)
                 {
@@ -77,10 +96,10 @@ namespace Liandan.Shell
                 }
             }
             Click(exhibits[0]); yield return null; yield return frame;
-            CheckCard(exhibits[0], "已收集"); Check(EggCount == total && eggCard!.Q<Label>(className: "egg-award") == null, "重复发现或发奖"); Shot("repeat");
+            CheckCard(exhibits[0], "已收集"); Check(EggCount == total, "重复发现"); Shot("repeat");
             var panelPoint = eggCounter.worldBound.center;
             ClickEgg(new Vector2(panelPoint.x / Root.worldBound.width * Screen.width, (1 - panelPoint.y / Root.worldBound.height) * Screen.height));
-            Check(eggCard == null, "点击标签没有收起卡片"); yield return null; yield return frame; Shot("dismiss");
+            Check(eggFooter.childCount == 0, "点击标签没有收起卡片"); yield return null; yield return frame; Shot("dismiss");
             Store = new GameStore(saveDirectory, Tables); Meta = Store.LoadMeta(); Draw();
             yield return null; yield return frame;
             Check(EggCount == total && (int?)Meta["ach"]!["egg_master"] == 1 && eggCounter.ClassListContains("egg-complete"), "重新载入后进度或成就丢失");
