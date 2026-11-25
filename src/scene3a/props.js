@@ -1074,35 +1074,33 @@ function roadWheel(k, g, x, z, radius, width) {
   for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8; k.box(width * 0.65, 0.006, radius * 0.12, C.dark, p, 0, Math.cos(a) * radius * 0.996, Math.sin(a) * radius * 0.996, { rx: a, r: 0 }); }
   return p;
 }
-function vehicle(k, g, o, type, w, d, h) {
-  const bus = type === 'bus', van = type === 'van' || type === 'food', pickup = type === 'pickup', suv = ['suv', 'robotaxi'].includes(type);
-  const wheelR = bus ? 0.42 : van ? 0.32 : 0.27;
-  const paint = material(k, brand(o, type === 'taxi' ? '#e5b739' : type === 'robotaxi' ? '#f1eee3' : '#528e88'), 'paint', 0.35, 0.35, { clear: 0.8 });
+function legacyVehicle(k, g, o, type, w, d, h) {
+  const van = type === 'food', suv = type === 'suv';
+  const wheelR = van ? 0.32 : 0.27;
+  const paint = material(k, brand(o, '#528e88'), 'paint', 0.35, 0.35, { clear: 0.8 });
   const glassMat = k.mat('#192f3e', { rough: 0.08, metal: 0.4, clear: 0.7 });
   const chrome = material(k, '#a9b3b8', 'metal', 0.24, 0.85);
-  const bodyH = bus ? 1.2 : van ? 0.7 : 0.5, bodyY = wheelR + bodyH * 0.46;
+  const bodyH = van ? 0.7 : 0.5, bodyY = wheelR + bodyH * 0.46;
   k.box(w * 0.91, bodyH, d * 0.96, paint, g, 0, bodyY, 0, { r: 0.075 });
   k.box(w * 0.72, 0.1, d * 0.8, C.black, g, 0, wheelR * 0.7, 0, { r: 0.02 });
-  const roof = type === 'robotaxi' ? h - 0.3 : type === 'taxi' ? h - 0.15 : bus ? h - 0.2 : h - 0.03;
-  const cabinBase = bodyY + bodyH * 0.36, cabD = bus ? d * 0.91 : van ? d * 0.9 : pickup ? d * 0.43 : type === 'sedan' || type === 'taxi' ? d * 0.54 : d * 0.64;
-  const cabZ = pickup ? d * 0.16 : van ? -d * 0.01 : -d * 0.09;
+  const roof = h - 0.03;
+  const cabinBase = bodyY + bodyH * 0.36, cabD = van ? d * 0.9 : type === 'sedan' ? d * 0.54 : d * 0.64;
+  const cabZ = van ? -d * 0.01 : -d * 0.09;
   k.box(w * 0.79, roof - cabinBase, cabD, paint, g, 0, (roof + cabinBase) / 2, cabZ, { r: 0.055 });
-  const windowH = (roof - cabinBase) * (bus ? 0.65 : 0.68), windowY = roof - windowH * 0.59 - 0.06;
-  k.box(w * 0.68, windowH, 0.018, glassMat, g, 0, windowY, cabZ + cabD / 2 + 0.003, { r: 0.018, rx: van || bus ? -0.08 : -0.17 });
+  const windowH = (roof - cabinBase) * 0.68, windowY = roof - windowH * 0.59 - 0.06;
+  k.box(w * 0.68, windowH, 0.018, glassMat, g, 0, windowY, cabZ + cabD / 2 + 0.003, { r: 0.018, rx: van ? -0.08 : -0.17 });
   k.box(w * 0.66, windowH * 0.83, 0.016, glassMat, g, 0, windowY, cabZ - cabD / 2 - 0.003, { r: 0.018, rx: 0.12 });
-  const windowCount = bus ? 7 : van ? 1 : 2;
+  const windowCount = van ? 1 : 2;
   for (const s of [-1, 1]) {
     for (let j = 0; j < windowCount; j++) {
-      const wz = bus ? -d * 0.36 + j * d * 0.113 : van ? d * 0.31 : cabZ + (j - 0.5) * cabD * 0.47;
-      k.box(0.018, windowH, bus ? d * 0.098 : van ? d * 0.16 : cabD * 0.42, glassMat, g, s * w * 0.398, windowY, wz, { r: 0.014 });
-      if (!bus) {
-        k.box(0.012, 0.022, 0.12, chrome, g, s * w * 0.46, bodyY + bodyH * 0.32, wz - 0.12);
-        k.box(0.005, bodyH * 0.76, 0.008, C.dark, g, s * w * 0.457, bodyY, wz - (van ? 0.34 : cabD * 0.23), { r: 0 });
-      }
+      const wz = van ? d * 0.31 : cabZ + (j - 0.5) * cabD * 0.47;
+      k.box(0.018, windowH, van ? d * 0.16 : cabD * 0.42, glassMat, g, s * w * 0.398, windowY, wz, { r: 0.014 });
+      k.box(0.012, 0.022, 0.12, chrome, g, s * w * 0.46, bodyY + bodyH * 0.32, wz - 0.12);
+      k.box(0.005, bodyH * 0.76, 0.008, C.dark, g, s * w * 0.457, bodyY, wz - (van ? 0.34 : cabD * 0.23), { r: 0 });
     }
     k.box(0.02, 0.04, d * 0.73, chrome, g, s * w * 0.455, wheelR + 0.06, 0);
-    k.box(w * 0.085, 0.085, 0.16, paint, g, s * w * 0.46, windowY - 0.05, bus ? d * 0.43 : cabZ + cabD * 0.4, { r: 0.025 });
-    k.box(0.018, 0.055, 0.11, chrome, g, s * w * 0.505, windowY - 0.05, bus ? d * 0.43 : cabZ + cabD * 0.4);
+    k.box(w * 0.085, 0.085, 0.16, paint, g, s * w * 0.46, windowY - 0.05, cabZ + cabD * 0.4, { r: 0.025 });
+    k.box(0.018, 0.055, 0.11, chrome, g, s * w * 0.505, windowY - 0.05, cabZ + cabD * 0.4);
   }
   const frontZ = d * 0.485, rearZ = -d * 0.485;
   k.box(w * 0.48, 0.15, 0.018, C.black, g, 0, bodyY - 0.02, frontZ);
@@ -1122,40 +1120,340 @@ function vehicle(k, g, o, type, w, d, h) {
     // Trim arch above each tire; open below, so the wheel remains visible.
     k.torus(wheelR * 1.1, 0.025, C.dark, g, x, wheelR, z, { ry: Math.PI / 2, arc: Math.PI });
   }
-  if (pickup) {
-    k.box(w * 0.72, 0.025, d * 0.35, C.dark, g, 0, bodyY + bodyH / 2 + 0.008, -d * 0.28);
-    for (const x of [-w * 0.41, w * 0.41]) k.box(0.08, 0.2, d * 0.36, paint, g, x, bodyY + bodyH / 2 + 0.07, -d * 0.28);
-    for (let i = 0; i < 8; i++) k.box(0.015, 0.015, d * 0.32, chrome, g, (i - 3.5) * w * 0.075, bodyY + bodyH / 2 + 0.027, -d * 0.28);
-  }
   if (suv) for (const x of [-w * 0.28, w * 0.28]) k.box(0.035, 0.035, cabD * 0.85, chrome, g, x, roof + 0.01, cabZ);
-  if (type === 'taxi') {
-    for (const x of [-w * 0.46, w * 0.46]) k.box(0.014, 0.13, d * 0.64, material(k, '#274d4c', 'paint', 0.35, 0.3, { clear: 0.8 }), g, x, bodyY, 0);
-    k.box(0.4, 0.13, 0.18, lit(k, '#ffe5a2'), g, 0, roof + 0.07, -0.1, { r: 0.02 });
-    labelLines(k, g, 0, roof + 0.08, -0.007, 0.22, 2, C.black);
-  }
-  if (type === 'robotaxi') {
-    k.box(0.65, 0.06, 0.6, C.dark, g, 0, roof + 0.04, -0.2);
-    const sensor = dynamic(k, g, 'lidar', 0, roof + 0.16, -0.2);
-    k.cyl(0.16, 0.16, 0.18, C.white, sensor, 0, 0, 0);
-    k.cyl(0.165, 0.165, 0.065, glassMat, sensor, 0, 0.01, 0);
-    k.box(0.045, 0.035, 0.025, C.dark, sensor, 0, 0.07, 0.15);
-    g.userData.tick = t => { sensor.rotation.y = t * 1.5; };
-    for (const x of [-w * 0.4, w * 0.4]) for (const z of [-d * 0.41, d * 0.41]) k.ball(0.045, glassMat, g, x, bodyY + 0.2, z);
-  }
   if (van) {
     for (const x of [-w * 0.401, w * 0.401]) { k.box(0.012, 0.3, d * 0.47, paint, g, x, 1.28, -0.55); k.box(0.018, 0.04, d * 0.44, chrome, g, x, 0.99, -0.52); }
     for (const x of [-0.34, 0.34]) { k.box(0.014, 1.05, 0.015, chrome, g, x, 1.17, -d * 0.466); k.box(0.1, 0.03, 0.03, C.dark, g, x, 1.03, -d * 0.47); }
   }
-  if (bus) {
-    k.box(w * 0.65, 0.15, d * 0.42, C.white, g, 0, roof + 0.085, -0.5, { r: 0.04 });
-    k.box(w * 0.68, 0.22, 0.02, C.black, g, 0, roof - 0.16, cabZ + cabD / 2 + 0.02);
-    face(k, g, { ...o, screen: o.screen || lit(k, '#ffc85c') }, 'screen', w * 0.65, 0.19, 0, roof - 0.16, cabZ + cabD / 2 + 0.032);
-    for (const z of [d * 0.3, -d * 0.12]) {
-      k.box(0.016, 1.65, 0.83, C.dark, g, w * 0.462, 1.13, z);
-      for (const dz of [-0.2, 0.2]) k.box(0.02, 1.38, 0.35, glassMat, g, w * 0.475, 1.23, z + dz);
+}
+const coachwork = {
+  pickup: { belt: .83, roofGap: .035, cabin: [-.105, .255, -.094, .136], widths: [.443, .381], crown: .038 },
+  taxi: { belt: .69, roofGap: .155, cabin: [-.355, .25, -.19, .08], widths: [.445, .348], crown: .045 },
+  robotaxi: { belt: .72, roofGap: .30, cabin: [-.442, .431, -.218, .188], widths: [.458, .357], crown: .07 },
+  van: { belt: .90, roofGap: .15, cabin: [-.465, .35, -.455, .219], widths: [.453, .413], crown: .046 },
+  bus: { belt: .98, roofGap: .22, cabin: [-.467, .468, -.459, .451], widths: [.456, .443], crown: .05 },
+};
+
+function vehiclePanel(k, parent, mat, corners, normals) {
+  const geometry = k.geo('vehicle-panel|' + JSON.stringify([corners,normals]), () => {
+    const geo = new k.THREE.BufferGeometry();
+    geo.setAttribute('position', new k.THREE.Float32BufferAttribute(corners.flat(), 3));
+    geo.setAttribute('uv', new k.THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    if(normals) geo.setAttribute('normal',new k.THREE.Float32BufferAttribute(normals.flat(),3));
+    else geo.computeVertexNormals();
+    return geo;
+  });
+  return k.put(geometry, mat, parent, 0, 0, 0, { cast: !mat.transparent });
+}
+
+function coachWheel(k, parent, x, z, radius, width, m) {
+  const hub = dynamic(k, parent, 'wheel', x, radius, z), outward = Math.sign(x);
+  const axle = k.group(hub); axle.rotation.z = -outward * Math.PI / 2;
+  const profile = [[.56,-.49],[.83,-.49],[.96,-.40],[1,-.26],[1,.26],[.96,.4],[.83,.49],[.59,.49],[.56,.43],[.56,-.49]];
+  k.lathe(profile.map(([r, offset]) => [r * radius, offset * width]), m.trim, axle, 0, 0, 0, { seg: 36 });
+  const faceY = width * .40;
+  k.lathe([[radius*.58,width*.50],[radius*.59,width*.535],[radius*.67,width*.535],[radius*.69,width*.48]].reverse(), m.rim, axle, 0, 0, 0, { seg: 36 });
+  k.cyl(radius*.59, radius*.59, .01, m.trim, axle, 0, faceY+.004, 0, { seg: 32 });
+  for (let spoke = 0; spoke < 6; spoke++) {
+    const angle = spoke * Math.PI / 3, carrier = k.group(axle, 0, faceY+.013, 0, angle);
+    k.extrude([[-.067,.08],[.081,.08],[.20,.57],[.091,.62]], .016, m.rim, carrier, 0, 0, 0, { rx: -Math.PI/2, sx: radius, sy: radius });
+  }
+  k.cyl(radius*.23, radius*.27, .026, m.rim, axle, 0, faceY+.022, 0, { seg: 20 });
+  return hub;
+}
+
+function buildCoachwork(k, g, type, w, d, radius, m, box) {
+  const {belt} = coachwork[type], sill = radius*.69, half = w*.449, bevel = .035, gap = radius + .066;
+  const sidePart = (profile, lo, hi, mat, rounding = 0) => k.extrude(profile.map(([z,y]) => [-z,y]), hi-lo, mat, g, lo, 0, 0, { ry: Math.PI/2, bevel: rounding });
+  const arch = (axle, r) => Array.from({length:19}, (_, index) => {
+    const angle = Math.PI * (1-index/18); return [axle + r*Math.cos(angle), radius + r*Math.sin(angle)];
+  });
+  const lip = (axle, r) => [[axle-r,sill], ...arch(axle,r), [axle+r,sill]];
+  const nose = .466*d, tail = -.466*d, pickup = type === 'pickup', pod = type === 'robotaxi';
+  const noseY = belt - (type === 'bus' ? .03 : pickup ? .11 : .12), tailY = belt - (pod ? .09 : .04);
+  const front = [[nose-.03,noseY],[nose,noseY-.046],[nose,sill+.07],[nose-.043,sill]];
+  const back = [[tail+.05,sill],[tail,sill+.065],[tail,tailY-.047],[tail+.035,tailY]];
+  const frontArch = lip(d*.31,gap).reverse(), rearArch = lip(-d*.31,gap).reverse();
+  if (pickup) {
+    const split = -d*.117;
+    sidePart([[split,belt],[d*.255,belt],[d*.39,belt-.041],...front,...frontArch,[split,sill]], -half, half, m.paint, bevel);
+    const bed = [[split-.091,belt+.015],[split-.091,sill],...rearArch,...back,[tail+.046,belt+.015]];
+    for (const sign of [-1,1]) {
+      const edge=sign*half; sidePart(bed, Math.min(edge,edge-sign*.064),Math.max(edge,edge-sign*.064),m.paint,bevel);
+      box(.096,.037,split-tail-.12,m.trim,edge-sign*.028,belt+.058,(split+tail-.047)/2,.016);
+      box(.25,.24,.81,m.trim,sign*(half-.15),.515,-d*.31,.085);
+    }
+    const bedLength = split-tail-.13, center = (split+tail-.066)/2;
+    box(half*2-.11,.08,bedLength,m.trim,0,.45,center,.018);
+    for (let rib=-4;rib<=4;rib++) box(.03,.025,bedLength-.09,m.trim,rib*w*.067,.497,center,.009);
+    box(half*2-.09,.39,.062,m.paint,0,.657,split-.09,.018);
+    box(half*2-.07,belt-sill,.064,m.paint,0,(belt+sill)/2,tail,.018);
+    box(.23,.054,.018,m.trim,0,belt-.08,tail-.039,.008);
+    bar(k,g,m.trim,[0,sill+.02,tail+.09],[0,sill-.044,tail-.074],.037);
+    k.ball(.035,m.rim,g,0,sill-.019,tail-.082);
+  } else {
+    const shoulder = pod ? [[tail+.07,tailY+.035],[-d*.40,belt],[d*.36,belt],[d*.427,belt-.042]]
+      : [[tail+.09,tailY],[d*-.31,belt],[d*.20,belt],[d*.36,belt-.022]];
+    sidePart([...shoulder,...front,...frontArch,...rearArch,...back],-half,half,m.paint,bevel);
+  }
+  box(w*.70,.10,d*.87,m.trim,0,sill+.008,0,.03);
+  g.userData.wheels = [];
+  for (const sign of [-1,1]) {
+    const side = sign*(half+bevel+.002);
+    for (const axle of [-d*.31,d*.31]) {
+      g.userData.wheels.push(coachWheel(k,g,sign*w*.43,axle,radius,w*.105,m));
+      const rim = [...lip(axle,gap-.032),...lip(axle,gap+.006).reverse()];
+      sidePart(rim,Math.min(side,side-sign*.032),Math.max(side,side-sign*.032),m.trim);
+      sidePart(lip(axle,gap-.023), sign*w*.35-.012,sign*w*.35+.012,m.trim);
+      box(.12,.105,.032,m.trim,side-sign*.072,sill-.008,axle-gap,.006);
+    }
+    box(.038,.056,d*.62-2*gap-.03,m.trim,side-sign*.011,sill+.012,0,.012);
+  }
+  return { nose:nose+bevel, tail:tail-bevel, noseY, tailY, side:half+bevel, sill, gap };
+}
+
+function buildGreenhouse(k, g, type, w, d, roof, m) {
+  const {belt,cabin,widths,crown} = coachwork[type], pod = type === 'robotaxi', bus = type === 'bus';
+  const mix = (a,b,t) => a+(b-a)*t;
+  const ring = (level) => {
+    const curve = pod ? level**1.65 : level, half = mix(widths[0],widths[1],curve)*w;
+    const front = mix(cabin[1],cabin[3],curve)*d, back = mix(cabin[0],cabin[2],curve)*d;
+    const cut = bus ? .07 : pod ? .14 : .077, height = mix(belt+.019,roof-crown,level);
+    return [[-half+cut,front],[half-cut,front],[half,front-cut],[half,back+cut],[half-cut,back],[-half+cut,back],[-half,back+cut],[-half,front-cut]].map(([x,z]) => [x,height,z]);
+  };
+  const low = ring(0), high = ring(1), levels = pod ? Array.from({length:13},(_,i)=>i/12) : [0,1];
+  const normal = (edge,t) => {
+    const next=(edge+1)%8,row=ring(t),a=ring(Math.max(0,t-.001)),b=ring(Math.min(1,t+.001));
+    const heading=new k.THREE.Vector3(...row[next]).sub(new k.THREE.Vector3(...row[edge]));
+    return heading.cross(new k.THREE.Vector3(...b[edge]).sub(new k.THREE.Vector3(...a[edge]))).normalize().toArray();
+  };
+  const smooth = (edge,lo,hi) => {if(pod){const a=normal(edge,lo),b=normal(edge,hi);return [a,a,b,b];}};
+  const skin = (from,to,mat,lo,hi) => from.forEach((pt,i) => {
+    const j=(i+1)%8;vehiclePanel(k,g,mat,[pt,from[j],to[j],to[i]],lo===undefined?undefined:smooth(i,lo,hi));
+  });
+  for (let i=1;i<levels.length;i++) skin(ring(levels[i-1]),ring(levels[i]),type==='van'||type==='pickup'?m.paint:m.frame,levels[i-1],levels[i]);
+  const under = low.map(([x,y,z])=>[x*.99,y-.06,z]); skin(under,low,m.paint);
+  const dome = high.map(([x,y,z])=>[x*.936,y+crown*.72,z*.983]);
+  const cap = dome.map(([x,y,z])=>[x*.93,y+crown*.28,z*.986]); skin(high,dome,m.roof);skin(dome,cap,m.roof);
+  for (let i=1;i<cap.length/2;i++) vehiclePanel(k,g,m.roof,[cap[8-i],cap[i-1],cap[i],cap[7-i]]);
+  // Each pane follows the same loft as its frame, including the pod's curved header.
+  const point = (edge,u,level,offset=.004) => {
+    const band = levels.findIndex(t=>t>=level), top = levels[Math.max(1,band)], bottom = levels[Math.max(0,band-1)];
+    const sample = t => {const row=ring(t),a=row[edge],b=row[(edge+1)%8];return a.map((v,i)=>mix(v,b[i],u));};
+    const a=sample(bottom), b=sample(top), result=a.map((v,i)=>mix(v,b[i],(level-bottom)/(top-bottom)));
+    if(edge===0||edge===4) result[2]+=edge===0?offset:-offset; else result[0]+=edge===2?offset:-offset;
+    return result;
+  };
+  const pane = (edge,start,end,bottom,top) => {
+    const cuts = [bottom,...levels.filter(t=>t>bottom&&t<top),top];
+    for(let i=1;i<cuts.length;i++) vehiclePanel(k,g,m.glass,[point(edge,start,cuts[i-1]),point(edge,end,cuts[i-1]),point(edge,end,cuts[i]),point(edge,start,cuts[i])],smooth(edge,cuts[i-1],cuts[i]));
+  };
+  pane(0,.018,.982,.045,bus ? .77 : .94);
+  const panes = type==='pickup'?3:type==='van'?2:1;
+  for(let i=0;i<panes;i++) pane(4,(i+.035)/panes,(i+.965)/panes,type==='van' ? .41 : .10,.91);
+  for(const edge of [2,6]) {
+    const windows = bus?8:type==='van'?1:2;
+    for(let i=0;i<windows;i++) {
+      let start=(i+.033)/windows, end=(i+.967)/windows;
+      if(type==='van') {start=.016;end=.235;}
+      if(type==='pickup' && i===0) end=.63;
+      if(type==='pickup' && i===1) start=.65;
+      if(edge===6) [start,end]=[1-end,1-start];
+      pane(edge,start,end,.057,.93);
+    }
+  }
+  for(const start of [.11,.53]) {
+    bar(k,g,m.trim,point(0,start+.14,.027,.010),point(0,start+.20,.12,.010),.008);
+    bar(k,g,m.trim,point(0,start,.072,.012),point(0,start+.32,.15,.012),bus ? .014 : .010);
+  }
+  return {point,low,high};
+}
+
+function vehicleFascias(k,g,type,w,m,body,box) {
+  const {nose,tail,noseY,tailY,sill} = body, bus=type==='bus',pod=type==='robotaxi',truck=type==='pickup';
+  const at = box;
+  for(const sign of [1,-1]) {
+    const front=sign===1, z=front?nose:tail, y=(front?noseY:tailY)-.119;
+    at(w*(pod ? .68 : .84),.095,.058,m.trim,0,sill+.091,z-sign*.012,.022);
+    at(w*.77,.018,.018,m.rim,0,sill+.109,z+sign*.018,.004);
+    at(.265,.087,.021,m.plate,0,sill+.12,z+sign*.036,.008);
+    for(const side of [-1,1]) {
+      const x=side*w*.323, width=w*(truck ? .211 : .197),height=truck ? .153 : pod ? .065 : .115;
+      const outline=[[-.49,-.26],[-.37,-.49],[.30,-.49],[.50,-.25],[.50,.32],[.35,.50],[-.45,.50],[-.50,.33]];
+      const lens=(scale,mat,offset,raised=0)=>{
+        const points=outline.map(([u,v])=>[u*width*scale*side,v*height*scale]);
+        k.extrude(points,.012,mat,g,x,y+raised,z+sign*offset,{ry:front?0:Math.PI,bevel:.004});
+      };
+      lens(1.12,m.rim,-.007);lens(1,m.frame,.007);
+      if(front && !pod) {
+        for(const shift of [-.21,.19]) k.cyl(height*.245,height*.245,.016,m.head,g,x+width*shift,y+.007,z+.027,{rx:Math.PI/2,seg:18});
+      } else at(width*.76,height*.30,.016,front?m.head:m.tail,x,y+.007,z+sign*.027,.006);
+      at(width*.78,.016,.015,front?m.head:m.plate,x,y-height*.31,z+sign*.027,.005);
+      if(pod) {
+        k.cyl(.045,.049,.025,m.trim,g,side*w*.416,y-.079,z,{rx:sign*Math.PI/2,seg:20});
+        k.disc(.029,m.glass,g,side*w*.416,y-.079,z+sign*.014,{ry:front?0:Math.PI,seg:20});
+      }
+    }
+    if(pod) at(w*.49,.027,.024,front?m.status:m.tail,0,y+.007,z+sign*.028,.009);
+  }
+  const gy=noseY-.142, gh=truck ? .205:type==='van' ? .235 : .124;
+  at(w*.403,gh,.032,pod||bus?m.paint:m.trim,0,gy,nose+.003,.015);
+  if(!pod&&!bus) {
+    const rows=truck?3:type==='van'?2:5;
+    for(let i=0;i<rows;i++) at(w*.38,truck ? .023 : .009,.012,m.rim,0,gy+gh*((i+.5)/rows-.5)*.93,nose+.023,.003);
+    if(type==='taxi') for(let i=-5;i<=5;i++) at(.007,gh*.85,.009,m.rim,i*w*.031,gy,nose+.024,.002);
+  }
+  if(!pod&&!bus) {
+    k.cyl(.038,.048,.092,m.rim,g,-w*.29,sill-.014,tail+.009,{rx:Math.PI/2,seg:18});
+    k.disc(.027,m.trim,g,-w*.29,sill-.014,tail-.039,{ry:Math.PI,seg:18});
+  }
+}
+
+function hoodStamp(k,g,type,w,d,m) {
+  const {belt,cabin}=coachwork[type], pickup=type==='pickup';
+  const stations=pickup ? [[.255,belt],[.39,belt-.041],[.466-.03/d,belt-.11]]
+    : [[.20,belt],[.36,belt-.022],[.466-.03/d,belt-.12]];
+  const sheet=(z,width,lift)=>{
+    const index=stations[1][0]>z?0:1, [a,ya]=stations[index], [b,yb]=stations[index+1];
+    const y=ya+(yb-ya)*(z-a)/(b-a)+.036;
+    return [-1,-.87,.87,1].map((t,i)=>[t*width*w,y+(i===1||i===2?lift:0),d*z]);
+  };
+  const rows=[sheet(cabin[1]+.009,.364,.003),sheet(stations[1][0],.358,pickup ? .033 : .020),sheet(.447,.31,.002)];
+  for(let row=1;row<rows.length;row++) for(let i=0;i<3;i++) vehiclePanel(k,g,m.paint,[rows[row-1][i],rows[row-1][i+1],rows[row][i+1],rows[row][i]].reverse());
+  for(const col of [0,3]) for(let i=1;i<rows.length;i++) bar(k,g,m.frame,rows[i-1][col],rows[i][col],.004);
+}
+
+function coachDoors(k,g,type,w,d,m,body,cab,box) {
+  const {belt} = coachwork[type], bus=type==='bus';
+  for(const sign of [-1,1]) {
+    const x=sign*(body.side+.003), edge=sign>0?2:6;
+    const pillar = u => cab.point(edge,sign>0?u:1-u,0)[2];
+    const mirror=cab.point(edge,sign>0 ? .043 : .957,bus ? .80 : .19);
+    const mount=[sign*w*.468,mirror[1]+(bus ? .035 : 0),mirror[2]+.04], head=[sign*(w*.5-.050),mirror[1]-(bus ? .16 : .014),mirror[2]+.06];
+    bar(k,g,m.trim,mirror,mount,.018);bar(k,g,m.trim,mount,head,.016);
+    box(.092,bus ? .19 : .082,type==='robotaxi' ? .094 : .135,m.roof,...head,.029);
+    box(.063,bus ? .145 : .05,.010,m.frame,head[0],head[1],head[2]-(type==='robotaxi' ? .048 : .068),.005);
+    if(bus) continue;
+    const ends=type==='van'?[.235]:type==='pickup'?[.64,.985]:[.50,.98];
+    for(const end of ends) {
+      const z=pillar(end),handleZ=z+.099, knee=belt-.042, axle=Math.sign(z)*.31*d;
+      const notch=body.gap+.011, radial=notch**2-(z-axle)**2;
+      const bottom=radial>0 ? (type==='van' ? .32 : .27)+Math.sqrt(radial) : body.sill+.063;
+      if(bottom<knee) bar(k,g,m.frame,[x,knee,z],[x,bottom,z],.007);
+      const handleY=Math.abs(handleZ-axle)<body.gap ? belt-.031 : belt-.078;
+      box(.027,.036,.135,m.rim,x,handleY,handleZ,.009);
     }
   }
 }
+
+function taxiEquipment(k,g,w,d,roof,m,body,box) {
+  const center=-.095;
+  box(.46,.033,.185,m.trim,0,roof+.011,center,.014);
+  box(.422,.110,.157,m.head,0,roof+.079,center,.025);
+  const glyphs=[['111','010','010','010','010'],['010','101','111','101','101'],['101','101','010','101','101'],['111','010','010','010','111']];
+  for(const sign of [-1,1]) {
+    glyphs.forEach((rows,index)=>rows.forEach((row,y)=>[...row].forEach((pixel,x)=>{
+      if(pixel==='1') box(.018,.015,.006,m.trim,sign*(index*4+x-7)*.018,roof+.080+(2-y)*.015,center+sign*.080,0);
+    })));
+    const length=.62*d-body.gap*2-.035,x=sign*(body.side+.005);
+    box(.014,.17,length,m.frame,x,body.sill+.133,0,.004);
+    const tile=length/20;
+    for(let i=0;i<20;i++) box(.006,tile*.5,tile,m.plate,x+sign*.009,body.sill+.17+(i%2-.5)*tile*.5,(i-9.5)*tile,0);
+  }
+}
+
+function vanEquipment(k,g,w,d,roof,m,body,cab,box) {
+  const {point} = cab;
+  for(const edge of [2,6]) {
+    const sign=edge===2?1:-1, surface=(u,t)=>point(edge,sign>0?u:1-u,t,.007);
+    for(const u of [.255,.715,.97]) bar(k,g,m.frame,surface(u,.03),surface(u,.87),.008);
+    bar(k,g,m.frame,surface(.255,.87),surface(.97,.87),.008);
+    if(sign>0) {
+      for(const u of [.255,.715]) {const [,y,z]=surface(u,.03);bar(k,g,m.frame,[body.side+.004,y-.07,z],[body.side+.004,body.sill+.12,z],.009);}
+      bar(k,g,m.trim,surface(.39,.20),surface(.94,.20),.025);
+      bar(k,g,m.rim,surface(.40,.21),surface(.93,.21),.010);
+      const handle=surface(.29,.12);box(.03,.04,.158,m.trim,...handle,.012);
+    }
+    const back=(u,t)=>point(4,u,t,.012);
+    for(const ht of [.13,.73]) box(.098,.045,.030,m.rim,...back(sign>0 ? .07 : .93,ht),.008);
+    box(.09,.032,.031,m.trim,...back(sign>0 ? .41 : .59,.33),.008);
+    if(sign>0) {
+      const start=point(4,.5,0);bar(k,g,m.frame,[0,body.sill+.04,body.tail-.004],[0,start[1]-.05,body.tail-.004],.009);
+      bar(k,g,m.frame,back(.5,.01),back(.5,.96),.009);
+    }
+    box(.054,.058,d*.47,m.trim,sign*w*.289,roof+.062,-d*.10,.02);
+    for(const z of [-d*.285,d*.096]) box(.075,.078,.115,m.frame,sign*w*.289,roof+.022,z,.014);
+  }
+  for(const z of [-d*.285,-d*.10,d*.096]) box(w*.631,.030,.045,m.rim,0,roof+.10,z,.01);
+}
+
+function busEquipment(k,g,o,w,d,roof,m,body,cab,box) {
+  const {point} = cab;
+  for(const sign of [-1,1]) {
+    const edge=sign>0?2:6, x=sign*(body.side+.005);
+    for(let i=0;i<3;i++) {
+      const z=-d*(.178+i*.018), band=[[z,.49],[z+.060,.49],[z+.26,.74],[z+.20,.74]].map(([z,y])=>[x,y,z]);
+      vehiclePanel(k,g,m.roof,sign>0?band.reverse():band);
+    }
+    for(const u of [.06,.49,.94]) box(.018,.028,.081,m.head,...point(edge,u,.968,.012),.006);
+    for(let pillar=1;pillar<8;pillar++) {
+      const u=pillar/8;bar(k,g,m.rim,point(edge,u,.07,.006),point(edge,u,.92,.006),.014);
+    }
+    const base=point(edge,.02,.06),end=point(edge,.98,.06);bar(k,g,m.rim,base,end,.010);
+  }
+  for(const [center,width] of [[.409*d,.109*d],[-.115*d,.134*d]]) {
+    const x=body.side+.012, left=center-width/2, right=center+width/2, bottom=body.sill+.055, join=coachwork.bus.belt+.02;
+    const pane=(lo,hi,y0,y1,mat,offset)=>vehiclePanel(k,g,mat,[[x+offset,y0,hi],[x+offset,y0,lo],[x+offset,y1,lo],[x+offset,y1,hi]]);
+    pane(left,right,bottom,join,m.frame,0);
+    const span=cab.low[2][2]-cab.low[3][2], u=z=>(cab.low[2][2]-z)/span;
+    const upper=(lo,hi,y0,y1,mat,offset)=>vehiclePanel(k,g,mat,[point(2,u(hi),y0,offset),point(2,u(lo),y0,offset),point(2,u(lo),y1,offset),point(2,u(hi),y1,offset)]);
+    upper(left,right,0,.96,m.frame,.013);
+    for(const mid of [center-width/4,center+width/4]) {
+      const lo=mid-width*.205,hi=mid+width*.205;
+      pane(lo,hi,bottom+.12,join-.017,m.glass,.005);upper(lo,hi,.018,.88,m.glass,.018);
+      bar(k,g,m.rim,[x+.014,join-.21,mid],[x+.014,join-.07,mid],.011);
+    }
+    box(.05,.037,width,m.plate,x-.01,bottom+.012,center,.007);
+  }
+  const y=roof-.208, z=point(0,.5,.865,.026)[2];
+  box(w*.77,.209,.066,m.frame,0,y,z,.022);
+  face(k,g,{...o,screen:o.screen||lit(k,'#ffc85c')},'screen',w*.717,.149,0,y,z+.035);
+  box(w*.60,.152,d*.306,m.roof,0,roof+.059,-d*.165,.06);
+  box(w*.53,.133,d*.168,m.roof,0,roof+.054,d*.162,.045);
+  for(const z of [d*.125,d*.196]) {
+    k.cyl(.207,.218,.019,m.frame,g,0,roof+.126,z,{seg:24});
+    for(let i=-2;i<=2;i++) box(.35-Math.abs(i)*.045,.009,.017,m.rim,0,roof+.14,z+i*.058,.003);
+  }
+  for(let i=-2;i<=2;i++) box(w*.53,.012,.019,m.rim,0,roof+.138,-d*.165+i*.35,.004);
+}
+
+function vehicle(k,g,o,type,w,d,h) {
+  const spec=coachwork[type]; if(!spec) return legacyVehicle(k,g,o,type,w,d,h);
+  const pod=type==='robotaxi', taxi=type==='taxi', radius=type==='bus' ? .42:type==='van' ? .32 : .27;
+  const roof=h-spec.roofGap, color=brand(o, taxi ? '#e5b739' : pod ? '#f1eee3' : '#528e88');
+  const paint=color=>material(k,color,'paint',.29,.38,{clear:.82});
+  const m={paint:paint(color),roof:paint(type==='bus'?'#e3e8df':color),frame:material(k,'#253339','paint',.46,.16),
+    trim:material(k,'#262c31','rubber',.84),rim:material(k,'#c1cbcc','metal',.28,.74),plate:material(k,'#f1e9ce','paint',.40),
+    glass:k.mat('#192f3e',{rough:.23,metal:.21,clear:.26,env:.52,alpha:.89}),head:lit(k,'#fff2cc',.27),tail:lit(k,'#d33138',.34)};
+  const box=(width,height,depth,mat,x,y,z,r=.012)=>k.box(width,height,depth,mat,g,x,y,z,{r});
+  if(pod) m.status=lit(k,'#54d7c8',.54);
+  const body=buildCoachwork(k,g,type,w,d,radius,m,box), cab=buildGreenhouse(k,g,type,w,d,roof,m);
+  if(type==='pickup'||taxi||type==='van') hoodStamp(k,g,type,w,d,m);
+  vehicleFascias(k,g,type,w,m,body,box);coachDoors(k,g,type,w,d,m,body,cab,box);
+  if(taxi) taxiEquipment(k,g,w,d,roof,m,body,box);
+  if(type==='van') vanEquipment(k,g,w,d,roof,m,body,cab,box);
+  if(type==='bus') busEquipment(k,g,o,w,d,roof,m,body,cab,box);
+  if(pod) {
+    box(.54,.081,.45,m.frame,0,roof+.027,-.2,.033);
+    const sensor=dynamic(k,g,'lidar',0,roof+.16,-.2);
+    k.cyl(.147,.18,.17,m.paint,sensor,0,0,0,{seg:32});
+    k.cyl(.164,.176,.078,m.frame,sensor,0,-.006,0,{seg:32});
+    k.cyl(.049,.049,.015,m.glass,sensor,0,-.005,.164,{rx:Math.PI/2,seg:20});
+    g.userData.tick = t => { sensor.rotation.y = t * 1.5; };
+  }
+}
+
 const vehicleSpecs = {
   car_sedan: [1.5, 3.3, 1.2, 'sedan'], car_suv: [1.6, 3.5, 1.45, 'suv'], car_hatch: [1.45, 2.9, 1.25, 'hatch'], car_pickup: [1.7, 4, 1.5, 'pickup'],
   car_taxi: [1.5, 3.3, 1.35, 'taxi'], robotaxi: [1.6, 3.5, 1.75, 'robotaxi'], van_delivery: [1.7, 4.2, 2.1, 'van'], bus_city: [2.2, 8, 2.6, 'bus'],
