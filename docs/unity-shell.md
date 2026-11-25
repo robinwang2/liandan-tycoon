@@ -108,14 +108,14 @@ node tools/unity/run.mjs build-game-il2cpp
 
 - **菜单与设置**：标题和经营页均有菜单。可继续、新游戏、访问商店/图鉴/成就或退出。设置存在 `Application.persistentDataPath/ldt_settings.json`，与当前局、局外成就分开；试玩不读取也不写入这份设置。四个音量通道的初值来自 `audio.json/VOLUMES`。参谋、静音、实时 FPS、帧率上限、自动降档和 50–150% 渲染比例可调。七个网页画质档按顺序映射到本机 Unity QualitySettings，渲染比例作用于 URP 而非 UI。
 - **教学与主题**：首局按网页 `meta.runs == 0` 默认启用，建角最后一步可以关闭。`Engine.Tutorial.cs` 按表中月份和提前触发条件逐项开放，提示和未读队列随单局存档。老周说话时参谋让位；按钮、页签、仪表及顶栏按步骤开放。路线主题沿用内核版本选择，红色结果按剧情版本分苏联/合作社，资本结果用冷色，其余默认；结果窗口暂缓换色。
-- **资源**：构建前的 `SyncTables` 同时调用 `tools/unity/sync-art.mjs`（需 Node 和已安装的 sharp）。仅转换美术表 `uses > 0` 的 46 张 WebP 为 JPEG；运行时以事件 art 键解码为 Texture2D。另从网页 SVG 生成公司标志、头像、剧情人物及页签图标。输出是忽略入库的 `Assets/StreamingAssets/shell-art`；单独检查转换可运行 `node tools/unity/sync-art.mjs`。编辑器直接 Play 前先用 **Liandan / Sync Tables**。
+- **资源**：构建前的 `SyncTables` 同时调用 `tools/unity/sync-art.mjs`（需 Node 和已安装的 sharp）。仅转换美术表 `uses > 0` 的 46 张 WebP 为 JPEG；运行时以事件 art 键解码为 Texture2D。另从网页 SVG 生成公司标志、剧情人物及页签图标。输出是忽略入库的 `Assets/StreamingAssets/shell-art`；单独检查转换可运行 `node tools/unity/sync-art.mjs`。编辑器直接 Play 前先用 **Liandan / Sync Tables**。
 - **底栏与楼层**：可从丹炉出炉或转经营、从产品开冲刺或转研发、从首个项目转项目链；底栏列最近三条日志。多层办公室按部门显示楼层、人数、老板所在层；按钮或 ↑/↓、PageUp/PageDown、Home 切换，搬楼重置为全楼。
 - **试玩**：`menu`、`settings`、`theme-default/soviet/rose/cold`、`tutorial-tip`、`illustrated-event` 均为新增必检 PNG。主题和教学采用首月快照副本，不向生产局写测试结局；带图事件仅当 UI 实际挂有纹理时抓取。看图时请留意老周提示是否挡住按钮、品牌图是否压住文字、插画裁切、调节后重启是否保留设置，以及真实路线结算后换色的时机。
 
 ### 已知差异
 
 - 苏联、合作社、冷色只有静态配色和标识。燃烧、藤蔓、冻结过渡留在 `ThemeChanged` 接口；无网页粒子和电梯/镜头动画，3D 仍是白盒。
-- 员工按五种岗位复用网页头像，不按每个 UID 生成脸；创始人按四套衣着复用头像画法，不是 3D 人物渲染。剧情头像、菜单/页签图标和建角标准品牌色使用网页原图形；其他行动等仍用数据表符号。自定义旧档非标准品牌色不是逐色渲染。
+- 员工头像由 `Avatar.cs` 按 uid 现场画（Painter2D），长相规则和画法逐行翻自网页 `looks.js` / `avatar.js`，同一个员工在两边是同一张脸；悬停气泡顶部放 76 像素大头像。创始人按四套衣着用同一画法。`-avatar-test` 对照网页长相结果。剧情头像、菜单/页签图标和建角标准品牌色使用网页原图形；其他行动等仍用数据表符号。自定义旧档非标准品牌色不是逐色渲染。
 - Unity 的质量档位、自动降档判断与网页 GPU 管线不同；没有 WebGL GPU 时间/绘制次数面板。桌面以外尺寸、字体回退、画面和鼠标交互仍须播放器实测。
 
 ### 内核改动后的复验
