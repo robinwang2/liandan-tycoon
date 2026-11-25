@@ -138,13 +138,14 @@ namespace Liandan.EditorTools
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var camera=Whitebox.Create(false,true);
             var batch=resource.ToLowerInvariant();
+            var package=resource=="Batch6"?"B6":resource;
             var folder=Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-"+batch));
             Directory.CreateDirectory(folder);
             var failures=new List<string>();var skipped=new List<string>();int passed=0;
             foreach(var item in PropBatch.Selection(resource).props)
             {
                 bool hybrid=item.parts?.Length>0;
-                string id=item.id, source=$"Assets/Art/Props/{id}/Resources/{resource}/{id}/SM_{id}.fbx";
+                string id=item.id, source=$"Assets/Art/Props/{id}/Resources/{package}/{id}/SM_{id}.fbx";
                 GameObject copy=null!;
                 try
                 {
@@ -152,19 +153,21 @@ namespace Liandan.EditorTools
                     if(hybrid) File.Delete(Path.Combine(folder,id+"-action.png"));
                     for (int level = 1; level <= 2; level++)
                         File.Delete(Path.Combine(folder, $"{id}-lod{level}.png"));
-                    if(!File.Exists(source)){skipped.Add(id);continue;}
+                    if(!File.Exists(source)){if(package=="B6")throw new FileNotFoundException(source);skipped.Add(id);continue;}
                     var log=AssetImporter.GetImportLog(source);
                     if(log!=null){var errors=log.logEntries.Where(entry=>(entry.flags & ImportLogFlags.Error)!=0).Select(entry=>entry.message).ToArray();
                         if(errors.Length>0)throw new InvalidDataException(string.Join("；",errors));}
-                    var placed=PropBatch.PlaceItem(item,resource);
+                    var placed=PropBatch.PlaceItem(item,package);
                     if(!placed)throw new InvalidDataException("FBX 已安装，但无法加载："+source);
                     copy=UnityEngine.Object.Instantiate(placed,new Vector3(100,0,100),placed.transform.rotation);
                     var group=copy.GetComponent<LODGroup>();var box=copy.GetComponent<BoxCollider>();
                     if(!group || group.lodCount!=3)throw new InvalidDataException("缺少完整三级 LODGroup");
                     if(!box)throw new InvalidDataException("缺少 BoxCollider");
+                    if(id=="egg_blub_tank" && !copy.transform.Find("Fish"))throw new InvalidDataException("缺少可移动 Fish 节点");
                     foreach(var lod in group.GetLODs())
                         if(lod.renderers.Length==0 || lod.renderers.Any(renderer=>!renderer || renderer.sharedMaterials.Length==0 || renderer.sharedMaterials.Any(mat=>!mat || mat.shader.name!="Universal Render Pipeline/Lit")))throw new InvalidDataException("LOD 缺少渲染器或 URP/Lit 材质");
-                    if(!group.GetLODs()[0].renderers.SelectMany(renderer=>renderer.sharedMaterials).Any(mat=>mat.GetTexture("_BaseMap")))throw new InvalidDataException("LOD0 缺少底色图");
+                    bool needsMap=package!="B6" || !(new[]{"egg_teapot","egg_cornell","egg_paperclips"}.Contains(id));
+                    if(needsMap && !group.GetLODs()[0].renderers.SelectMany(renderer=>renderer.sharedMaterials).Any(mat=>mat.GetTexture("_BaseMap")))throw new InvalidDataException("LOD0 缺少底色图");
                     group.ForceLOD(0);
                     var levels=group.GetLODs();
                     float xSign=1;
@@ -179,7 +182,7 @@ namespace Liandan.EditorTools
                     // 混合件按回读枢轴确定轴向。只在静止姿态取景一次，远级和动作图共用同一变换与画幅。
                     var center=box.transform.TransformPoint(box.center);
                     var diagonal=Vector3.Scale(box.size,box.transform.lossyScale).magnitude;
-                    var direction=copy.transform.TransformDirection(new Vector3(.75f*xSign,.65f,-xSign)).normalized;
+                    var direction=copy.transform.TransformDirection(package=="B6"?new Vector3(.23f,.24f,1):new Vector3(.75f*xSign,.65f,-xSign)).normalized;
                     camera.transform.position=center+direction*diagonal*2;
                     camera.transform.LookAt(center);
                     camera.orthographicSize=diagonal*.5f*1.08f;

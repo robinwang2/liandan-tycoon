@@ -26,8 +26,8 @@ const [mode, input, ...extra] = process.argv.slice(2);
 const shotBatch = /^art-(batch[1-9]\d*)$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
-function run() {
-  const resource = shotBatch && batchConfig(shotBatch).resource;
+async function run() {
+  const resource = shotBatch==='batch6'?'Batch6':shotBatch && batchConfig(shotBatch).resource;
   if (shotBatch) methods.set(mode, 'CaptureSelectedBatch');
   const gamePath = folder => join(project, 'Build', folder, 'Liandan.exe');
   const testPlayer = process.env.LIANDAN_PLAYER ? resolve(process.env.LIANDAN_PLAYER) : gamePath('Game');
@@ -151,7 +151,14 @@ function run() {
       (mode.startsWith('build-game') && (!contents.includes('Liandan build OK:') || !existsSync(gamePath(mode === 'build-game' ? 'Game' : mode==='build-game-art'?'ArtProbe':'GameIl2cpp')))) ||
       (mode === 'build-probe' && (!existsSync(player) || !contents.includes('IL2CPP 探针构建完成'))))
     throw new Error('执行失败（进程退出码 ' + proc.status + '），请查看 ' + log);
+  if(shotBatch==='batch6') {
+    const {default:sharp}=await import('sharp');
+    const folder=join(project,'Build/art-batch6');
+    const {props}=JSON.parse(readFileSync(join(project,'Assets/Shell/Resources/PropPolicyBatch6.json'),'utf8'));
+    const tiles=await Promise.all(props.map(async ({id},index)=>({input:await sharp(join(folder,id+'.png')).resize(320,240,{fit:'contain'}).png().toBuffer(),left:index%4*320,top:Math.floor(index/4)*240})));
+    await sharp({create:{width:1280,height:720,channels:3,background:'#f2f2f2'}}).composite(tiles).jpeg({quality:90}).toFile(join(folder,'contact.jpg'));
+  }
 }
 
-try { run(); }
+try { await run(); }
 catch (error) { console.error(error.message); process.exitCode = 1; }
