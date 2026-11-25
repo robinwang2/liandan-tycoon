@@ -441,7 +441,7 @@ for index, mat in enumerate(materials):
     else:
         mat.name = 'M_' + stem
     records.append(textures(mat, stem))
-    if args.hybrid and mat.name == 'M_'+args.name+'_Glass':
+    if (args.hybrid and mat.name == 'M_'+args.name+'_Glass') or (extra_levels and mat.get('transparentProp')):
         bsdf = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
         records[-1]['baseColor'][3] = bsdf.inputs['Alpha'].default_value
         records[-1]['glass'] = True
@@ -514,7 +514,7 @@ for level, ratio in enumerate([1,.4,.12]):
                 reduce(obj,ratio)
         if repair_rack and part_names[index] == 'Shell':
             flatten_rack_sides(obj)
-        suffix = '' if len(objects)==1 else ('_'+part_names[index] if args.hybrid or repair_rack or part_names[index] in ('Upper','Lower') else f'_Part{index+1:02}')
+        suffix = '' if len(objects)==1 else ('_'+part_names[index] if args.hybrid or repair_rack or part_names[index] in ('Upper','Lower','Fish') else f'_Part{index+1:02}')
         obj.name = f'SM_{args.name}{suffix}_LOD{level}'
         obj.data.name = obj.name
         group.append(obj)

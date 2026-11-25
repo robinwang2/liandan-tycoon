@@ -12,7 +12,7 @@ namespace Liandan.EditorTools
     {
         const string Folder = "Assets/Art/Props/Furnace/Resources/Furnaces/";
         bool Furnace => assetPath.StartsWith(Folder, StringComparison.Ordinal);
-        bool Batch => System.Text.RegularExpressions.Regex.IsMatch(assetPath,@"^Assets/Art/Props/[^/]+/Resources/Batch[1-9]\d*/");
+        bool Batch => System.Text.RegularExpressions.Regex.IsMatch(assetPath,@"^Assets/Art/Props/[^/]+/Resources/(?:Batch[1-9]\d*|B6)/");
         bool Reference => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Editor/RepairReference/");
         bool InPackage => Furnace || Batch || Reference;
         string Sibling(string file) => assetPath.Substring(0, assetPath.LastIndexOf('/')+1) + file;
@@ -191,7 +191,8 @@ namespace Liandan.EditorTools
             {
                 context.DependsOnSourceAsset(PropBatch.PolicyPath);
                 config=JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(PropBatch.PolicyPath));
-                string selectionPath=PropBatch.SelectionPath(assetPath.Split('/')[5]);
+                var resource=assetPath.Split('/')[5];
+                string selectionPath=PropBatch.SelectionPath(resource=="B6"?"Batch6":resource);
                 context.DependsOnSourceAsset(selectionPath);
                 var selection=selectionPath==PropBatch.PolicyPath ? config : JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(selectionPath));
                 var item=selection.props.Single(prop=>prop.id==assetPath.Split('/')[3]); origin=item.origin;
@@ -209,6 +210,20 @@ namespace Liandan.EditorTools
             }
             else { context.DependsOnSourceAsset(PolicyPath); policy=JsonUtility.FromJson<Policy>(File.ReadAllText(PolicyPath)); }
             var renderers = root.GetComponentsInChildren<MeshRenderer>(true);
+            if(assetPath.Contains("/Resources/B6/"))
+            {
+                foreach(var renderer in renderers.Where(member=>member.name.EndsWith("_LOD0",StringComparison.Ordinal)))
+                {
+                    int slot=Array.FindIndex(renderer.sharedMaterials,mat=>mat.name.EndsWith("_Print",StringComparison.Ordinal) || mat.name=="M_egg_cornell_Light");
+                    if(slot<0)continue;
+                    var mesh=renderer.GetComponent<MeshFilter>().sharedMesh;
+                    var vertices=mesh.vertices; var matrix=root.transform.worldToLocalMatrix*renderer.transform.localToWorldMatrix;
+                    var depths=mesh.GetTriangles(slot).Select(index=>matrix.MultiplyPoint3x4(vertices[index]).z).ToArray();
+                    if(depths.Min()+depths.Max()<0)
+                        foreach(Transform child in root.transform)child.RotateAround(root.transform.position,root.transform.up,180);
+                    break;
+                }
+            }
             var lods = new LOD[3];
             for (int level=0;level<lods.Length;level++)
             {
@@ -258,6 +273,13 @@ namespace Liandan.EditorTools
                 }
             }
             if(selectionItem?.parts?.Length>0) CheckAssembly(root,lods,selectionItem,Sibling("report.json"));
+            if(selectionItem?.id=="egg_blub_tank" && assetPath.Contains("/Resources/B6/"))
+            {
+                var members=lods.Select((lod,level)=>PropBatch.Part(lod,selectionItem.id,"Fish",level)).ToArray();
+                var pivot=new GameObject("Fish").transform; pivot.SetParent(root.transform,false);
+                pivot.position=members[0].GetComponent<Renderer>().bounds.center;
+                foreach(var member in members)member.SetParent(pivot,true);
+            }
             group.SetLODs(lods); group.RecalculateBounds();
         }
     }

@@ -1,0 +1,348 @@
+{
+  "props": [
+    {
+      "id": "egg_teapot",
+      "name": "犹他茶壶",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.28,
+      "d": 0.18,
+      "h": 0.15,
+      "budget": 4000,
+      "x": -5.4,
+      "y": 0.06,
+      "z": -4,
+      "replacement": {
+        "name": "eggs",
+        "blend": "tools/art/eggs_teapot.py",
+        "blendSha": "d8e3e639b1b4bcbac0aaf68b0c4b426a4f2cbc643dd2df64f4afb70eb72a7026",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "程序生成",
+        "license": "Martin Newell，犹他大学，1975；曲面数据按公有领域使用",
+        "method": "32 片 Bézier 曲面采样、暖白釉",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": false,
+        "hashMode": "UTF-8 LF"
+      }
+    },
+    {
+      "id": "egg_bob",
+      "name": "小黄鸭Bob",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.18054,
+      "d": 0.22907,
+      "h": 0.12,
+      "budget": 6000,
+      "x": -1.7,
+      "y": 0.06,
+      "z": -4,
+      "replacement": {
+        "name": "eggs",
+        "blend": "art-src/eggs/egg_bob/src/bob.zip",
+        "blendSha": "0b9a3e750ad776cf1d5721eb793cc3add31cadb79e99dbd987ce03357ac44253",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/bob.zip",
+        "license": "Bob by Keenan Crane，CC0 1.0",
+        "method": "原 OBJ / UV / PNG 分级减面",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true
+      }
+    },
+    {
+      "id": "egg_spot",
+      "name": "奶牛Spot摆件",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.12,
+      "d": 0.17,
+      "h": 0.16,
+      "budget": 6000,
+      "x": 1.8,
+      "y": 0.06,
+      "z": -4,
+      "replacement": {
+        "name": "eggs",
+        "blend": "art-src/eggs/egg_spot/src/spot.zip",
+        "blendSha": "1d4082da4e940f6a4cfdf648fd77e1647ac613c618dbff933f1ba23fad254608",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/spot.zip",
+        "license": "Spot by Keenan Crane，CC0 1.0",
+        "method": "原牛模型与纹理、木底座",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true
+      }
+    },
+    {
+      "id": "egg_blub_tank",
+      "name": "鱼缸里的Blub",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.45,
+      "d": 0.25,
+      "h": 0.35,
+      "budget": 8000,
+      "x": 5.2,
+      "y": 0.06,
+      "z": -4,
+      "replacement": {
+        "name": "eggs",
+        "blend": "art-src/eggs/egg_blub_tank/src/blub.zip",
+        "blendSha": "0b10a303b407ef1a5ba8c406f18842cdf4e62ea411e3279232f2dbfd9bfca811",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/blub.zip",
+        "license": "Blub by Keenan Crane，CC0 1.0",
+        "method": "原鱼独立枢轴、玻璃水体石子水草",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true
+      }
+    },
+    {
+      "id": "egg_hotdog",
+      "name": "NeRF热狗",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.25,
+      "d": 0.24985,
+      "h": 0.0524,
+      "budget": 6000,
+      "x": -5.4,
+      "y": 0.06,
+      "z": -1.1,
+      "replacement": {
+        "name": "eggs",
+        "blend": "art-src/eggs/egg_hotdog/src/hotdog.blend",
+        "blendSha": "031dfa1b12845b2da2a22b18b518521fa5978f77b762c27ba3265bf901cc56e6",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "https://huggingface.co/datasets/wengflow/robust-e-nerf/resolve/main/scenes/hotdog.blend",
+        "license": "hotdog by erickfree，BlendSwap 23962，CC0；文件取自 NeRF 合成数据集（CC-BY-4.0），致谢 Mildenhall 等",
+        "method": "移除相机，求值修改器、烘 UV",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true
+      }
+    },
+    {
+      "id": "egg_mic",
+      "name": "NeRF麦克风",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.30544,
+      "d": 0.33382,
+      "h": 0.4,
+      "budget": 8000,
+      "x": -1.7,
+      "y": 0.06,
+      "z": -1.1,
+      "replacement": {
+        "name": "eggs",
+        "blend": "art-src/eggs/egg_mic/src/mic.blend",
+        "blendSha": "8803a2627aeee81f8d2bbc03944038c4eff80275994af336c733e13a16cece3f",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "https://huggingface.co/datasets/wengflow/robust-e-nerf/resolve/main/scenes/mic.blend",
+        "license": "mic by up3d.de，BlendSwap 23295，CC0；文件取自 NeRF 合成数据集（CC-BY-4.0），致谢 Mildenhall 等",
+        "method": "移除灯光相机，保留网罩、支架与原材质",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.04,
+        "textured": true,
+        "reason": "三脚架细腿和悬臂斜穿像素，远级丢失少量内部像素；四向 IoU 仍须达到 0.90。网罩以原件凸壳与原创网纹代替独立金属丝，移除拖线。"
+      }
+    },
+    {
+      "id": "egg_cornell",
+      "name": "康奈尔盒子",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.4,
+      "d": 0.4,
+      "h": 0.4,
+      "budget": 1000,
+      "x": 1.8,
+      "y": 0.06,
+      "z": -1.1,
+      "replacement": {
+        "name": "eggs",
+        "blend": "tools/art/eggs_prep.py",
+        "blendSha": "fa360760e9a2fbbca51c7c1761282414f4b73ba99fdc0868c9baa1e4d7e1b42b",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "程序生成",
+        "license": "场景按 Goral 等 1984 年论文描述自建（Cornell University Program of Computer Graphics）",
+        "method": "红绿侧壁、双白块与独立发光板",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": false,
+        "hashMode": "UTF-8 LF"
+      }
+    },
+    {
+      "id": "egg_paperclips",
+      "name": "回形针堆",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.3,
+      "d": 0.22,
+      "h": 0.1,
+      "budget": 15000,
+      "x": 5.2,
+      "y": 0.06,
+      "z": -1.1,
+      "replacement": {
+        "name": "eggs",
+        "blend": "tools/art/eggs_prep.py",
+        "blendSha": "fa360760e9a2fbbca51c7c1761282414f4b73ba99fdc0868c9baa1e4d7e1b42b",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "程序生成",
+        "license": "原创；梗出自 Nick Bostrom 2003 年的思想实验",
+        "method": "固定种子扫管、按远近抽稀",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.01,
+        "textured": false,
+        "reason": "保留全部 150 枚的散落位置，远级细丝改为低面高光代理；四向 IoU 仍须达到 0.90。",
+        "hashMode": "UTF-8 LF"
+      }
+    },
+    {
+      "id": "egg_gpu_ad",
+      "name": "华强北「核弹」显卡广告",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.8,
+      "d": 0.4,
+      "h": 1.7,
+      "budget": 2000,
+      "x": -5.4,
+      "y": 0.06,
+      "z": 1.5,
+      "replacement": {
+        "name": "eggs",
+        "blend": "tools/art/eggs_prep.py",
+        "blendSha": "fa360760e9a2fbbca51c7c1761282414f4b73ba99fdc0868c9baa1e4d7e1b42b",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "程序生成",
+        "license": "原创",
+        "method": "原创 KT 板、支架与广告印刷面",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true,
+        "hashMode": "UTF-8 LF"
+      }
+    },
+    {
+      "id": "egg_bbb_poster",
+      "name": "《大雄兔》海报",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.6,
+      "d": 0.04,
+      "h": 0.9,
+      "budget": 500,
+      "x": -1.7,
+      "y": 0.06,
+      "z": 1.5,
+      "replacement": {
+        "name": "eggs",
+        "blend": "art-src/eggs/egg_bbb_poster/src/poster_bunny_big.jpg",
+        "blendSha": "e5b77c8d2e3c7a22668e17c15a402652436b00953f282c450571b87ad8b7fc57",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "https://peach.blender.org/wp-content/uploads/poster_bunny_big.jpg",
+        "license": "Big Buck Bunny © Blender Foundation，peach.blender.org，CC-BY 3.0",
+        "method": "原创画框配官方海报",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true
+      }
+    },
+    {
+      "id": "egg_attention",
+      "name": "装裱的论文首页",
+      "egg": true,
+      "origin": "bottom",
+      "w": 0.5,
+      "d": 0.04,
+      "h": 0.7,
+      "budget": 500,
+      "x": 1.8,
+      "y": 0.06,
+      "z": 1.5,
+      "replacement": {
+        "name": "eggs",
+        "blend": "tools/art/eggs_prep.py",
+        "blendSha": "fa360760e9a2fbbca51c7c1761282414f4b73ba99fdc0868c9baa1e4d7e1b42b",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "程序生成",
+        "license": "原创排版；论文：Vaswani 等，NeurIPS 2017",
+        "method": "原创画框、标题与编解码框图",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true,
+        "hashMode": "UTF-8 LF"
+      }
+    },
+    {
+      "id": "egg_whiteboard",
+      "name": "写满梗的白板",
+      "egg": true,
+      "origin": "bottom",
+      "w": 1.4,
+      "d": 0.55,
+      "h": 1.8,
+      "budget": 3000,
+      "x": 5.2,
+      "y": 0.06,
+      "z": 1.5,
+      "replacement": {
+        "name": "eggs",
+        "blend": "tools/art/eggs_prep.py",
+        "blendSha": "fa360760e9a2fbbca51c7c1761282414f4b73ba99fdc0868c9baa1e4d7e1b42b",
+        "prep": "tools/art/eggs_prep.py",
+        "source": "程序生成",
+        "license": "原创",
+        "method": "移动脚轮、原创手写风贴图",
+        "minIoU": [
+          0.9,
+          0.9
+        ],
+        "maxInteriorLoss": 0.005,
+        "textured": true,
+        "hashMode": "UTF-8 LF"
+      }
+    }
+  ]
+}
