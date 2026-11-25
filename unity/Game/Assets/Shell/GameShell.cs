@@ -62,6 +62,8 @@ namespace Liandan.Shell
                 doc.panelSettings = panel;
                 ui.SetActive(true);
                 Root = doc.rootVisualElement;
+                Transition = new ThemeFx(doc);
+                SuppressThemeFx = auto;
                 captureDirectory=driver?.Shots;
                 InitSettings(auto);
                 Root.styleSheets.Add(Required<StyleSheet>("Shell")); Root.AddToClassList("shell");
