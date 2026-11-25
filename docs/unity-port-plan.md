@@ -560,6 +560,13 @@ node tools/art/batch.mjs status --batch batch5
 - **平台操作：** 网页导出 GLB 时把文件名改成 `b5_<id>`，免得下载件对不上号。第一次会话在贴完 5 件后中断（403），续做前按余额和资产页核对过已贴图件，没有重复付费。
 - **Unity：** `node tools/unity/run.mjs art-batch5` 通过 13 件，未安装 0 件。对照图 `unity/Game/Build/art-batch5/contact.jpg`。售货机正面玻璃回装后饮料偏淡，验收后在选件表加 `glassAlpha: 0.15`（原模玻璃 0.35），`hybrid.py` 按件覆盖，重跑 ingest 后三级面数不变（14850/6000/1800）；前后对比见 `unity/Game/Build/art-batch5/vending-glass-compare.png`。
 
+#### 发财树换成 CC0 的 ficus 盆栽（2026-11-25）
+
+- **来源与许可。** BlendSwap 23125「indoor plant ficus」，作者 Herberhold，页面许可 CC0。原站下载要登录，改用 NeRF 合成数据集里同一原作的改版：Hugging Face `wengflow/robust-e-nerf` 的 `scenes/ficus.blend`（数据集整体标 CC-BY-4.0，台账里一并致谢）。原件放 `art-src/ficus/src/`，不进 git，哈希写在 `PropPolicyBatch5.json` 的 `replacement.blendSha`。不花 Tripo 积分；原 Tripo 版交付留在 `art-src/tripo/batch5/money_tree/tripo-delivery/`。
+- **做法。** `node tools/art/batch.mjs replace money_tree --batch batch5`：`tools/art/ficus_prep.py` 以禁用脚本自动执行的方式打开 .blend，去掉相机和地面片，把 Mapping 节点烘进 UV，输出三级源 GLB；`normalize.py --lod-sources` 直接用这三级，照常缝合、裂缝检查、FBX 回读。等比缩放到 1.6 m 高，盆约 0.44 m 宽，树冠约 0.66×1.06 m。选件表的 `canopyW/canopyD` 让 Unity 按树冠宽深验尺寸，碰撞盒仍按表内占地 0.7×0.7。
+- **为什么放宽远级门槛。** 原件 18 万面、1896 片独立小叶，叶片只占自身外轮廓的一半左右。逐片减面时，LOD2 最少也要 2336 面，轮廓重合度只有 0.43–0.51；体素包裹、整团凸包等实心树冠在 5600/1680 面下最高约 0.6–0.7。0.90 的门槛本是为实心道具定的，散叶植物用不上。所以远两级改用按 6 cm、9 cm 分块取凸包、再贴回叶面的树冠，颜色取叶片平均色（线性空间）。选件表 `replacement.minIoU` 把 LOD1/LOD2 的门槛定为 0.55/0.52，漏像素 ≤ 10%，只对这一件生效；`qc.py` 按规范化报告里记录的门槛复核。
+- **结果。** 三级 13990/5577/1522 面，破面边 0。LOD1 四向重合度 0.63–0.72，LOD2 为 0.53–0.61，漏像素 ≤ 4.7%。Unity 13 件截图通过；对比图 `unity/Game/Build/art-batch5/money_tree-ficus-compare.png`，依次为旧 Tripo 版、LOD0、LOD1、LOD2。
+
 **第 5 批之后的余额估算。** 按逐件核对口径，第 5 批完成后还剩 16 件待付费，约 640 分；本月余额 250 分，可再做 6 件，其余约 400 分要等下月额度。
 
 ### 城市：模块化建筑套件

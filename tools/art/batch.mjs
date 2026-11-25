@@ -80,7 +80,50 @@ function manifest() {
   }
   save(path.join(local,'upload.json'),entries);
 }
+// 选件表 replacement：整件改用第三方模型（如 CC0 的 ficus），不走 Tripo 下载件。
+function replacementState(item) {
+  const r=item.replacement, p=paths(item.id), report=read(p.report), blend=path.join(root,r.blend);
+  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && report.blendSha===hash(blend) &&
+    report.sha===hash(path.join(p.dir,r.name,'lod0.glb')) && fs.existsSync(path.join(p.dest,report.model));
+  const qc=normal?{pass:true,triangles:report.lods[0].triangles,size:report.lods[0].size,problems:[]}:null;
+  const receipt=normal && read(path.join(shots,item.id+'.json'));
+  return {prep:true,downloaded:fs.existsSync(blend),qc,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png'))};
+}
+function replace(item) {
+  const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend), dir=path.join(p.dir,r.name);
+  if(!fs.existsSync(blend)) throw Error('缺少第三方原件：'+blend);
+  if(hash(blend)!==r.blendSha) throw Error('第三方原件哈希与选件表不符：'+blend);
+  // 下载的 .blend 可能带脚本，始终禁用自动执行。
+  const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
+    ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',blend,'-P',path.join(root,r.prep),'--',dir],
+    {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+  if(run.error || run.status!==0) throw run.error??Error('第三方模型整理失败：'+item.id);
+  const lods=[0,1,2].map(n=>path.join(dir,'lod'+n+'.glb')), ref=path.join(p.dir,r.name+'-ref');
+  tool('qc',lods[0],'--tight-frame','--out',ref,'--flat','--bg',1,'--views',[...views,'color'].join(','));
+  // 等比缩放到表内高度，树冠宽深须与选件表登记一致（Unity 按它验尺寸，按表内宽深放碰撞）。
+  const size=read(path.join(ref,'report.json')).size, k=item.h/size.height;
+  const w=+(size.width*k).toFixed(4), d=+(size.depth*k).toFixed(4);
+  if(Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
+  const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
+  tool('normalize',lods[0],'--lod-sources',lods.slice(1).join(','),'--min-iou',r.minIoU.join(','),'--max-interior-loss',r.maxInteriorLoss,
+    '--out',stage,'--name',item.id,'--width',w,'--depth',d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
+  const report=read(path.join(stage,'report.json'));
+  if(!report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
+  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
+  // 原交付（Tripo 版）首次替换前整体留底；之后只覆盖。
+  const backup=path.join(p.dir,'tripo-delivery');
+  if(fs.existsSync(p.dest) && !fs.existsSync(backup) && read(p.report)?.replacement===undefined) fs.cpSync(p.dest,backup,{recursive:true});
+  fs.mkdirSync(p.dest,{recursive:true});
+  const fresh=new Set(fs.readdirSync(stage));
+  for(const name of fs.readdirSync(p.dest)) {
+    const stem=name.endsWith('.meta')?name.slice(0,-5):name;
+    if(!fresh.has(stem)) fs.rmSync(path.join(p.dest,name));
+  }
+  for(const name of [...[...fresh].filter(name=>name!==report.model),report.model]) fs.copyFileSync(path.join(stage,name),path.join(p.dest,name));
+  console.log('已替换为 '+r.name+'：'+p.dest+'；原交付留底 '+backup);
+}
 function state(item) {
+  if(item.replacement) return replacementState(item);
   const hybrid=isHybrid(item);
   const original=paths(item.id), report=read(original.report), download=read(path.join(original.dir,'download.json'));
   const assembly=hybrid && read(path.join(original.dir,'assembly.json'));
@@ -178,8 +221,12 @@ try {
   } else if(command==='ingest' && (args.length===2 || (args.length===3 && args.includes('--mirror-depth')))) {
     const [id,file]=args.filter(arg=>arg!=='--mirror-depth'); await ingest(chosen(id),file,args.includes('--mirror-depth'));
   }
+  else if(command==='replace' && args.length===1) {
+    const item=chosen(args[0]); if(!item.replacement) throw Error(item.id+' 的选件表没有 replacement'); replace(item);
+  }
   else if(command==='reexport') {
     for(const item of args.length?args.map(chosen):batch){
+      if(item.replacement) { if(args.length) replace(item); continue; }
       const p=paths(item.id);
       if(!args.length && !fs.existsSync(p.report) && !fs.existsSync(p.source)) continue;
       const {report}=state(item);
@@ -202,6 +249,12 @@ try {
   else if(command==='ledger') {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
+      if(item.replacement) {
+        const r=item.replacement;
+        return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
+          qc:s.report?`精模 ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).map(v=>+v.toFixed(3)).join('×')} m；LOD ${s.report.lods.map(lod=>lod.triangles).join('/')}；远级轮廓 IoU 门槛 ${r.minIoU.join('/')}`:'待替换',
+          status:deliveryStatus(s,{},item)};
+      }
       const hybrid=isHybrid(item);
       const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+'；参考原色图贴图，程序件从游戏原模回装':null,
         e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?(hybrid?'AI 外壳＋程序部件':'AI 外壳 + 程序化修补')+'；本地追加 0 积分':null].filter(Boolean).join('；');
@@ -210,7 +263,7 @@ try {
         qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e,item)};
     });
     await writeSources(path.join(root,'tables/美术.xlsx'),rows);
-  } else throw Error('用法：batch.mjs [--batch batchN] prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
+  } else throw Error('用法：batch.mjs [--batch batchN] prep [id... | --manifest-only] | ingest <id> <下载或同目录 repaired.glb 的路径> [--mirror-depth] | replace <id> | reexport [id...] | credit --from-notes | credit <id> <累计积分> [备注] | status | ledger [id...]');
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
 function deliveryStatus(s,entry,item) {

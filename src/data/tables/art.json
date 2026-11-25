@@ -684,10 +684,12 @@
   {
    "id":"batch5_money_tree",
    "name":"发财树",
-   "method":"四向灰模生成整件；原色 3/4 图贴图；返工 0 次；H3.1 多视图几何 30 + 图片贴图 2K 10",
-   "credits":40,
-   "file":"art-src/tripo/batch5/money_tree/tripo.glb",
-   "qc":"下载件 39012 面，宽深高 0.3916×0.4007×0.98 m；通过；LOD 14000/5600/1680",
+   "source":"ficus by Herberhold，BlendSwap 23125，CC0；文件取自 NeRF 合成数据集（Hugging Face wengflow/robust-e-nerf scenes/ficus.blend，CC-BY-4.0），致谢 Herberhold 与 NeRF（Mildenhall 等）作者",
+   "method":"Blender 后台脚本 ficus_prep.py：去相机与地面片，Mapping 烘进 UV；等比缩放到 1.6 m 高，盆约 0.44 m 宽，树冠伸出 0.7 m（约 0.66×1.06 m），占地与碰撞按表内 0.7×0.7；LOD0 精模，LOD1/2 为 6 cm/9 cm 分块凸包树冠（叶片平均色）＋同一盆茎；散叶植物按件放宽 LOD 轮廓门槛 0.55/0.52、漏像素 ≤10%；不花 Tripo 积分，原 Tripo 版（已付 40 分）留作备份",
+   "credits":0,
+   "license":"CC0（原作）；数据集 CC-BY-4.0，已致谢",
+   "file":"art-src/ficus/src/ficus.blend",
+   "qc":"精模 13990 面，宽深高 0.665×1.058×1.6 m；LOD 13990/5577/1522；远级轮廓 IoU 门槛 0.55/0.52",
    "status":"Unity 已生成截图；待人工验收"
   },
   {

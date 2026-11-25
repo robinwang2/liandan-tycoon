@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { budgetFor, geometryErrors } from './prop-geometry.mjs';
 
-const options = Object.fromEntries(['out','name','height','width','depth','origin','reference','rotate-z','budget','qc','ref','res'].map(key => [key, { type: 'string' }]));
+const options = Object.fromEntries(['out','name','height','width','depth','origin','reference','rotate-z','budget','qc','ref','res','lod-sources','min-iou','max-interior-loss'].map(key => [key, { type: 'string' }]));
 options['mirror-depth'] = { type: 'boolean' };
 options.hybrid = { type: 'boolean' };
 options['legacy-hybrid'] = { type: 'boolean' };
@@ -40,7 +40,8 @@ while (true) {
     lod.attempts = history;
     if (!errors.length) continue;
     const reason = `LOD${lod.level} ${lod.triangles}/${lod.budget} 面：${errors.join('；')}`;
-    if (lod.targetTriangles >= lod.budget || lod.triangles > lod.budget) {
+    // 预制远级不随目标面数变化，重试无意义。
+    if (values['lod-sources'] || lod.targetTriangles >= lod.budget || lod.triangles > lod.budget) {
       exhausted.push(reason);
       continue;
     }

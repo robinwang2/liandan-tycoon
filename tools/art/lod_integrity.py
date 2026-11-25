@@ -53,7 +53,8 @@ def coverage(triangles, axis, sign):
     return np.cumsum(delta[:, :-1], axis=1) > 0
 
 
-def compare(reference, candidate):
+def compare(reference, candidate, min_iou=MIN_IOU, max_interior_loss=MAX_INTERIOR_LOSS):
+    """散叶植物等按件放宽的门槛由调用方传入，默认值适用于实心道具。"""
     ref, lod = world_triangles(reference), world_triangles(candidate)
     lo, hi = ref.min(axis=(0, 1)), ref.max(axis=(0, 1))
     scale = RESOLUTION / (1.12 * max(hi - lo))
@@ -73,5 +74,5 @@ def compare(reference, candidate):
                            interiorPixels=interior_count, missingInteriorPixels=missing,
                            interiorLoss=missing / interior_count if interior_count else 0.,
                            iou=int((base & current).sum()) / union_count if union_count else 1.)
-    return dict(resolution=RESOLUTION, edgeMarginPixels=2, maxInteriorLoss=MAX_INTERIOR_LOSS,
-                minIoU=MIN_IOU, views=views)
+    return dict(resolution=RESOLUTION, edgeMarginPixels=2, maxInteriorLoss=max_interior_loss,
+                minIoU=min_iou, views=views)

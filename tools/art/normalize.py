@@ -343,6 +343,11 @@ parser.add_argument('--hybrid', action='store_true')
 parser.add_argument('--lod-limits')
 parser.add_argument('--lod-targets', default='0,0')
 parser.add_argument('--legacy-hybrid', action='store_true')
+# 预制远级：逗号分隔的 LOD1、LOD2 GLB，零件与主件同名同序，不再自动减面（散叶植物用）。
+parser.add_argument('--lod-sources')
+# 按件放宽的 LOD 完整性门槛：--min-iou 依次给 LOD1、LOD2；--max-interior-loss 两级共用。
+parser.add_argument('--min-iou')
+parser.add_argument('--max-interior-loss', type=float)
 parser.add_argument('--width', type=float)
 parser.add_argument('--depth', type=float)
 parser.add_argument('--origin', choices=['bottom','wall','ceiling'], default='bottom')
@@ -361,6 +366,28 @@ if args.reference:
 if not math.isfinite(height) or height <= 0:
     raise ValueError('目标高度必须为正数')
 objects = load(args.source)
+extra_levels = []
+for file in (args.lod_sources.split(',') if args.lod_sources else []):
+    if args.hybrid or args.mirror_depth or args.rotate_z:
+        raise ValueError('预制远级只支持整件、不旋转、不镜像')
+    known = set(bpy.data.objects)
+    import_glb(Path(file))
+    base = lambda name: name.rsplit('.', 1)[0] if name.rsplit('.', 1)[-1].isdigit() else name
+    found = {base(obj.name): obj for obj in set(bpy.data.objects) - known if obj.type == 'MESH'}
+    if sorted(found) != sorted(obj.name for obj in objects):
+        raise ValueError(f'{file} 的零件 {sorted(found)} 与主件 {sorted(obj.name for obj in objects)} 不符')
+    level_objects = [found[obj.name] for obj in objects]
+    for obj in level_objects:
+        world = obj.matrix_world.copy()
+        obj.parent = None
+        obj.data = obj.data.copy()
+        obj.data.transform(world)
+        obj.matrix_world = Matrix.Identity(4)
+        # 回读产生的同名 .001 材质换回主件材质，保证各级共用一份贴图与材质记录。
+        for slot, mat in enumerate(obj.data.materials):
+            if mat and base(mat.name) != mat.name and base(mat.name) in bpy.data.materials:
+                obj.data.materials[slot] = bpy.data.materials[base(mat.name)]
+    extra_levels.append(level_objects)
 rotation = Matrix.Rotation(math.radians(args.rotate_z), 4, 'Z')
 if args.mirror_depth:
     rotation = Matrix.Diagonal(Vector((1, -1, 1, 1))) @ rotation
@@ -400,7 +427,12 @@ merged = 0
 for obj in objects:
     obj.data.transform(transform)
     merged += clean(obj.data)
-materials = sorted({mat for obj in objects for mat in obj.data.materials if mat}, key=lambda mat: mat.name)
+for level_objects in extra_levels:
+    for obj in level_objects:
+        obj.data.transform(transform)
+        clean(obj.data)
+materials = sorted({mat for obj in objects + [o for level in extra_levels for o in level] for mat in obj.data.materials if mat},
+                   key=lambda mat: mat.name)
 records = []
 for index, mat in enumerate(materials):
     stem = args.name + (f'_{index+1:02}' if index else '')
@@ -453,7 +485,9 @@ for level, ratio in enumerate([1,.4,.12]):
         ratio = min(1., (goal - fixed) / max(1, sum(counts.values()) - fixed))
     for index, original in enumerate(objects):
         obj = original
-        if level:
+        if level and extra_levels:
+            obj = extra_levels[level-1][index]
+        elif level:
             obj = original.copy()
             obj.data = original.data.copy()
             bpy.context.collection.objects.link(obj)
@@ -546,7 +580,13 @@ for lod in lods:
     if lod['level'] == 0:
         reference_group = group
     else:
-        lod['lodIntegrity'] = compare(reference_group, group)
+        overrides = {}
+        if args.min_iou:
+            limits_iou = [float(v) for v in args.min_iou.split(',')]
+            overrides['min_iou'] = limits_iou[min(lod['level'], len(limits_iou)) - 1]
+        if args.max_interior_loss is not None:
+            overrides['max_interior_loss'] = args.max_interior_loss
+        lod['lodIntegrity'] = compare(reference_group, group, **overrides)
     measured = list(anchor(*bounds(group)))
     if not all(abs(value) <= .0001 for value in measured):
         raise ValueError(f"FBX 回读 LOD{lod['level']} 表面锚点偏移：{measured} m")
@@ -579,6 +619,8 @@ report = dict(source=args.source.name, model=model, budget=args.budget, targetHe
               sourceSize=dimensions(low,high), normals='缝合反向同位对边，保留面角 UV；按连通面统一绕序，开口壳片按源法线校正朝向', weldToleranceMeters=0,
               mergedVertices=merged, lods=lods, materials=records, seconds=round(time.monotonic()-start,2),
               origin=args.origin, axisScales=factors, movingParts='保留分件；单网格不自动推断活动边界。')
+if extra_levels:
+    report['lodSources'] = [Path(file).name for file in args.lod_sources.split(',')]
 if args.hybrid:
     report['legacyHybridRecipe'] = args.legacy_hybrid
     # 将规范化枢轴还原为网页 XYZ 轴序，Unity 可据此反验导入轴转换并应用角位移。
