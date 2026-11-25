@@ -22,6 +22,9 @@ namespace Liandan.EditorTools
             public string name = "", BaseColor = "", Normal = "", LitMask = "";
             public float metallic = 0, smoothness = 0;
             public bool glass;
+            public bool thinTint;
+            public int thinTintOrder;
+            public float baseMapEmission;
             public float[] baseColor = Array.Empty<float>();
             public float[] emission = Array.Empty<float>();
         }
@@ -159,6 +162,17 @@ namespace Liandan.EditorTools
                 material.SetFloat("_ZWrite",0); material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 material.SetOverrideTag("RenderType","Transparent"); material.renderQueue=3000;
                 material.SetShaderPassEnabled("ShadowCaster",false);
+                if (finish.thinTint)
+                {
+                    material.SetFloat("_Cull",(float)UnityEngine.Rendering.CullMode.Back);
+                    material.SetShaderPassEnabled("DepthOnly",false);
+                    material.SetFloat("_BlendModePreserveSpecular",0);
+                    material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    material.SetFloat("_SpecularHighlights",0); material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                    material.SetFloat("_EnvironmentReflections",0); material.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+                    material.SetFloat("_QueueOffset",finish.thinTintOrder);
+                    material.renderQueue=3000+finish.thinTintOrder;
+                }
             }
             if (finish.emission.Length==3 && finish.emission.Any(value=>value>0))
             {
@@ -172,6 +186,15 @@ namespace Liandan.EditorTools
             material.SetFloat("_Metallic",bronze ? .25f : finish.metallic);
             material.SetFloat("_Smoothness",bronze ? .32f : finish.smoothness);
             if (!string.IsNullOrEmpty(finish.BaseColor)) material.SetTexture("_BaseMap",Load(finish.BaseColor));
+            if (finish.baseMapEmission>0)
+            {
+                var paper=material.GetColor("_BaseColor")*(1-finish.baseMapEmission);
+                paper.a=1; material.SetColor("_BaseColor",paper);
+                material.SetTexture("_EmissionMap",material.GetTexture("_BaseMap"));
+                material.SetColor("_EmissionColor",(Color.white*finish.baseMapEmission).gamma);
+                material.globalIlluminationFlags=MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                material.EnableKeyword("_EMISSION");
+            }
             if (!string.IsNullOrEmpty(finish.Normal)) { material.SetTexture("_BumpMap",Load(finish.Normal)); material.EnableKeyword("_NORMALMAP"); }
             if (!string.IsNullOrEmpty(finish.LitMask))
             {

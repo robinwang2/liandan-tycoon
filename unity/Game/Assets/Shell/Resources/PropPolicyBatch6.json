@@ -45,16 +45,17 @@
         "name": "eggs",
         "blend": "art-src/eggs/egg_bob/src/bob.zip",
         "blendSha": "0b9a3e750ad776cf1d5721eb793cc3add31cadb79e99dbd987ce03357ac44253",
-        "prep": "tools/art/eggs_prep.py",
+        "prep": "tools/art/eggs_display_prep.py",
         "source": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/bob.zip",
         "license": "Bob by Keenan Crane，CC0 1.0",
-        "method": "原 OBJ / UV / PNG 分级减面",
+        "method": "原 OBJ / UV / PNG 分级减面，鸭嘴朝 +Z",
         "minIoU": [
           0.9,
           0.9
         ],
         "maxInteriorLoss": 0.005,
-        "textured": true
+        "textured": true,
+        "prepSha": "4e2508abf18d703d56a0ccec372055cf01579c997980c4fe424f2b7f6aba69b8"
       }
     },
     {
@@ -73,16 +74,17 @@
         "name": "eggs",
         "blend": "art-src/eggs/egg_spot/src/spot.zip",
         "blendSha": "1d4082da4e940f6a4cfdf648fd77e1647ac613c618dbff933f1ba23fad254608",
-        "prep": "tools/art/eggs_prep.py",
+        "prep": "tools/art/eggs_display_prep.py",
         "source": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/spot.zip",
         "license": "Spot by Keenan Crane，CC0 1.0",
-        "method": "原牛模型与纹理、木底座",
+        "method": "原牛模型与纹理、木底座，牛脸朝 +Z",
         "minIoU": [
           0.9,
           0.9
         ],
         "maxInteriorLoss": 0.005,
-        "textured": true
+        "textured": true,
+        "prepSha": "4e2508abf18d703d56a0ccec372055cf01579c997980c4fe424f2b7f6aba69b8"
       }
     },
     {
@@ -101,16 +103,17 @@
         "name": "eggs",
         "blend": "art-src/eggs/egg_blub_tank/src/blub.zip",
         "blendSha": "0b10a303b407ef1a5ba8c406f18842cdf4e62ea411e3279232f2dbfd9bfca811",
-        "prep": "tools/art/eggs_prep.py",
+        "prep": "tools/art/eggs_display_prep.py",
         "source": "https://www.cs.cmu.edu/~kmcrane/Projects/ModelRepository/blub.zip",
         "license": "Blub by Keenan Crane，CC0 1.0",
-        "method": "原鱼独立枢轴、玻璃水体石子水草",
+        "method": "原鱼独立枢轴；淡蓝水体和玻璃各用单层透明面",
         "minIoU": [
           0.9,
           0.9
         ],
         "maxInteriorLoss": 0.005,
-        "textured": true
+        "textured": true,
+        "prepSha": "4e2508abf18d703d56a0ccec372055cf01579c997980c4fe424f2b7f6aba69b8"
       }
     },
     {
@@ -329,19 +332,20 @@
       "z": 1.5,
       "replacement": {
         "name": "eggs",
-        "blend": "tools/art/eggs_prep.py",
-        "blendSha": "fa360760e9a2fbbca51c7c1761282414f4b73ba99fdc0868c9baa1e4d7e1b42b",
-        "prep": "tools/art/eggs_prep.py",
+        "blend": "tools/art/eggs_display_prep.py",
+        "blendSha": "4e2508abf18d703d56a0ccec372055cf01579c997980c4fe424f2b7f6aba69b8",
+        "prep": "tools/art/eggs_display_prep.py",
         "source": "程序生成",
         "license": "原创",
-        "method": "移动脚轮、原创手写风贴图",
+        "method": "移动脚轮、原创手写风贴图；板面按原图补光保留字迹",
         "minIoU": [
           0.9,
           0.9
         ],
         "maxInteriorLoss": 0.005,
         "textured": true,
-        "hashMode": "UTF-8 LF"
+        "hashMode": "UTF-8 LF",
+        "prepSha": "4e2508abf18d703d56a0ccec372055cf01579c997980c4fe424f2b7f6aba69b8"
       }
     }
   ]

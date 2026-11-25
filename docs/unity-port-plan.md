@@ -741,7 +741,7 @@ Windows 的 Mono 与 IL2CPP 播放器共用 C# 实时合成器，直接读取既
 | `egg_teapot` | 犹他茶壶 | 3080/1560/552 | 0.28×0.18×0.15 | 0.9929/0.9745 |
 | `egg_bob` | 小黄鸭Bob | 5798/2248/682 | 0.18054×0.22907×0.12 | 0.9967/0.9870 |
 | `egg_spot` | 奶牛Spot摆件 | 5810/2260/694 | 0.12×0.17×0.16 | 0.9970/0.9859 |
-| `egg_blub_tank` | 鱼缸里的Blub | 6576/2676/856 | 0.45×0.25×0.35 | 1.0000/1.0000 |
+| `egg_blub_tank` | 鱼缸里的Blub | 6534/2634/814 | 0.45×0.25×0.35 | 1.0000/1.0000 |
 | `egg_hotdog` | NeRF热狗 | 5878/2348/826 | 0.25×0.24985×0.0524 | 0.9876/0.9597 |
 | `egg_mic` | NeRF麦克风 | 7836/3096/930 | 0.30544×0.33382×0.4 | 0.9739/0.9123 |
 | `egg_cornell` | 康奈尔盒子 | 864/352/96 | 0.4×0.4×0.4 | 1.0000/0.9991 |
@@ -770,4 +770,6 @@ node tools/art/batch.mjs --batch batch6 status
 
 Unity 使用 `Resources.Load<GameObject>("B6/<id>/SM_<id>")`。导入器按整件包围盒在根节点生成 `BoxCollider`；鱼缸额外提供根下的 `Fish`，同时驱动三个 LOD 的鱼，不移动鱼缸；康奈尔灯板材质为 `M_egg_cornell_Light`。选件表给出 4 列 × 3 行展示坐标。
 
-**待 Claude 实机验收：** 本次只离线编译 Unity Editor 脚本，未运行 Unity、未生成或签收 Unity 截图。在此工作树运行 `node tools/unity/run.mjs art-batch6`，检查 `unity/Game/Build/art-batch6/` 下的 12 张 `<id>.png` 与 `contact.jpg`，重点看鱼缸透明排序、印刷面正向可读性和麦克风远景。验收后可运行 `node tools/art/batch.mjs --batch batch6 ledger` 更新截图状态，再执行 `npm run tables`。
+**首轮 Unity 验收与四件复修。** `9956715` 的 `art-batch6` 已跑完 12 件；人工看图发现 Bob、Spot 背对镜头，鱼缸发白，白板偏灰。本轮只对这四件重新执行 Blender prep、规范化和三级 FBX 回读。Bob 和 Spot 的模型绕竖轴转了 180°，不是改相机；水体与玻璃各自使用独立、单面、关闭深度写入的透明壳，先画水（alpha 0.14）再画玻璃（0.035）；白板仅在印刷面用原图补光，不给字迹叠白色。四件的尺寸、三角面与 IoU 见上表。外部原件哈希不变，四件修订脚本的哈希见选件表 `prepSha`。
+
+**待 Unity 复验：** 在此工作树运行 `node tools/unity/run.mjs art-batch6`，查看 `unity/Game/Build/art-batch6/` 里的四张新近景：从 +Z 能看见牛脸和鸭嘴，鱼、石子和水草不泛白，白板底色接近白色且字迹和曲线清楚。旧截图不能作为修订后的签收依据。

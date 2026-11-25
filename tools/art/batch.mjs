@@ -90,6 +90,7 @@ function replacementState(item) {
   const r=item.replacement, p=paths(item.id), report=read(p.report), blend=path.join(root,r.blend);
   const lod0=path.join(p.dir,r.name,'lod0.glb');
   const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && report.blendSha===sourceHash(blend) && report.blendSha===r.blendSha &&
+    (!r.prepSha || (report.prepSha===r.prepSha && sourceHash(path.join(root,r.prep))===r.prepSha)) &&
     fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(p.dest,report.model));
   const qc=normal?{pass:true,triangles:report.lods[0].triangles,size:report.lods[0].size,problems:[]}:null;
   const receipt=normal && read(path.join(shots,item.id+'.json'));
@@ -99,6 +100,7 @@ function replace(item) {
   const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend), dir=path.join(p.dir,r.name);
   if(!fs.existsSync(blend)) throw Error('缺少第三方原件：'+blend);
   if(sourceHash(blend)!==r.blendSha) throw Error('原件哈希与选件表不符：'+blend);
+  if(r.prepSha && sourceHash(path.join(root,r.prep))!==r.prepSha) throw Error('prep 哈希与选件表不符：'+r.prep);
   // 下载的 .blend 可能带脚本，始终禁用自动执行。
   const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
     ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',...(!eggs || blend.endsWith('.blend')?[blend]:[]),'-P',path.join(root,r.prep),'--',dir,...(eggs?[item.id,blend]:[])],
@@ -115,7 +117,7 @@ function replace(item) {
     '--out',stage,'--name',item.id,'--width',w,'--depth',d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
   const report=read(path.join(stage,'report.json'));
   if((!eggs || r.textured) && !report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
-  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
+  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
   // 原交付（Tripo 版）首次替换前整体留底；之后只覆盖。
   const backup=path.join(p.dir,'tripo-delivery');
   if(fs.existsSync(p.dest) && !fs.existsSync(backup) && read(p.report)?.replacement===undefined) fs.cpSync(p.dest,backup,{recursive:true});
