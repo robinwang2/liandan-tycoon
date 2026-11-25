@@ -54,3 +54,14 @@
 .rarity-2 { border-top-color: rgb(109,177,233); border-top-width: 3px; } .rarity-3 { border-top-color: rgb(234,195,104); border-top-width: 3px; }
 .shell .selected { background-color: rgb(41,111,112); border-bottom-width: 2px; border-bottom-color: rgb(119,223,202); }
 .art-row { flex-direction: row; } .art-row .art { flex-grow: 1; height: 90px; } .portrait { width: 80px; background-color: rgb(51,67,84); -unity-text-align: middle-center; font-size: 32px; }
+.egg-stage { flex-grow: 1; flex-basis: 0; min-height: 0; }
+.egg-count { align-self: flex-start; margin: 8px; padding: 4px 12px; color: #dae8e8; background-color: #232e39; }
+.egg-complete, .egg-award { color: #ffd379; }
+.egg-footer { flex-shrink: 0; align-items: center; }
+.egg-card { flex-shrink: 0; width: 90%; max-width: 760px; margin-bottom: 8px; padding: 8px 16px; background-color: #202c39; border-top-width: 2px; border-top-color: #79cbbb; }
+.egg-status { font-size: 14px; color: #97ddcf; }
+.egg-name { font-size: 21px; color: #fff2d8; }
+.egg-credit { font-size: 13px; white-space: normal; color: #bccad5; }
+.egg-award-card { flex-shrink: 0; width: 94%; max-width: 860px; min-height: 144px; margin-bottom: 8px; padding: 14px 22px; justify-content: center; background-color: #30291f; border-width: 2px; border-color: #e7b95f; }
+.egg-award { font-size: 32px; -unity-font-style: bold; -unity-text-align: middle-center; white-space: normal; }
+.egg-award-detail { font-size: 16px; color: #ead8b1; -unity-text-align: middle-center; white-space: normal; }

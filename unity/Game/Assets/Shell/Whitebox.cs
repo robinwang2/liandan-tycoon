@@ -15,7 +15,7 @@ namespace Liandan.Shell
             return instance;
         }
 
-        public static Camera Create(bool placeFurnace = true, bool batch = false)
+        public static Camera Create(bool placeFurnace = true, bool batch = false, int eggRows = 0)
         {
             var camera = new GameObject("Office Camera").AddComponent<Camera>();
             camera.transform.position = new Vector3(8,8,-10); camera.transform.LookAt(Vector3.zero); camera.orthographic = true; camera.orthographicSize = 5.5f;
@@ -26,6 +26,15 @@ namespace Liandan.Shell
             {
                 var cube=GameObject.CreatePrimitive(PrimitiveType.Cube); cube.name=name; cube.transform.position=position; cube.transform.localScale=size;
                 var renderer=cube.GetComponent<MeshRenderer>(); renderer.sharedMaterial=material; var props=new MaterialPropertyBlock(); props.SetColor("_BaseColor",color); renderer.SetPropertyBlock(props);
+            }
+            if (eggRows > 0)
+            {
+                float floorDepth = (eggRows - 1) * GameShell.EggRowSpacing + 3;
+                Block("Egg Gallery Floor", new Vector3(0,-.15f,0), new Vector3(12,.3f,floorDepth), new Color(.37f,.46f,.49f));
+                camera.transform.rotation = Quaternion.Euler(32, 192, 0);
+                camera.transform.position = -camera.transform.forward * (20 + floorDepth);
+                light.transform.rotation = Quaternion.Euler(44, 155, 0);
+                return camera;
             }
             bool original = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-furnace-original") >= 0;
             bool extended = batch || !placeFurnace || PlaceFurnace(original);

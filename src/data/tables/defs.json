@@ -460,8 +460,58 @@
   "x996":{"name":"福报传人","icon":"🌃","desc":"连续 {ach.x996} 个月实行 996"},
   "leather":{"name":"皮衣之友","icon":"🧥","desc":"在皮衣教主最艰难的时候挺了他"},
   "allend":{"name":"人生百态","icon":"🎭","desc":"解锁 {ach.allend} 种不同结局"},
-  "road":{"name":"未曾设想的道路","icon":"🛤️","desc":"国资入股后走完「路线之争」，终局时仍握有至少 {ideo.equity}% 股权"}
+  "road":{"name":"未曾设想的道路","icon":"🛤️","desc":"国资入股后走完「路线之争」，终局时仍握有至少 {ideo.equity}% 股权"},
+  "egg_master":{"name":"彩蛋大师","icon":"🥚","desc":"找到全部彩蛋"}
  },
+ "EASTER_EGGS":[
+  {
+   "id":"teapot",
+   "name":"犹他茶壶",
+   "prop":"egg_teapot",
+   "anchor":"茶水间台面",
+   "desc":"1975 年 Martin Newell 照着自家茶壶描出的曲面，从此成了图形学的 Hello World。",
+   "credit":"Martin Newell，犹他大学，1975"
+  },
+  {"id":"bob","name":"小黄鸭 Bob","prop":"egg_bob","anchor":"工程师工位","desc":"卡住的时候对它把代码讲一遍，讲着讲着 bug 就自己找到了。","credit":"Bob by Keenan Crane，CC0"},
+  {"id":"spot","name":"奶牛 Spot","prop":"egg_spot","anchor":"老板办公室书架","desc":"几何处理论文里出镜最多的奶牛，身上那张贴图是一整块展开的 UV。","credit":"Spot by Keenan Crane，CC0"},
+  {"id":"blub","name":"鱼缸里的 Blub","prop":"egg_blub_tank","anchor":"大堂前台","desc":"Spot 的同门师弟，一条专门为测试网格算法而生的鱼。","credit":"Blub by Keenan Crane，CC0"},
+  {
+   "id":"hotdog",
+   "name":"NeRF 热狗",
+   "prop":"egg_hotdog",
+   "anchor":"会客区茶几",
+   "desc":"NeRF 论文的八个测试场景之一。训练了二十万步，最后还是被当成午饭。",
+   "credit":"hotdog by erickfree（BlendSwap，CC0）；NeRF 合成数据集，Mildenhall 等"
+  },
+  {
+   "id":"mic",
+   "name":"NeRF 麦克风",
+   "prop":"egg_mic",
+   "anchor":"发布会讲台",
+   "desc":"也出自 NeRF 数据集。试音：一、二、三，loss 在降。",
+   "credit":"mic by up3d.de（BlendSwap，CC0）；NeRF 合成数据集，Mildenhall 等"
+  },
+  {"id":"cornell","name":"康奈尔盒子","prop":"egg_cornell","anchor":"实验室","desc":"红墙、绿墙、一盏顶灯。1984 年起，全世界的渲染器都拿它对答案。","credit":"Goral 等，康奈尔大学，1984"},
+  {
+   "id":"paperclips",
+   "name":"一盒回形针",
+   "prop":"egg_paperclips",
+   "anchor":"老板办公桌",
+   "desc":"一个只想造回形针的 AI，最后把整个宇宙都变成了回形针。先从这一盒开始。",
+   "credit":"Nick Bostrom 的思想实验，2003"
+  },
+  {"id":"gpu_ad","name":"「核弹」显卡广告","prop":"egg_gpu_ad","anchor":"机房门口","desc":"华强北老广告。2012 年的 AlexNet，就是用两张这一代的「核弹」炼出来的。","credit":"原创"},
+  {"id":"whiteboard","name":"写满梗的白板","prop":"egg_whiteboard","anchor":"会议室","desc":"strawberry 里到底有几个 r？9.11 和 9.9 谁大？大模型的考前必背。","credit":"原创"},
+  {
+   "id":"bbb",
+   "name":"《大雄兔》海报",
+   "prop":"egg_bbb_poster",
+   "anchor":"休息区墙上",
+   "desc":"Blender 基金会 2008 年的开源短片，主角是一只好脾气的大兔子。",
+   "credit":"Big Buck Bunny © Blender Foundation，CC-BY 3.0"
+  },
+  {"id":"attention","name":"装裱的论文","prop":"egg_attention","anchor":"老板办公室墙上","desc":"2017 年的一篇论文，标题后来成了整个行业的口头禅。","credit":"Vaswani 等，NeurIPS 2017"}
+ ],
  "GOALS":{
   "model":{"name":"炼出 AGI，然后上市","desc":""},
   "app":{"name":"做出一亿人每天在用的 AI 产品","desc":""},
