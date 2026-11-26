@@ -31,7 +31,7 @@ function shutterFlight(cargo, rearX, rearZ, wallZ, target, flight) {
 }
 
 export function createDelivery(k, props, parent, { makeRack, install, impact, traffic }) {
-  let trip = null;
+  let trip = null, idleSince = performance.now();
 
   function start(layout, brand, first, count, shutter) {
     const root = k.group(parent), cargo = k.group(root), paint = brand || '#528e88';
@@ -48,15 +48,16 @@ export function createDelivery(k, props, parent, { makeRack, install, impact, tr
     k.box(1.32, 1.16, 0.045, '#263239', van, 0, 1.35, -2.025);
     k.box(1.32, 1.16, 0.065, paint, hinge, 0.66 * swing, 1.35, -0.04, { r: 0.025 });
     k.box(0.16, 0.045, 0.035, '#e4e8ea', hinge, 1.15 * swing, 1.27, -0.09);
-    k.box(0.77, 0.9, 0.69, '#cc9863', cargo, 0, 0, 0, { r: 0.025 });
-    k.box(0.14, 0.91, 0.7, paint, cargo, 0, 0, 0, { glow: paint, glowK: 0.28 });
+    k.box(0.77, 0.9, 0.69, shutter ? '#cc9863' : '#f2d3a0', cargo, 0, 0, 0, { r: 0.025 });
+    k.box(shutter ? 0.14 : 0.26, 0.91, 0.7, paint, cargo, 0, 0, 0, { glow: paint, glowK: 0.28 });
+    if (!shutter) k.box(0.78, 0.19, 0.71, paint, cargo, 0, -0.08, 0, { glow: paint, glowK: 0.28 });
     k.box(0.23, 0.15, 0.015, '#fff4d9', cargo, -0.21, 0.17, 0.35);
     cargo.visible = false;
-    if (!shutter) cargo.scale.setScalar(0.72);
     van.position.y = -parent.position.y;
     const streetZ = shutter ? -layout.D / 2 - 6.95 : layout.D / 2 + 6.25;
     trip = { root, cargo, van, wheels, hinge, baked, layout, shutter, streetZ, first, count, time: 0, popped: [], landed: false };
-    traffic?.setBlock(streetZ);
+    parkVan(trip, 1.2, 0);
+    traffic?.setBlock(streetZ, van.position.x);
     parkVan(trip, 0, 0);
   }
 
@@ -66,6 +67,7 @@ export function createDelivery(k, props, parent, { makeRack, install, impact, tr
     trip.root.removeFromParent();
     for (const batch of trip.baked) batch.userData.dispose();
     trip = null;
+    idleSince = performance.now();
   }
 
   function step(dt) {
@@ -109,5 +111,5 @@ export function createDelivery(k, props, parent, { makeRack, install, impact, tr
     }
   }
 
-  return { start, cancel, step, get active() { return !!trip; }, extend(count) { trip.count = count; } };
+  return { start, cancel, step, get active() { return !!trip; }, get idleSince() { return trip ? null : idleSince; }, extend(count) { trip.count = count; } };
 }

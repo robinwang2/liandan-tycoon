@@ -763,12 +763,17 @@ export function boot(root, scene) {
   addEventListener('resize', fit);
   reducedMotion?.addEventListener('change', syncScene);
   if (import.meta.env.DEV && office?.debug?.room && new URLSearchParams(location.search).get('truck') === '1') {
+    const room = office.debug.room, delay = 6000;
+    let nextRackAt = performance.now() + delay;
     setInterval(() => {
-      if (V.screen !== 'play' || !S || document.hidden) return;
-      const room = office.debug.room, capacity = room.L.rackRow * 3;
+      const now = performance.now();
+      if (V.screen !== 'play' || !S || document.hidden) { nextRackAt = now + delay; return; }
+      if (room.deliveryIdleSince === null || now < Math.max(nextRackAt, room.deliveryIdleSince + delay)) return;
+      const capacity = room.L.rackRow * 3;
       const current = previewRacks ?? (S.ownModel ? Math.min(capacity, Math.ceil(Math.log2(S.gpu / 8 + 1))) : 0);
+      nextRackAt = now + delay;
       previewRacks = current >= capacity ? 0 : current + 1; syncScene();
-    }, 6000);
+    }, 250);
   }
   ui.addEventListener('click', e => {
     const el = e.target.closest('[data-a]');

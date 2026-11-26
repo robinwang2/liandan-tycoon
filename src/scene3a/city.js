@@ -111,7 +111,7 @@ const SIGN_COL = [['#c8402f', '#fff6e0'], ['#f2c14e', '#3a2a10'], ['#1f6f8b', '#
 
 export function createCity(stage, k, PROPS, artMat) {
   const CM = new THREE.Matrix4();
-  let blockedStreetZ = 0;
+  let blockedStreetZ = 0, parkedVanX = 0;
   let root = new THREE.Group(), live = null, job = null;                      // live：正在显示的城；job：后台正在搭的城
   let owned = [], bakes = [], blds = [], cars = [], peds = null, night = [], wetMats = [], ticks = [], frameInfo = null, built = '';
   const own = x => { owned.push(x); return x; };
@@ -509,10 +509,12 @@ export function createCity(stage, k, PROPS, artMat) {
       if (c.loop) {
         const side = Math.sign(blockedStreetZ);
         if (side) {
-          const [, currentZ] = loopPos(c.p, c.a, c.b), [, nextZ] = loopPos(c.p + distance, c.a, c.b);
-          const stopZ = Math.abs(blockedStreetZ) - 2.6 - c.halfLength;
-          const gap = stopZ - side * currentZ;
-          if (gap >= 0 && side * (nextZ - currentZ) > 0) distance *= clamp(gap / 2.5, 0, 1);
+          const [currentX, currentZ] = loopPos(c.p, c.a, c.b), [nextX, nextZ] = loopPos(c.p + distance, c.a, c.b);
+          const waitGap = 4, vanEnvelope = 3.6, stopOffset = c.halfLength + vanEnvelope + waitGap;
+          let gap = -1;
+          if (side * (nextZ - currentZ) > 0) gap = Math.abs(blockedStreetZ) - side * currentZ - stopOffset;
+          else if (side * currentZ >= c.b - 0.01) gap = Math.sign(nextX - currentX) * (parkedVanX - currentX) - stopOffset;
+          if (gap >= 0) distance = Math.sign(distance) * Math.min(gap, Math.abs(distance) * clamp(gap / 2.5, 0, 1));
         }
         c.p += distance; const [x, z, r] = loopPos(c.p, c.a, c.b);
         const clearance = Math.max(0, Math.abs(blockedStreetZ) + 2.05 - c.b);
@@ -533,5 +535,5 @@ export function createCity(stage, k, PROPS, artMat) {
   });
   function dispose() { if (job) abort(); if (live) { stage.scene.remove(live.root); release(live); live = null; } }
   return { build, dispose, destroy() { off(); dispose(); }, get root() { return live?.root; }, get busy() { return !!job; },
-    setBlock(streetZ) { blockedStreetZ = streetZ; }, clearBlock() { blockedStreetZ = 0; } };
+    setBlock(streetZ, vanX) { blockedStreetZ = streetZ; parkedVanX = vanX; }, clearBlock() { blockedStreetZ = 0; } };
 }

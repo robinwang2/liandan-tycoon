@@ -1123,7 +1123,7 @@ export function createRoom(stage, k, PROPS, art, traffic) {
     return { rebuilt, up, L: st.L, floors: tw.on ? tw.N : 1, frame: tw.on ? tw.frame : null, lift: tw.on ? tw.camY - 0.3 * tw.frame.H : 0, top: tw.on ? tw.N * tw.FH + 3 : st.L.H + 2 };
   }
   return {
-    sync, play, get L() { return st.L; },
+    sync, play, get L() { return st.L; }, get deliveryIdleSince() { return delivery.idleSince; },
     // 手机档：关掉三盏点光源（室内暖灯、炉火），每个像素少算三盏灯；屏幕、招牌、炉火这些自发光照样亮
     setLite(on) { lampA.visible = lampB.visible = fireLight.visible = !on; },
     // 电梯现在的状态：给界面上的楼层面板用
