@@ -17,15 +17,17 @@
 // IDEO_POOL 里的卡另有 id（全局唯一）、from / to（能出现在第几级，1~15）、when（出现条件，同事件 when，
 // 另外支持 redMin / redMax / capMin / capMax 读两条进度条）。
 // 从第 3 级起，引擎按「玩家意图」决定每级给几张哪种类型的卡：本级 opts 优先，不够的从 IDEO_POOL 抽。
+import { localize } from '../i18n/tables.js';
 import T from './tables/ideology_cn.json' with { type: 'json' };
 import { fillRec } from './defs.js';
 
 // 代码弹的窗口里，选项提示引用数的 {效果.xxx} {临时.xxx}：载入时填好（{价格} 这类代码算的留着）
-for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
-  if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
-}
-for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);
-
+localize('ideology_cn', T, () => {
+  for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
+    if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
+  }
+  for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);
+});
 export const {
   IDEO_CAST,          // 主要角色（正文直接写名字）
   IDEO_STAGES,        // 15 级，按顺序。每级 2~4 个 opts，至少一张 red、一张 cap

@@ -10,14 +10,16 @@
 // 1. 选项和事件的 fx 里可以用 heat: n（反共压力，-15~+15），湾区的红色选项大多会加压力
 // 2. 普通事件（SCARE_EVENTS 等）的 fx 里可以用 ideo: { red, cap } 直接推进度条
 // 3. 多一个 SCARE_EVENTS：红色恐慌事件，由引擎在路线之争期间（when.flag: 'us_chain'）和「共享繁荣」结局之后（when.flag: 'rose'）排进来
+import { localize } from '../i18n/tables.js';
 import T from './tables/ideology_us.json' with { type: 'json' };
 import { fillRec } from './defs.js';
 
-for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
-  if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
-}
-for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);   // 同深圳版
-
+localize('ideology_us', T, () => {
+  for (const event of Object.values(T.IDEO_ENDINGS)) for (const option of event.options || []) for (const key of ['hint', 'text']) {
+    if (option[key]?.includes('{')) option[key] = fillRec(option[key], option);
+  }
+  for (const e of T.SYS_EVENTS) for (const o of e.options) if (o.hint?.includes('{')) o.hint = fillRec(o.hint, o);   // 同深圳版
+});
 export const {
   IDEO_CAST, IDEO_STAGES, IDEO_POOL, IDEO_ENDINGS, IDEO_CHAINS, UTOPIA_EVENTS, BCI_EVENTS, SCARE_EVENTS,
   ACT_TEXT, IDEO_EVENTS, SYS_EVENTS, VER,

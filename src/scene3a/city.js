@@ -1,3 +1,4 @@
+import { tr, getLang } from '../i18n/index.js';
 // 3A 版城市：办公室坐落在街区中央，四周是按「地区 + 公司等级」生成的街区。
 // 楼是真的有窗洞、窗框、阳台、屋顶设备的几何体（不是贴图盒子）；挡在镜头和办公室之间的楼会被「剖」到只剩底层商铺。
 import * as THREE from 'three';
@@ -152,7 +153,7 @@ export function createCity(stage, k, PROPS, artMat) {
   function makeSigns(bay, first = []) {                                         // first：这个街区特有的店招，排在前面
     const c = document.createElement('canvas'); c.width = 2048; c.height = 1152; const x = c.getContext('2d'), names = [...first, ...SIGNS[bay ? 'bay' : 'sz']];
     for (let i = 0; i < 36; i++) {
-      const cx = (i % 4) * 512, cy = (i / 4 | 0) * 128, [bg, fg] = SIGN_COL[i % SIGN_COL.length], name = names[i % names.length];
+      const cx = (i % 4) * 512, cy = (i / 4 | 0) * 128, [bg, fg] = SIGN_COL[i % SIGN_COL.length], name = tr(names[i % names.length]);
       x.fillStyle = bg; x.fillRect(cx, cy, 512, 128); x.strokeStyle = fg; x.globalAlpha = 0.5; x.lineWidth = 4; x.strokeRect(cx + 9, cy + 9, 494, 110); x.globalAlpha = 1;
       let fs = 78; const font = () => `900 ${fs}px "Microsoft YaHei","PingFang SC","Noto Sans SC",Impact,sans-serif`; x.font = font();
       while (x.measureText(name).width > 450 && fs > 28) { fs -= 4; x.font = font(); }
@@ -183,7 +184,7 @@ export function createCity(stage, k, PROPS, artMat) {
     ];
   }
   function build(o) {
-    const key = `${o.region}|${o.level}|${o.L.W}|${o.detail ?? 1}|${o.level <= 2 ? o.hood || '' : ''}`;
+    const key = `${getLang()}|${o.region}|${o.level}|${o.L.W}|${o.detail ?? 1}|${o.level <= 2 ? o.hood || '' : ''}`;
     if (key === (job ? job.key : live?.key)) return;
     if (job) abort();
     root = new THREE.Group(); owned = []; bakes = []; blds = []; cars = []; peds = null; night = []; wetMats = []; ticks = []; frameInfo = null;

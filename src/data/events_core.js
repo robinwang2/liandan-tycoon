@@ -2,6 +2,7 @@
 // 文字和数字都在 tables/事件.xlsx 里：「系统事件」（标题、正文、参数）、「系统选项」（选项、提示、检定、结果、效果、参数）、
 // 「系统文本」（正文里按局势换着用的几段话）。这里只有表格写不出来的逻辑，按事件 id 和选项的「脚本」名对上。
 // 写法见 src/game/scripted.js。
+import { localize } from '../i18n/tables.js';
 import T from './tables/events.json' with { type: 'json' };
 import { officeName, fillRec } from './defs.js';
 import { bindEvents } from '../game/scripted.js';
@@ -101,5 +102,7 @@ const HOOKS = {
 };
 
 // 选项和提示里引用数的 {变量}（「参数」列的名字、{效果.xxx}、{临时.xxx}、平衡参数）：载入时填好，剩下的留给脚本填
-for (const e of T.EVENTS_CORE) for (const o of e.options || []) for (const k of ['label', 'hint']) if (o[k]?.includes('{')) o[k] = fillRec(o[k], o, { ...(e.p || {}), ...(o.p || {}) });
+localize('events', { EVENTS_CORE: T.EVENTS_CORE, TEXT: T.TEXT }, () => {
+  for (const e of T.EVENTS_CORE) for (const o of e.options || []) for (const k of ['label', 'hint']) if (o[k]?.includes('{')) o[k] = fillRec(o[k], o, { ...(e.p || {}), ...(o.p || {}) });
+});
 export const EVENTS_CORE = bindEvents(T.EVENTS_CORE, HOOKS, T.TEXT);

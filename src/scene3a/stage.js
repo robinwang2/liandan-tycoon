@@ -1,6 +1,7 @@
 // 3A 版舞台：渲染器 + HDR 后期（环境光遮蔽 / 景深 / 泛光 / 调色）+ 天空昼夜天气 + 电影镜头。
 // 城市、办公室、人物都往这个舞台上摆；它只管「怎么拍」。
 import * as THREE from 'three';
+import { tr } from '../i18n/index.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
@@ -338,7 +339,7 @@ export function createStage(container) {
     setWeather(w) { if (WEATHER[w]) st.weather = w; },
     setAlert(on) { st.alertT = on ? 1 : 0; },
     shake(a) { st.shake = Math.max(st.shake, a); },
-    setQuality, quality: () => ({ q: st.q, auto: st.qAuto, gpu: GPU.name, igpu: GPU.igpu, phone: GPU.phone, tablet: GPU.tablet, scale: st.scale, fps: st.fpsCap, fpsNow: fpsCap(), res: st.res }),
+    setQuality, quality: () => ({ q: st.q, auto: st.qAuto, gpu: tr(GPU.name), igpu: GPU.igpu, phone: GPU.phone, tablet: GPU.tablet, scale: st.scale, fps: st.fpsCap, fpsNow: fpsCap(), res: st.res }),
     setScale(s) { st.scale = clamp(+s || 1, 0.5, 1.5); saveGfx(); buildPipeline(); },        // 渲染精度：在画质档的分辨率上限上再乘一个系数
     setFpsCap(c) { st.fpsCap = c == null ? null : +c; saveGfx(); },                         // null = 跟着画质档（手机档 30），0 = 不限
     onQuality(f) { qSubs.push(f); f(QUALITY[st.q]); return () => { const i = qSubs.indexOf(f); if (i >= 0) qSubs.splice(i, 1); }; },

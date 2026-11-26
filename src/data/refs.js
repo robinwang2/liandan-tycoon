@@ -1,3 +1,4 @@
+import { tr, trVar, units } from '../i18n/index.js';
 // 表格文字里引用「数」的 {变量}：说明里的数直接读这一条记录自己的数、或者平衡参数，改了数，字跟着变。
 //
 // 写法：{名字} 或者 {名字:格式}（冒号写全角的也行，几个格式可以连着写：{抬价倍数:增:去号}）
@@ -63,15 +64,15 @@ export function findRef(name, ctx) {
 // 把一段字里的 {变量} 填上。vars = 代码给的变量；P = 平衡参数；ctx 见 findRef。返回填好的字
 export function fillRefs(text, { vars, P, ...ctx } = {}) {
   if (text == null) return text;
-  return String(text).replace(/\{([^{}\s:：]+)((?:[:：][^{}\s:：]+)*)\}/g, (m, name, f) => {
+  return units(String(tr(text)).replace(/\{([^{}\s:：]+)((?:[:：][^{}\s:：]+)*)\}/g, (m, name, f) => {
     const fmts = f ? f.split(/[:：]/).filter(Boolean) : [];
-    if (vars && name in vars) { const v = vars[name]; return fmts.length ? fmtNum(v, fmts) ?? m : v; }
+    if (vars && name in vars) { const v = vars[name]; return fmts.length ? fmtNum(v, fmts) ?? m : trVar(name, v); }
     if (P && name in P) return fmtNum(P[name], fmts) ?? m;
     const r = findRef(name, ctx);
     if (!r || r.ambiguous) return m;
     if (fmts[0] === '月') return r.months != null ? fmtNum(r.months, fmts.slice(1)) ?? m : m;
     return fmtNum(r.v, fmts, r.kind) ?? m;
-  });
+  }));
 }
 // 一段字里落空的 {变量}（给校验用）：known = 代码会填的变量名
 export function missingRefs(text, { known = [], P, ...ctx } = {}) {
@@ -111,7 +112,6 @@ export function defTexts(D) {
 }
 export const refMaps = D => ({ mods: Object.fromEntries(D.MODS.map(m => [m.zh, m.id])), attrs: Object.fromEntries(D.ATTRS.map(a => [a.name, a.id])) });
 // 载入设定.xlsx 时调用：把说明里的 {变量} 填好（游戏里拿到的就是填好的字；表格和 JSON 里留着变量）
-export function fillDefs(D, P) {
-  const maps = refMaps(D);
+export function fillDefs(D, P, maps = refMaps(D)) {
   for (const [name, , rec, key, host] of defTexts(D)) host[key] = fillRefs(host[key], { P, rec, ...maps, fields: DEF_FIELDS[name].fields, bare: true });
 }

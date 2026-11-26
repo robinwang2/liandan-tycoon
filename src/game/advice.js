@@ -163,7 +163,7 @@ const RULES = [
   function selfdev(S) {
     const r = avail(S, 'selfdev');
     if (!r || G.runway(S) < P['advice.selfdev.runway'] || S.cash < P['advice.selfdev.cash'] * ACT.selfdev.cost(S)) return null;
-    return { id: 'selfdev', lv: 'gold', icon: T(S, 'advice.selfdev.icon'), title: T(S, 'advice.selfdev.title'), text: T(S, 'advice.selfdev.text', { 轮次: STAGES[S.stage].name, 上游: G.rivalOf(S, S.upstream)?.name || '' }), act: 'selfdev', later: r.later };
+    return { id: 'selfdev', lv: 'gold', icon: T(S, 'advice.selfdev.icon'), title: T(S, 'advice.selfdev.title'), text: T(S, 'advice.selfdev.text', { 轮次: STAGES[S.stage].name, 上游: G.rivalName(G.rivalOf(S, S.upstream)) }), act: 'selfdev', later: r.later };
   },
   // ── 留意 ──
   function premium(S) {                                                         // 超出配额的卡在按现货价烧钱：提醒去要配额

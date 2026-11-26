@@ -1,3 +1,5 @@
+import { getLang, setLang, onLanguage, tr } from '../i18n/index.js';
+import { dialogView } from './dialog-view.js';
 // 《炼丹大亨》界面层：DOM 浮层，负责渲染、接收点击、调度引擎和 3D 场景。
 import * as G from '../game/engine.js';
 import * as A from '../game/actions.js';
@@ -13,6 +15,7 @@ import { icon } from './icons.js';
 import { playThemeFx, stopThemeFx } from './themefx.js';
 import { createAudio } from '../audio/audio.js';
 import { text, fill, TEXT } from '../data/text.js';
+import { nameBits, namePool, defaultName, displayName, playerName, playerModel } from '../data/player-names.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const nl = s => esc(s).replace(/\n/g, '<br>');
@@ -50,34 +53,37 @@ const chainInfo = id => (id === 'ideo' ? { title: text('ideo.page.chain'), icon:
 const ACT_IC = { code: 'code', release: 'rocket', furnace: 'swap', selfdev: 'target', sprint: 'puzzle', paper: 'paper', headhunt: 'search_user', teambuild: 'party', pie: 'cake', office: 'building', raise: 'handshake', roadshow: 'mic', ipo: 'bell', sellcourse: 'book', subsidy: 'gift', lobby: 'capitol', hype: 'megaphone_loud', ads: 'ad', goodpr: 'heart', navy: 'ghost', fakeusers: 'mask', wash: 'washer', digdirt: 'shovel', beg: 'hand', sweep: 'broom', agi: 'sparkles', mobilize: 'megaphone_loud', utopia: 'sun', selfcrit: 'eye', subbotnik: 'broom', plan: 'calendar', yank: 'target', bci: 'bolt', buyback: 'swap', costcut: 'minus', spinoff: 'rocket' };
 
 // 建角向导里「🎲 随机」用的名字（一行一个）
-const RAND = {
-  bay: { name: lines('ui.rand.name', true), co: lines('ui.rand.co', true) },
-  sz: { name: lines('ui.rand.name', false), co: lines('ui.rand.co', false) },
-  model: lines('ui.rand.model'),
-};
+const wizardName = (wizard, field) => displayName(field, wizard[field], wizard.region, wizard.autoNames);
+function rollName(wizard, field) {
+  wizard[field] = rnd(namePool(field, wizard.region));
+  wizard.autoNames |= nameBits[field];
+}
 const TITLE_STAFF = ['res', 'eng', 'eng', 'ops', 'biz', 'legal', 'res'].map((role, i) => ({ id: 't' + i, role, mood: 60 + i * 5 }));
 const LONGHAIR = `<svg class="art" width="118" height="118" viewBox="0 0 120 120"><path d="M26 60Q22 14 60 12Q98 14 94 60L98 104Q88 96 84 70L36 70Q32 96 22 104Z" fill="#2b2220" stroke="#1e2233" stroke-width="3"/><ellipse cx="60" cy="56" rx="26" ry="29" fill="#f3c9a3" stroke="#1e2233" stroke-width="3"/><path d="M34 46Q40 22 60 24Q80 22 86 46Q72 34 60 38Q48 34 34 46Z" fill="#2b2220"/><rect x="38" y="48" width="18" height="13" rx="3" fill="#fff" stroke="#111" stroke-width="3.5"/><rect x="64" y="48" width="18" height="13" rx="3" fill="#fff" stroke="#111" stroke-width="3.5"/><path d="M56 54h8" stroke="#111" stroke-width="3.5"/><circle cx="47" cy="55" r="2.5"/><circle cx="73" cy="55" r="2.5"/><ellipse cx="60" cy="74" rx="8" ry="6" fill="#7a1f1f" stroke="#1e2233" stroke-width="2.5"/><path d="M30 118Q32 92 60 92Q88 92 90 118Z" fill="#c8402f" stroke="#1e2233" stroke-width="3"/><path d="M44 94v24M60 92v26M76 94v24M32 106h56" stroke="#7a1f1f" stroke-width="2" opacity=".7"/></svg>`;
 const brandLogo = (co, size) => (co?.logo ? logoSVG(co.logo, co.brand, size) : '⚗️');
 
 // ───────── 标题 / 建角 / 局外 ─────────
+const langButton = () => `<button class="btn lang-toggle" data-a="lang" aria-label="${getLang() === 'en' ? '切换到中文' : 'Switch to English'}">${getLang() === 'en' ? '中' : 'EN'}</button>`;
 function title() {
   const save = G.loadGame();
   return `<section class="title"><h1>${uh('ui.title.name')}</h1><p class="sub">${uh('ui.title.sub', { 起: START_YEAR, 止: START_YEAR + MONTHS / 12 - 1 })}</p>
   <div class="tbtns"><button class="btn big go" data-a="new">${uh('ui.title.new')}</button>
-  ${save ? `<button class="btn big" data-a="continue">${uh('ui.title.continue')}<small>${esc(save.co.name)} · ${G.dateStr(save.t)}</small></button>` : ''}
-  <button class="btn" data-a="meta">${uh('ui.title.meta')}<small>${uh('ui.points', { 点数: meta.points })}</small></button><button class="btn" data-a="settings">${icon('settings', 18)}${uh('ui.title.settings')}</button></div>
-  ${office?.quality?.()?.igpu ? `<p class="gpu-tip">${uh('ui.title.igpu', { 显卡: esc(office.quality().gpu), 建议: GPU_TIP })}</p>` : ''}
+  ${save ? `<button class="btn big" data-a="continue">${uh('ui.title.continue')}<small>${esc(playerName(save, 'coName'))} · ${G.dateStr(save.t)}</small></button>` : ''}
+  ${langButton()}<button class="btn" data-a="meta">${uh('ui.title.meta')}<small>${uh('ui.points', { 点数: meta.points })}</small></button><button class="btn" data-a="settings">${icon('settings', 18)}${uh('ui.title.settings')}</button></div>
+  ${office?.quality?.()?.igpu ? `<p class="gpu-tip">${uh('ui.title.igpu', { 显卡: esc(office.quality().gpu), 建议: uh('ui.gpuTip') })}</p>` : ''}
   <p class="fine">${uh('ui.title.fine')}<br>${uh('ui.title.record', { 次数: meta.runs, 最高分: meta.best })}</p></section>`;
 }
 const firstOf = (group, region) => TRAITS[group].find(t => !t.region || t.region === region).id;
 function newWizard() {
   const region = 'bay', attrs = Object.fromEntries(ATTRS.map(a => [a.id, P['start.attrBase']]));
-  return {
-    step: 0, name: rnd(RAND[region].name), coName: rnd(RAND[region].co), modelName: rnd(RAND.model), region, attrs, pts: P['start.attrPoints'] + (meta.own.m_point ? P['meta.attrPoint'] : 0) + (meta.own.m_point2 ? P['meta.attrPoint'] : 0),
+  const wizard = {
+    step: 0, autoNames: 0, region, attrs, pts: P['start.attrPoints'] + (meta.own.m_point ? P['meta.attrPoint'] : 0) + (meta.own.m_point2 ? P['meta.attrPoint'] : 0),
     edu: 'yao', bg: 'bigtech', quirk: 'none', motto: 'm_allin', outfit: 'turtleneck', route: 'model', track: 'chat',
     cofounder: 'c_solo', seed: 's_self', district: firstOf('district', region), mission: 'v_agi', logo: LOGOS[region][0].id, brand: BRAND_COLORS[0],
     tutorial: meta.runs === 0,                                               // 第一次玩默认开新手教学
   };
+  for (const field of Object.keys(nameBits)) rollName(wizard, field);
+  return wizard;
 }
 const ptsLeft = W => W.pts - ATTRS.reduce((a, x) => a + W.attrs[x.id] - P['start.attrBase'], 0);
 const wizTraits = W => [W.edu, W.bg, W.quirk, W.motto, W.cofounder, W.seed, W.district, W.mission];
@@ -94,7 +100,7 @@ function wizard() {
   }).join('')}</div>`;
   let body = '';
   if (W.step === 0) {
-    body = `<h2>${uh('ui.wiz.name.h')}</h2><div class="form"><label>${uh('ui.wiz.name.label')}<input data-f="name" maxlength="12" value="${esc(W.name)}"></label><button class="btn sm" data-a="w:rand">${uh('ui.wiz.rand')}</button></div>
+    body = `<h2>${uh('ui.wiz.name.h')}</h2><div class="form"><label>${uh('ui.wiz.name.label')}<input data-f="name" maxlength="12" value="${esc(wizardName(W, 'name'))}"></label><button class="btn sm" data-a="w:rand">${uh('ui.wiz.rand')}</button></div>
     <h2>${uh('ui.wiz.region.h')}</h2><div class="cards2">${Object.values(REGIONS).map(r => `<button class="pick ${W.region === r.id ? 'on' : ''}" data-a="w:region:${r.id}"><span class="pi">${r.icon}</span><b>${r.name}</b><em>${r.tagline}</em><ul>${r.desc.map(d => `<li>${d}</li>`).join('')}</ul><small>${uh('ui.wiz.region.cash', { 币: r.cur, 金额: r.cash })}</small></button>`).join('')}</div>
     <h2>${uh('ui.wiz.outfit.h')}</h2><div class="cards4">${OUTFITS.map(o => `<button class="pick sm ${W.outfit === o.id ? 'on' : ''}" data-a="w:pick:outfit:${o.id}"><span class="pi">${o.icon}</span><b>${o.name}</b><small>${o.desc}</small></button>`).join('')}</div>
     ${grp('motto', uh('ui.wiz.motto.h'))}`;
@@ -109,23 +115,23 @@ function wizard() {
     ${grp('cofounder', uh('ui.wiz.cofounder.h'))}${grp('seed', uh('ui.wiz.seed.h'))}${grp('district', uh('ui.wiz.district.h'))}`;
   } else {
     const pv = startPreview(W), ms = TRAIT[W.mission];
-    body = `<h2>${uh('ui.wiz.co.h')}</h2><div class="form"><label>${uh('ui.wiz.co.label')}<input data-f="coName" maxlength="10" value="${esc(W.coName)}"></label><label>${uh('ui.wiz.model.label')}<input data-f="modelName" maxlength="8" value="${esc(W.modelName)}"></label><button class="btn sm" data-a="w:randco">${uh('ui.wiz.rand')}</button></div>
+    body = `<h2>${uh('ui.wiz.co.h')}</h2><div class="form"><label>${uh('ui.wiz.co.label')}<input data-f="coName" maxlength="10" value="${esc(wizardName(W, 'coName'))}"></label><label>${uh('ui.wiz.model.label')}<input data-f="modelName" maxlength="8" value="${esc(wizardName(W, 'modelName'))}"></label><button class="btn sm" data-a="w:randco">${uh('ui.wiz.rand')}</button></div>
     <h2>${uh('ui.wiz.logo.h')}<small>${uh('ui.wiz.logo.tip', null, W.region === 'bay')}</small></h2>
     <div class="logos">${LOGOS[W.region].map(l => `<button class="lgp ${W.logo === l.id ? 'on' : ''}" data-a="w:pick:logo:${l.id}">${logoSVG(l.id, W.brand, 50)}<b>${l.name}</b><small>${l.desc}</small></button>`).join('')}</div>
     <h2>${uh('ui.wiz.brand.h')}</h2><div class="swatches">${BRAND_COLORS.map(c => `<button class="sw ${W.brand === c ? 'on' : ''}" style="--c:${c}" data-a="w:brand:${c}" aria-label="${uh('ui.wiz.brand.aria', { 颜色: c })}"></button>`).join('')}</div>
     ${grp('mission', uh('ui.wiz.mission.h'), 'cards2')}
-    <div class="brandcard">${logoSVG(W.logo, W.brand, 64)}<div><h3 data-live="co">${esc(W.coName)}</h3><p>${ms.name}</p></div><div class="nums"><small>${uh('ui.wiz.card.cash')}</small><b>${uh('ui.wiz.card.cashValue', { 币: R.cur, 金额: Math.round(pv.cash) })}</b><small>${uh('ui.wiz.card.equity', { 股权: pv.eq })}</small></div></div>
+    <div class="brandcard">${logoSVG(W.logo, W.brand, 64)}<div><h3 data-live="co">${esc(wizardName(W, 'coName'))}</h3><p>${ms.name}</p></div><div class="nums"><small>${uh('ui.wiz.card.cash')}</small><b>${uh('ui.wiz.card.cashValue', { 币: R.cur, 金额: Math.round(pv.cash) })}</b><small>${uh('ui.wiz.card.equity', { 股权: pv.eq })}</small></div></div>
     <label class="chkline"><input type="checkbox" data-f="tutorial" ${W.tutorial ? 'checked' : ''}> <b>${uh('ui.wiz.tutorial')}</b>${uh('ui.wiz.tutorial.desc')}</label>`;
   }
   return `<section class="wizard panel"><div class="wsteps">${steps.map((s, i) => `<span class="${i === W.step ? 'on' : i < W.step ? 'done' : ''}">${i + 1}. ${s}</span>`).join('')}</div><div class="wbody scroll" data-sc="w${W.step}">${body}</div>
-  <div class="wfoot"><button class="btn ghost" data-a="${W.step ? 'w:step:-1' : 'back'}">${W.step ? uh('ui.wiz.prev') : uh('ui.back')}</button>${W.step === 1 && ptsLeft(W) > 0 ? `<small>${uh('ui.wiz.unspent', { 点数: ptsLeft(W) })}</small>` : ''}${W.step < 4 ? `<button class="btn big" data-a="w:step:1">${uh('ui.wiz.next')}</button>` : `<button class="btn big go" data-a="w:start">${uh('ui.wiz.start')}</button>`}</div></section>`;
+  <div class="wfoot">${langButton()}<button class="btn ghost" data-a="${W.step ? 'w:step:-1' : 'back'}">${W.step ? uh('ui.wiz.prev') : uh('ui.back')}</button>${W.step === 1 && ptsLeft(W) > 0 ? `<small>${uh('ui.wiz.unspent', { 点数: ptsLeft(W) })}</small>` : ''}${W.step < 4 ? `<button class="btn big" data-a="w:step:1">${uh('ui.wiz.next')}</button>` : `<button class="btn big go" data-a="w:start">${uh('ui.wiz.start')}</button>`}</div></section>`;
 }
 function metaScreen() {
   return `<section class="wizard panel"><div class="wsteps"><span class="on">${uh('ui.meta.h')}</span><b class="mp">${uh('ui.points', { 点数: meta.points })}</b></div><div class="wbody scroll" data-sc="m">
   <h2>${uh('ui.meta.shop')}<small>${uh('ui.meta.shop.tip')}</small></h2><div class="shop">${META_SHOP.map(it => { const own = meta.own[it.id], lock = it.need && !meta.own[it.need]; return `<button class="pick sm ${own ? 'on' : ''}" data-a="buy:${it.id}" ${own || lock || meta.points < it.cost ? 'disabled' : ''}><b>${it.name}</b><small>${own ? uh('ui.meta.owned') : lock ? uh('ui.meta.needPrev') : uh('ui.meta.cost', { 点数: it.cost })}</small></button>`; }).join('')}</div>
   <h2>${uh('ui.meta.ends')}<small>${Object.keys(meta.ends).length}/${Object.keys(ENDINGS).length}</small></h2><div class="gal">${Object.entries(ENDINGS).map(([id, e]) => (meta.ends[id] ? `<span class="got" title="${uh('ui.meta.endCount', { 次数: meta.ends[id] })}">${e.icon} ${e.name}</span>` : `<span>${uh('ui.meta.unknown')}</span>`)).join('')}</div>
   <h2>${uh('ui.meta.ach')}<small>${Object.keys(meta.ach).length}/${Object.keys(ACHIEVEMENTS).length}</small></h2><div class="gal">${Object.entries(ACHIEVEMENTS).map(([id, a]) => `<span class="${meta.ach[id] ? 'got' : ''}" title="${esc(a.desc)}">${meta.ach[id] ? a.icon : '🔒'} ${a.name}</span>`).join('')}</div>
-  </div><div class="wfoot"><button class="btn ghost" data-a="back">${uh('ui.back')}</button></div></section>`;
+  </div><div class="wfoot">${langButton()}<button class="btn ghost" data-a="back">${uh('ui.back')}</button></div></section>`;
 }
 
 // ───────── 经营主界面 ─────────
@@ -133,13 +139,13 @@ const chip = (ic, label, val, sub, cls = '') => `<div class="chip ${cls}"><span 
 const skillDots = n => `<span class="dots">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(10 - n)}</span>`;
 function topbar() {
   const net = G.revenue(S).total - G.costs(S).total, rw = G.runway(S), apm = Math.max(G.apMax(S), S.ap);
-  return `<header class="top panel"><div class="brand"><span class="logo" data-a="menu" title="${uh('ui.top.menu')}">${brandLogo(S.co, 36)}</span><div><b>${esc(S.co.name)}</b><span class="stage">${STAGES[S.stage].name}</span><br><small>${uh('ui.top.when', { 日期: G.dateStr(Math.min(S.t, MONTHS)), 月: Math.min(S.t, MONTHS), 总: MONTHS, 地区: REGIONS[S.co.region].name, 办公室: officeName(S) })}</small></div></div>
+  return `<header class="top panel"><div class="brand"><span class="logo" data-a="menu" title="${uh('ui.top.menu')}">${brandLogo(S.co, 36)}</span><div><b>${esc(playerName(S, 'coName'))}</b><span class="stage">${STAGES[S.stage].name}</span><br><small>${uh('ui.top.when', { 日期: G.dateStr(Math.min(S.t, MONTHS)), 月: Math.min(S.t, MONTHS), 总: MONTHS, 地区: REGIONS[S.co.region].name, 办公室: (getLang() === 'en' ? ' · ' : '') + officeName(S) })}</small></div></div>
   <div class="chips">${chip(icon('cash', 20), uh('ui.top.cash'), G.money(S, S.cash), uh('ui.top.net', { 净: G.money(S, net, true), 续航: rw >= 99 ? uh('ui.top.profit') : uh('ui.top.runway', { 月数: rw < 1 ? uh('ui.top.runway.lt1') : Math.floor(rw) }) }), net < 0 && rw < P['advice.cash.runway'] ? 'bad' : net >= 0 ? 'good' : '')}
   ${chipOpen(S, 'val') ? chip(icon('valuation', 20), uh('ui.top.val'), G.money(S, G.valuation(S)), uh('ui.top.perf', { 业绩: G.perf(S).toFixed(2) })) : ''}
   ${!chipOpen(S, 'users') ? '' : chip(icon('users', 20), uh('ui.top.users'), G.fmtUsers(S.users + S.fake), S.fake > 0.5 ? uh('ui.top.fake', { 假用户: G.fmtUsers(S.fake) }) : uh('ui.top.share', { 份额: (S.users / G.market(S) * 100).toFixed(1) }))}
-  ${!chipOpen(S, 'rank') ? '' : S.model ? chip(icon('trophy', 20), uh('ui.top.rank'), uh('ui.top.rankN', { 名次: G.rank(S) }), uh('ui.top.bench', { 模型: esc(S.model.name), 跑分: S.model.bench.toFixed(1) })) : chip(icon('flask', 20), uh('ui.top.model'), uh('ui.top.wrapper'), uh('ui.top.api', { 上游: esc(G.rivalOf(S, S.upstream).name) }))}
+  ${!chipOpen(S, 'rank') ? '' : S.model ? chip(icon('trophy', 20), uh('ui.top.rank'), uh('ui.top.rankN', { 名次: G.rank(S) }), uh('ui.top.bench', { 模型: esc(playerModel(S)), 跑分: S.model.bench.toFixed(1) })) : chip(icon('flask', 20), uh('ui.top.model'), uh('ui.top.wrapper'), uh('ui.top.api', { 上游: esc(G.rivalName(G.rivalOf(S, S.upstream))) }))}
   ${!chipOpen(S, 'equity') ? '' : chip(icon('pie', 20), uh('ui.top.equity'), S.equity.toFixed(0) + '%', S.equity < P['coup.equity'] ? uh('ui.top.equity.warn') : uh('ui.top.equity.ok'), S.equity < P['ui.equityBad'] ? 'bad' : '')}</div>
-  <div class="turn"><div class="ap" title="${uh('ui.top.ap')}">${'<i class="on"></i>'.repeat(Math.max(0, S.ap))}${'<i></i>'.repeat(Math.max(0, apm - S.ap))}</div><button class="btn icon" data-a="settings" title="${uh('ui.title.settings')}">${icon('settings', 18)}</button><button class="btn big next" data-a="next">${uh('ui.top.next')} ${icon('next', 18)}</button></div></header>`;
+  <div class="turn">${langButton()}<div class="ap" title="${uh('ui.top.ap')}">${'<i class="on"></i>'.repeat(Math.max(0, S.ap))}${'<i></i>'.repeat(Math.max(0, apm - S.ap))}</div><button class="btn icon" data-a="settings" title="${uh('ui.title.settings')}">${icon('settings', 18)}</button><button class="btn big next" data-a="next">${uh('ui.top.next')} ${icon('next', 18)}</button></div></header>`;
 }
 function actCard(a) {
   const st = A.actionState(S, a), rec = !st.why && V.recActs.has(a.id);                     // rec：顶部提示里建议现在做的
@@ -167,7 +173,7 @@ function opsPanel() {
     <div class="gpurow"><button class="btn sm" data-a="gpu:min">0</button><button class="btn sm" data-a="gpu:-">−</button><b>${uh('ui.gpu.count', { 张数: S.gpu })}</b><button class="btn sm" data-a="gpu:+">＋</button><button class="btn sm" data-a="gpu:max" title="${uh('ui.gpu.max.tip')}">${uh('ui.gpu.max')}</button></div>
     <small><b style="color:var(--sky)">■</b> ${uh('ui.gpu.infer', { 用了: Math.min(need, S.gpu), 需要: need })}${need > S.gpu ? ` <b class="bad">${uh('ui.gpu.short')}</b>` : ''} · <b style="color:var(--coral)">■</b> ${uh('ui.gpu.train', { 张数: Math.max(0, S.gpu - need) })}<br>${uh('ui.gpu.rent', { 月租: G.money(S, G.gpuRent(S)) })}${note}${brain ? `<br>${uh('ui.gpu.brain', { 卡: `<b>${uh('ui.gpu.brain.n', { 张数: brain })}</b>` })}` : ''}</small></div>`;
   } else {
-    h += `<p class="note">${uh('ui.ops.wrapper', { 上游: `<b>${esc(G.rivalOf(S, S.upstream).name)}</b>`, 能力: G.upCap(S).toFixed(0), 账单: G.money(S, G.costs(S).api) })}</p>`;
+    h += `<p class="note">${uh('ui.ops.wrapper', { 上游: `<b>${esc(G.rivalName(G.rivalOf(S, S.upstream)))}</b>`, 能力: G.upCap(S).toFixed(0), 账单: G.money(S, G.costs(S).api) })}</p>`;
   }
   if (isOpen(S, 'policy')) h += Object.entries(POLICIES).map(([k, P]) => `<h4>${P.name}</h4><div class="seg">${Object.entries(P.opts).map(([v, o]) => `<button class="${String(S.policies[k]) === v ? 'on' : ''}" data-a="pol:${k}:${v}" title="${esc(o.desc)}">${o.name}</button>`).join('')}</div><small class="note">${esc(P.opts[S.policies[k]].desc)}</small>`).join('');
   return h + `<h4>${uh('ui.acts.h')}</h4>`;
@@ -200,7 +206,7 @@ function ideoPanel() {
     <p class="note">${esc(IDEO.leanText(S))}</p>
     <p class="note">${ivh('ideo.page.rule')}<br>${ivh('ideo.page.equity', { 股权: `<b class="${S.equity < IDEO.IDEO_EQUITY ? 'bad' : S.equity < P['ideo.equityWarn'] ? 'warn' : 'good'}">${S.equity.toFixed(0)}%</b>`, 底线: IDEO.IDEO_EQUITY })}${heatLine() ? `<br>${heatLine()}` : ''}${reds ? `<br>${ivh('ideo.page.reds', { 人数: reds })}` : ''}</p>
     <h4>${ivh('ideo.page.cast')}</h4><div class="cast">${['rep', 'red', 'cap'].map(k => `<div class="${k}"><b>${esc(C[k].name)}</b><small>${esc(C[k].role)}</small><p>${esc(C[k].desc)}</p></div>`).join('')}</div>`;
-    if (I.picks.length) h += `<h4>${ivh('ideo.page.picks')}</h4><ul class="ipicks">${I.picks.slice(-6).reverse().map(p => `<li class="${p.side}"><small>${ivh('ideo.page.pickN', { 级: p.n })}</small>${esc(p.label)}</li>`).join('')}</ul>`;
+    if (I.picks.length) h += `<h4>${ivh('ideo.page.picks')}</h4><ul class="ipicks">${I.picks.slice(-6).reverse().map(p => `<li class="${p.side}"><small>${ivh('ideo.page.pickN', { 级: p.n })}</small>${esc(tr(p.label))}</li>`).join('')}</ul>`;
     return h;
   }
   const R = RESULT_OF(I.result), st = [];
@@ -235,13 +241,13 @@ function emblemHTML() {
 }
 // 湾区的哈桑·拍客彩蛋：插画上叠一个卡通主播（原创形象，不是任何真人的肖像）
 const STREAMER = '<svg class="art" width="118" height="118" viewBox="0 0 120 120"><circle cx="60" cy="56" r="47" fill="none" stroke="#fff3d6" stroke-width="7" opacity=".55"/><path d="M14 120Q16 92 42 88L78 88Q104 92 106 120Z" fill="#c98a62" stroke="#1e2233" stroke-width="3"/><path d="M38 120L41 92Q60 101 79 92L82 120Z" fill="#2e3442" stroke="#1e2233" stroke-width="3"/><rect x="50" y="74" width="20" height="16" fill="#c98a62" stroke="#1e2233" stroke-width="3"/><ellipse cx="60" cy="54" rx="24" ry="27" fill="#d49a72" stroke="#1e2233" stroke-width="3"/><path d="M36 50Q36 26 60 26Q84 26 84 50Q80 38 70 36Q60 40 50 36Q40 40 36 50Z" fill="#2b2220" stroke="#1e2233" stroke-width="3"/><path d="M37 58Q38 82 60 84Q82 82 83 58Q78 70 72 68Q60 74 48 68Q42 70 37 58Z" fill="#2b2220" stroke="#1e2233" stroke-width="2.5"/><path d="M46 47h9M65 47h9" stroke="#1e2233" stroke-width="3.5" stroke-linecap="round"/><circle cx="51" cy="54" r="2.6" fill="#1e2233"/><circle cx="69" cy="54" r="2.6" fill="#1e2233"/><path d="M53 71Q60 75 67 71" fill="none" stroke="#f3e6d8" stroke-width="2.5" stroke-linecap="round"/><path d="M33 52Q33 20 60 20Q87 20 87 52" fill="none" stroke="#22252d" stroke-width="5"/><rect x="27" y="46" width="11" height="18" rx="5" fill="#3a3f4c" stroke="#1e2233" stroke-width="2.5"/><rect x="82" y="46" width="11" height="18" rx="5" fill="#3a3f4c" stroke="#1e2233" stroke-width="2.5"/><path d="M33 62Q36 76 49 76" fill="none" stroke="#22252d" stroke-width="3"/><rect x="47" y="72" width="9" height="7" rx="3.5" fill="#e5484d" stroke="#1e2233" stroke-width="2"/><circle cx="46" cy="104" r="4.5" fill="#e0435e" stroke="#1e2233" stroke-width="2"/></svg>';
-const RTABS = [['board', 'board'], ['chain', 'pin'], ['team', 'team'], ['safe', 'safe'], ['perks', 'cards'], ['fin', 'ledger'], ['log', 'news']].map(([id, ic]) => [id, icon(ic, 18), text('ui.rtab.' + id)]);
+const rightTabs = () => [['board', 'board'], ['chain', 'pin'], ['team', 'team'], ['safe', 'safe'], ['perks', 'cards'], ['fin', 'ledger'], ['log', 'news']].map(([id, ic]) => [id, icon(ic, 18), text('ui.rtab.' + id)]);
 // 情境日志：进行中的特殊项目 + 各条事件链的进展
 function chainTab() {
   const proj = S.projects.map(p => {
     const rate = G.projectRate(S, p), left = Math.max(0, p.need - p.done), ch = chainInfo(p.chain);
     const eta = left <= 0 ? uh('ui.proj.check') : p.kind === 'ap' ? uh('ui.proj.apOnly') : rate > 0.01 ? uh('ui.proj.eta', { 月数: Math.ceil(left / rate) }) : uh('ui.proj.stalled');
-    return `<div class="proj"><b>${ch ? ch.icon : '📌'} ${esc(p.name)}</b><small>${esc(p.desc)}</small><div class="bar"><i style="width:${pct(p.done, p.need)}%"></i></div><small>${uh('ui.proj.line', { 类型: KIND_NAME[p.kind], 进度: eta, 日期: G.dateStr(p.due) })}${p.due - S.t <= P['advice.proj.urgent'] && left > 0 ? ` <b class="bad">${uh('ui.proj.late')}</b>` : ''}</small><button class="btn sm" data-a="push:${p.uid}" ${S.ap < 1 || left <= 0 ? 'disabled' : ''}>${uh('ui.proj.push')}</button></div>`;
+    return `<div class="proj"><b>${ch ? ch.icon : '📌'} ${esc(tr(p.name))}</b><small>${esc(tr(p.desc))}</small><div class="bar"><i style="width:${pct(p.done, p.need)}%"></i></div><small>${uh('ui.proj.line', { 类型: KIND_NAME[p.kind], 进度: eta, 日期: G.dateStr(p.due) })}${p.due - S.t <= P['advice.proj.urgent'] && left > 0 ? ` <b class="bad">${uh('ui.proj.late')}</b>` : ''}</small><button class="btn sm" data-a="push:${p.uid}" ${S.ap < 1 || left <= 0 ? 'disabled' : ''}>${uh('ui.proj.push')}</button></div>`;
   }).join('');
   const logs = Object.values(S.chains).sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0) || b.t - a.t).map(c => {
     const ch = chainInfo(c.id) || { title: c.id, icon: '📜' };
@@ -257,14 +263,14 @@ function rightBody() {
   }
   if (V.rtab === 'chain') return chainTab();
   if (V.rtab === 'team') return `<p class="note">${uh('ui.team.note', { 人数: S.staff.length, 上限: G.teamCap(S), 月薪: G.money(S, G.costs(S).salary) })}</p>` + (S.staff.length ? S.staff.map(e => person(e, `<button class="btn sm ghost" data-a="fire:${e.uid}" title="${uh('ui.team.fire', { 月数: P['fire.payMonths'] })}">✕</button>`)).join('') : `<p class="empty">${uh('ui.team.none')}</p>`);
-  if (V.rtab === 'safe') return (S.dirt.length ? S.dirt.map(d => `<div class="dirt"><b>${esc(d.name)}</b>${DIRT[d.type]?.crime ? `<i>${uh('ui.dirt.crime')}</i>` : ''}<div class="bar"><i style="width:${Math.min(100, d.sev * 2.5)}%"></i></div><small>${uh('ui.dirt.line', { 严重度: Math.round(d.sev), 日期: G.dateStr(d.t) })}</small></div>`).join('') : `<p class="empty">${uh('ui.dirt.none')}</p>`)
+  if (V.rtab === 'safe') return (S.dirt.length ? S.dirt.map(d => `<div class="dirt"><b>${esc(tr(d.name))}</b>${DIRT[d.type]?.crime ? `<i>${uh('ui.dirt.crime')}</i>` : ''}<div class="bar"><i style="width:${Math.min(100, d.sev * 2.5)}%"></i></div><small>${uh('ui.dirt.line', { 严重度: Math.round(d.sev), 日期: G.dateStr(d.t) })}</small></div>`).join('') : `<p class="empty">${uh('ui.dirt.none')}</p>`)
     + `<p class="note">${uh('ui.dirt.note')}<br>${uh('ui.dirt.exposed', { 累计: Math.round(S.exposed), 违法: S.exposedCrime >= P['ui.crimeShow'] ? uh('ui.dirt.exposedCrime', { 违法: Math.round(S.exposedCrime), 经侦线: P['scandal.probeLine'] }) : '' })}</p>`;
   if (V.rtab === 'perks') {
     const temps = S.temp.filter(t => t.until - S.t < 900).map(t => `<li>${MOD_NAME[t.key] || t.key} ${t.mult != null ? '×' + t.mult : (t.add > 0 ? '+' : '') + t.add}<small> ${uh('ui.perks.left', { 月数: t.until - S.t })}</small></li>`).join('');
     return (S.perks.length ? S.perks.map(id => `<div class="perk r${PERK[id].r}"><span>${PERK[id].icon}</span><div><b>${PERK[id].name}</b><small>${PERK[id].desc}</small></div></div>`).join('') : `<p class="empty">${uh('ui.perks.none')}</p>`)
       + (S.feats.length ? `<h4>${uh('ui.perks.feats')}</h4><div class="feats">${S.feats.map(id => `<span title="${esc(FEAT[id].desc)}">${FEAT[id].icon} ${FEAT[id].name}</span>`).join('')}</div>` : '')
       + (temps ? `<h4>${uh('ui.perks.temps')}</h4><ul class="temps">${temps}</ul>` : '')
-      + `<h4>${uh('ui.perks.founder', { 名字: esc(S.founder.name) })}</h4><div class="feats">${ATTRS.map(a => `<span title="${a.desc}">${a.icon} ${a.name} ${S.founder.attrs[a.id]}</span>`).join('')}</div><div class="feats">${S.founder.traits.map(id => `<span title="${esc(TRAIT[id].desc)}">${TRAIT[id].icon} ${TRAIT[id].name}</span>`).join('')}</div>`;
+      + `<h4>${uh('ui.perks.founder', { 名字: esc(playerName(S, 'name')) })}</h4><div class="feats">${ATTRS.map(a => `<span title="${a.desc}">${a.icon} ${a.name} ${S.founder.attrs[a.id]}</span>`).join('')}</div><div class="feats">${S.founder.traits.map(id => `<span title="${esc(TRAIT[id].desc)}">${TRAIT[id].icon} ${TRAIT[id].name}</span>`).join('')}</div>`;
   }
   if (V.rtab === 'fin') {
     const rv = G.revenue(S), cs = G.costs(S), net = rv.total - cs.total, row = (n, v, neg) => (v > 0.05 ? `<div class="fr"><span>${n}</span><b class="${neg ? 'bad' : 'good'}">${G.money(S, neg ? -v : v, true)}</b></div>` : '');
@@ -276,7 +282,7 @@ function rightBody() {
 }
 function rightPanel() {
   if (!rightOpen(S)) return '';                                             // 教学第一个月：右边先不出现
-  const tabs = RTABS.filter(([id]) => rtabOpen(S, id));
+  const tabs = rightTabs().filter(([id]) => rtabOpen(S, id));
   if (!tabs.some(([id]) => id === V.rtab)) V.rtab = tabs[0]?.[0] || 'team';
   const g = (id, ic, name, v, color, tip) => !gaugeOpen(S, id) ? '' : `<div class="g" title="${tip}"><span>${ic} ${name}</span><div class="bar"><i style="width:${Math.round(v)}%;background:${color}"></i></div><b>${Math.round(v)}</b></div>`;
   const badge = id => (id === 'safe' && S.dirt.length ? ` ${S.dirt.length}` : id === 'chain' && S.projects.length ? ` ${S.projects.length}` : '');
@@ -297,7 +303,7 @@ function bottom() {
     const link = idle ? ` data-a="${now ? 'act:sprint' : 'ltab:rd'}" title="${now ? uh('ui.w.sprint.tip') : uh('ui.w.noAp.tip')}"` : '';
     items.push(`<div class="w${idle ? ' ready' : ''}"${link}><span class="big">${TRACKS[S.co.track].icon}</span><div><b>${uh('ui.w.product', { 赛道: TRACKS[S.co.track].name, 体验: S.quality.toFixed(0) })}</b><br><small>${S.sprint ? uh('ui.w.dev', { 功能: FEAT[S.sprint.id].name, 进度: Math.round(S.sprint.done / S.sprint.need * 100) }) : idle ? (now ? uh('ui.w.idle') : uh('ui.w.idleLater')) : uh('ui.w.allDone')}</small></div></div>`);
   }
-  if (S.projects.length) { const p = S.projects[0]; items.push(`<div class="w" data-a="rtab:chain" style="cursor:pointer"><span class="big">📌</span><div><b>${uh('ui.w.proj', { 个数: S.projects.length })}</b><br><small>${esc(p.name)} ${Math.round(pct(p.done, p.need))}%</small></div></div>`); }
+  if (S.projects.length) { const p = S.projects[0]; items.push(`<div class="w" data-a="rtab:chain" style="cursor:pointer"><span class="big">📌</span><div><b>${uh('ui.w.proj', { 个数: S.projects.length })}</b><br><small>${esc(tr(p.name))} ${Math.round(pct(p.done, p.need))}%</small></div></div>`); }
   return `<footer class="bottom"><div class="widgets">${items.join('')}</div><div class="ticker panel">${S.log.slice(0, 3).map(l => `<span>${esc(l.msg)}</span>`).join('')}</div></footer>`;
 }
 const chipsHTML = cs => (cs || []).map(c => `<span class="chg ${c.good == null ? '' : c.good ? 'good' : 'bad'}">${c.name} ${c.v}</span>`).join('');
@@ -314,15 +320,15 @@ function tipHTML(tip) {
   return tip.ok.length || tip.fail.length ? `<span class="tip"><u>${uh('ui.ok')}</u>${tipLines(tip.ok) || none}<u>${uh('ui.fail')}</u>${tipLines(tip.fail) || none}</span>` : '';
 }
 function modal() {
-  const d = V.dlg;
-  if (!d) return '';
+  if (!V.dlg) return '';
+  const view = V.dlg.local ? null : V.dialogView?.read(), d = view?.dialog || V.dlg, result = view?.result || V.res;
   const C = CAT[d.cat] || CAT.sys, ch = d.chain && chainInfo(d.chain), img = d.art ? artURL(d.art) : '';
-  const bar = `<div class="pdx-bar"><span class="tag" style="--c:${C.color}">${C.name}</span>${ch ? `<span class="tag chain">${uh('ui.dlg.chain', { 图标: ch.icon, 链: ch.title })}</span>` : ''}${d.closable && !V.res ? '<button class="x" data-a="dlg:close">✕</button>' : ''}</div>`;
+  const bar = `<div class="pdx-bar">${langButton()}<span class="tag" style="--c:${C.color}">${C.name}</span>${ch ? `<span class="tag chain">${uh('ui.dlg.chain', { 图标: ch.icon, 链: ch.title })}</span>` : ''}${d.closable && !V.res ? '<button class="x" data-a="dlg:close">✕</button>' : ''}</div>`;
   const ttl = `<h2${img ? '' : ' class="pdx-title"'}><i>${d.icon || ''}</i>${esc(d.title)}</h2>`;
   const head = bar + (img ? `<div class="pdx-art" style="background-image:url('${img}')">${d.portrait === 'longhair' ? LONGHAIR : d.portrait === 'streamer' ? STREAMER : ''}${ttl}</div>` : ttl) + ideoStrip(d);
   if (V.res) {
-    const fx = (V.res.chips || []).map(c => `<span class="fxl ${c.good == null ? '' : c.good ? 'good' : 'bad'}">${c.name} ${c.v}</span>`).join('');
-    return `<div class="veil"><div class="pdx">${head}<div class="pdx-text">${V.res.ok != null ? `<span class="stamp ${V.res.ok ? 'ok' : 'no'}">${V.res.ok ? uh('ui.ok') : uh('ui.fail')}</span>` : ''}${nl(V.res.text)}</div>${fx ? `<div class="pdx-fx">${fx}</div>` : ''}<div class="pdx-opts"><button class="opt go" data-a="res">${uh('ui.dlg.continue')}</button></div></div></div>`;
+    const fx = (result.chips || []).map(c => `<span class="fxl ${c.good == null ? '' : c.good ? 'good' : 'bad'}">${c.name} ${c.v}</span>`).join('');
+    return `<div class="veil"><div class="pdx">${head}<div class="pdx-text">${V.res.ok != null ? `<span class="stamp ${V.res.ok ? 'ok' : 'no'}">${V.res.ok ? uh('ui.ok') : uh('ui.fail')}</span>` : ''}${nl(result.text)}</div>${fx ? `<div class="pdx-fx">${fx}</div>` : ''}<div class="pdx-opts"><button class="opt go" data-a="res">${uh('ui.dlg.continue')}</button></div></div></div>`;
   }
   const opts = d.options.map((o, i) => (d.kind === 'cards'
     ? `<button class="pcard r${o.card.r || 1}" data-a="dlg:${i}"><span class="pi">${o.card.icon}</span><b>${esc(o.card.name)}</b><small>${nl(o.card.desc)}</small></button>`
@@ -332,15 +338,15 @@ function modal() {
 function endScreen() {
   const o = S.over, E = ENDINGS[o.id], R = V.summary, t = Math.min(o.t, MONTHS), img = artURL(ENDING_ART[o.id]);
   const stats = [['alive', uh('ui.end.months', { 月数: t })], ['val', G.money(S, o.val)], ['equity', S.equity.toFixed(0) + '%'], ['users', G.fmtUsers(S.stats.maxUsers)], ['raised', G.money(S, S.stats.raised)], ['events', S.stats.events], ['perks', S.perks.length], ['exposed', Math.round(S.exposed)]].map(([k, v]) => [uh('ui.end.' + k), v]);
-  return `<section class="endc panel ${E.good ? 'good' : 'bad'}">${img ? `<div class="endart" style="background-image:url('${img}')"></div>` : ''}<div class="eicon">${E.icon}</div><small>${uh('ui.end.sub', { 公司: esc(S.co.name), 日期: G.dateStr(t) })}</small><h1>${E.name}</h1><p class="etext">${nl(R.text)}</p>
+  return `<section class="endc panel ${E.good ? 'good' : 'bad'}">${img ? `<div class="endart" style="background-image:url('${img}')"></div>` : ''}<div class="eicon">${E.icon}</div><small>${uh('ui.end.sub', { 公司: esc(playerName(S, 'coName')), 日期: G.dateStr(t) })}</small><h1>${E.name}</h1><p class="etext">${nl(G.fmt(S, E.text).replace('{pay}', G.money(S, o.pay || 0)))}</p>
   <div class="estats">${stats.map(([k, v]) => `<div><small>${k}</small><b>${v}</b></div>`).join('')}</div>
   <div class="escore">${uh('ui.end.score', { 得分: `<b>${R.score}</b>`, 人脉点: `<b>+${R.points}</b>` })}${R.newEnd ? `　<i>${uh('ui.end.new')}</i>` : ''}</div>
   ${R.newAch.length ? `<div class="each">${R.newAch.map(a => `<span title="${esc(ACHIEVEMENTS[a].desc)}">${ACHIEVEMENTS[a].icon} ${ACHIEVEMENTS[a].name}</span>`).join('')}</div>` : ''}
-  <div class="tbtns row"><button class="btn big go" data-a="new">${uh('ui.end.again')}</button><button class="btn" data-a="meta">${uh('ui.meta.h')}</button><button class="btn ghost" data-a="back">${uh('ui.end.title')}</button></div></section>`;
+  <div class="tbtns row">${langButton()}<button class="btn big go" data-a="new">${uh('ui.end.again')}</button><button class="btn" data-a="meta">${uh('ui.meta.h')}</button><button class="btn ghost" data-a="back">${uh('ui.end.title')}</button></div></section>`;
 }
 
 // ───────── 设置、配乐、环境声 ─────────
-const GPU_TIP = uh('ui.gpuTip');
+
 const fpsText = () => { const s = office?.stats; return s ? `${Math.round(s.fps)} FPS · ${s.gpu ? s.gpu.toFixed(1) : '—'} ms` : ''; };
 const perfText = () => { const s = office?.stats; return s ? ut('ui.set.perf', { 帧: Math.round(s.fps), 毫秒: s.gpu ? s.gpu.toFixed(1) : '—', 绘制: s.calls }) : ''; };
 function settingsHTML() {
@@ -352,9 +358,9 @@ function settingsHTML() {
   <div class="set-row scalerow"><span>${uh('ui.set.scale')}</span><input type="range" min="50" max="150" step="10" value="${Math.round((q.scale || 1) * 100)}" data-s="scale"><b>${Math.round((q.scale || 1) * 100)}%</b></div>
   <div class="set-row fpsrow"><span>${uh('ui.set.fps')}</span><div class="seg">${[['auto', uh('ui.set.fps.auto')], ['30', '30'], ['60', '60'], ['0', uh('ui.set.fps.none')]].map(([v, n]) => `<button class="${fpsOn === v ? 'on' : ''}" data-a="fpscap:${v}">${n}</button>`).join('')}</div></div>
   <label class="chk"><input type="checkbox" data-s="auto" ${q.auto ? 'checked' : ''}> ${uh('ui.set.auto')}</label><p class="note" data-live="perf">${perfText()}</p>
-  <p class="note">${uh('ui.set.gpu', { 显卡: `<b>${esc(q.gpu || ut('ui.set.gpu.unknown'))}</b>`, 类型: q.phone ? uh('ui.set.gpu.phone') : q.tablet ? uh('ui.set.gpu.tablet') : q.igpu ? uh('ui.set.gpu.igpu') : '' })}</p>${q.igpu ? `<p class="note warn">${uh('ui.set.igpu', { 建议: GPU_TIP })}</p>` : ''}${q.phone ? `<p class="note">${uh('ui.set.phone')}</p>` : ''}${q.q === 'max' ? `<p class="note">${uh('ui.set.max')}</p>` : ''}` : `<p class="note">${uh('ui.set.no3d')}</p>`;
+  <p class="note">${uh('ui.set.gpu', { 显卡: `<b>${esc(q.gpu || ut('ui.set.gpu.unknown'))}</b>`, 类型: q.phone ? uh('ui.set.gpu.phone') : q.tablet ? uh('ui.set.gpu.tablet') : q.igpu ? uh('ui.set.gpu.igpu') : '' })}</p>${q.igpu ? `<p class="note warn">${uh('ui.set.igpu', { 建议: uh('ui.gpuTip') })}</p>` : ''}${q.phone ? `<p class="note">${uh('ui.set.phone')}</p>` : ''}${q.q === 'max' ? `<p class="note">${uh('ui.set.max')}</p>` : ''}` : `<p class="note">${uh('ui.set.no3d')}</p>`;
   const row = (k, n) => `<div class="set-row"><span>${n}</span><input type="range" min="0" max="100" value="${p(vol[k])}" data-s="vol:${k}"><b>${p(vol[k])}</b></div>`;
-  return `<div class="veil"><section class="settings panel"><h2>${icon('settings', 20)} ${uh('ui.set.h')}</h2>${gfx}
+  return `<div class="veil"><section class="settings panel"><h2>${icon('settings', 20)} ${uh('ui.set.h')}</h2><div class="set-row"><span>${tr('语言')}</span>${langButton()}</div>${gfx}
   <h4>${uh('ui.set.sound')}</h4>${row('master', uh('ui.set.vol.master'))}${row('music', uh('ui.set.vol.music'))}${row('sfx', uh('ui.set.vol.sfx'))}${row('amb', uh('ui.set.vol.amb'))}
   <label class="chk"><input type="checkbox" data-s="mute" ${muted ? 'checked' : ''}> ${uh('ui.set.mute')}</label>
   <h4>${uh('ui.set.display')}</h4><label class="chk"><input type="checkbox" data-s="hints" ${V.hintsOff ? '' : 'checked'}> ${uh('ui.set.hints')}</label><label class="chk"><input type="checkbox" data-s="fps" ${V.fps ? 'checked' : ''}> ${uh('ui.set.showFps')}</label>
@@ -443,7 +449,7 @@ const HINT_MAX = P['ui.hintMax'];
 function hintCTA(h) {
   if (h.later) return ut('ui.hint.later', { 事: h.act ? ut('ui.hint.later.act', { 行动: A.actName(S, A.ACT[h.act]) }) : ut('ui.hint.later.other') });
   if (h.act) return ut('ui.hint.do', { 行动: A.actName(S, A.ACT[h.act]) });
-  const tab = h.go?.ltab ? A.TABS.find(t => t.id === h.go.ltab)?.name : h.go?.rtab ? RTABS.find(r => r[0] === h.go.rtab)?.[2] : null;
+  const tab = h.go?.ltab ? A.TABS.find(t => t.id === h.go.ltab)?.name : h.go?.rtab ? rightTabs().find(r => r[0] === h.go.rtab)?.[2] : null;
   return tab ? ut('ui.hint.go', { 页签: tab }) : '';
 }
 function alertsHTML() {
@@ -526,7 +532,7 @@ function syncScene() {
   if (S && (V.screen === 'play' || V.screen === 'end')) {
     const free = Math.max(0, S.gpu - G.inferNeed(S));
     office.sync({
-      mode: V.screen === 'end' ? 'end' : 'play', t: S.t, region: S.co.region, level: S.co.office, sign: S.co.name,
+      mode: V.screen === 'end' ? 'end' : 'play', t: S.t, region: S.co.region, level: S.co.office, sign: playerName(S, 'coName'),
       logo: S.co.logo ? logoDataURL(S.co.logo, S.co.brand) : undefined, brand: S.co.brand, founder: { outfit: S.founder.outfit || 'turtleneck' },
       staff: S.staff.map(e => ({ id: e.uid, role: e.role, mood: G.clamp(S.morale + (parseInt(e.uid.slice(1), 10) * 7) % 21 - 10, 0, 100) })),
       racks: previewRacks ?? (S.ownModel ? G.clamp(Math.ceil(Math.log2(S.gpu / 8 + 1)), 0, 12) : 0),
@@ -540,7 +546,7 @@ function syncScene() {
   } else {
     const W = V.screen === 'wizard' ? V.W : null, box = rect('.wizard') || rect('.title');
     office.sync({
-      mode: 'title', wizard: V.screen === 'wizard', region: W?.region || 'bay', level: W ? 1 : 3, sign: W?.coName || ut('ui.title.name'),
+      mode: 'title', wizard: V.screen === 'wizard', region: W?.region || 'bay', level: W ? 1 : 3, sign: W && wizardName(W, 'coName') || ut('ui.title.name'),
       logo: W ? logoDataURL(W.logo, W.brand) : undefined, brand: W?.brand, founder: { outfit: W?.outfit || 'turtleneck' },
       staff: W ? [] : TITLE_STAFF, racks: W ? (W.route === 'model' ? 1 : 0) : 4, furnace: { heat: 0.7 }, night: false, alert: false,
       district: W?.district, own: !W || W.route === 'model', track: W?.track,                                  // 建角时选什么，背景里的房子就跟着换
@@ -617,7 +623,8 @@ function openDialog(d) {
 }
 // 把引擎里排队的对话框一个个放出来；放完就存档
 function pump() {
-  const d = G.nextDialog(S);
+  V.dialogView = S.q.length && !S.over ? dialogView(S, G.nextDialog) : null;
+  const d = V.dialogView ? V.dialogView.original : G.nextDialog(S);
   playFx();
   if (d) return openDialog(d);
   V.dlg = null; V.res = null;
@@ -639,26 +646,32 @@ const resetView = () => { sceneSession++; previewRacks = null; V.theme = undefin
 function startGame(setup) { S = G.newGame(setup, meta); V.screen = 'play'; V.ltab = 'rd'; V.rtab = 'board'; resetView(); pump(); }
 
 const CMD = {
+  lang() { setLang(getLang() === 'zh' ? 'en' : 'zh'); if (V.dlg?.local) { const reopen = V.reopen; V.dlg = null; reopen(); } else render(); },
   new() { V.W = newWizard(); V.screen = 'wizard'; V.dlg = null; render(); },
   continue() { const s = G.loadGame(); if (!s) return render(); S = s; V.screen = 'play'; resetView(); pump(); },
   meta() { V.screen = 'meta'; render(); },
   back() { V.screen = 'title'; V.dlg = null; render(); },
   buy(id) { G.buyMeta(meta, id); render(); },
   w(k, a, b) {
-    const W = V.W, isRand = (pool, v) => RAND.bay[pool].includes(v) || RAND.sz[pool].includes(v);
+    const W = V.W;
     if (k === 'step') W.step = G.clamp(W.step + +a, 0, 4);
     else if (k === 'region') {
       W.region = a; W.logo = LOGOS[a][0].id;
-      if (isRand('name', W.name)) W.name = rnd(RAND[a].name);
-      if (isRand('co', W.coName)) W.coName = rnd(RAND[a].co);
+      for (const field of ['name', 'coName']) if (W.autoNames & nameBits[field]) rollName(W, field);
       for (const g of ['seed', 'district']) if (TRAIT[W[g]]?.region && TRAIT[W[g]].region !== a) W[g] = firstOf(g, a);
     }
-    else if (k === 'rand') W.name = rnd(RAND[W.region].name);
-    else if (k === 'randco') { W.coName = rnd(RAND[W.region].co); W.modelName = rnd(RAND.model); }
+    else if (k === 'rand') rollName(W, 'name');
+    else if (k === 'randco') { rollName(W, 'coName'); rollName(W, 'modelName'); }
     else if (k === 'attr') { const v = W.attrs[a] + +b; if (v >= 5 && v <= 10 && (+b < 0 || ptsLeft(W) > 0)) W.attrs[a] = v; }
     else if (k === 'pick') W[a] = b;
     else if (k === 'brand') W.brand = a;
-    else if (k === 'start') return startGame({ name: W.name.trim() || ut('ui.wiz.default.name'), coName: W.coName.trim() || ut('ui.wiz.default.co'), modelName: W.modelName.trim() || text('default.model'), region: W.region, attrs: W.attrs, traits: wizTraits(W), route: W.route, track: W.track, logo: W.logo, brand: W.brand, outfit: W.outfit, tutorial: W.tutorial });
+    else if (k === 'start') {
+      for (const field of Object.keys(nameBits)) {
+        W[field] = W[field].trim();
+        if (!W[field]) { W[field] = defaultName(field); W.autoNames |= nameBits[field]; }
+      }
+      return startGame({ ...W, traits: wizTraits(W) });
+    }
     render();
   },
   // 点员工 / 候选人：在面板旁边冒出气泡，沙盘里对应的小人也会应一声
@@ -698,6 +711,7 @@ const CMD = {
   rtab(t) { V.rtab = t; render(); },
   toast() { V.toast = null; ui.querySelector('.toast')?.remove(); },
   menu() {
+    V.reopen = CMD.menu;
     localDialog(ut('ui.menu.title'), ut('ui.menu.text'), ut('ui.menu.icon'), [
       { label: ut('ui.menu.resume'), fn() { render(); } },
       { label: ut('ui.menu.settings'), fn() { V.settings = true; render(); } },
@@ -710,7 +724,9 @@ const CMD = {
   fpscap(v) { office?.setFpsCap?.(v === 'auto' ? null : +v); render(); },
   act(id) {
     if (V.dlg || V.wait) return;
-    const r = A.perform(S, id);
+    let r;
+    const view = dialogView(S, state => { const action = A.perform(state, id); if (state === S) r = action; return action?.dialog; });
+    if (r?.dialog) V.dialogView = view;
     if (!r) return;
     if (id === 'code') sfx('type');
     playFx();
@@ -723,6 +739,7 @@ const CMD = {
   fire(uid) {
     if (V.dlg || V.wait) return;
     const e = S.staff.find(x => x.uid === uid);
+    V.reopen = () => CMD.fire(uid);
     if (e) localDialog(ut('ui.fire.title', { 名字: e.name }), ut('ui.fire.text', { 月数: P['fire.payMonths'], 金额: G.money(S, P['fire.payMonths'] * e.salary * G.mod(S, 'salaryMult')) }), ut('ui.fire.icon'), [{ label: ut('ui.fire.ok'), fn() { sfx('fire'); toast(A.fire(S, uid)); render(); } }, { label: ut('ui.fire.no'), fn() { render(); } }]);
   },
   gpu(k) { const q = G.quota(S), step = Math.max(P['ui.gpuStepMin'], Math.round(q * P['ui.gpuStep'])); A.setGpu(S, k === 'max' ? q : k === 'min' ? 0 : S.gpu + (k === '+' ? step : -step)); render(); },
@@ -731,6 +748,7 @@ const CMD = {
     if (V.dlg || V.wait || S.over) return;
     if (S.ap > 0 && S.t > 1) {                                               // 还有行动点：把参谋建议的事情直接摆成选项
       const sug = hintsNow().filter(h => h.act && !h.later && !A.actionState(S, A.ACT[h.act]).why).slice(0, P['ui.nextSug']);
+      V.reopen = CMD.next;
       return localDialog(ut('ui.next.title'), ut('ui.next.text', { 行动点: S.ap }) + (sug.length ? ut('ui.next.sug') : ''), ut('ui.next.icon'), [
         ...sug.map(h => ({ label: ut('ui.next.go', { 行动: A.actName(S, A.ACT[h.act]) }), hint: h.title, fn() { CMD.act(h.act); } })),
         { label: ut('ui.next.ok'), fn: nextMonth }, { label: ut('ui.next.no'), fn() { render(); } },
@@ -745,6 +763,7 @@ const CMD = {
     if (d.local) { V.dlg = null; return d.options[+i]?.fn(); }
     const r = G.choose(S, d, +i);
     if (!r) return;
+    V.dialogView?.selected(+i, r);
     playFx();
     if (r.dialog) return openDialog(r.dialog);
     if (!r.text && !r.chips.length) return pump();
@@ -758,7 +777,13 @@ export function boot(root, scene) {
   ui = root; office = scene;
   // 手机竖屏放不下这套界面：盖一层「请横过来」（只在竖屏窄屏时由 CSS 显示）
   crisisEl = document.querySelector('.crisis-edge') || document.body.appendChild(Object.assign(document.createElement('div'), { className: 'crisis-edge' }));
-  if (!document.querySelector('.rotate-hint')) document.body.insertAdjacentHTML('beforeend', `<div class="rotate-hint"><b>↻</b><span>${uh('ui.rotate.h')}</span><small>${uh('ui.rotate.tip')}</small></div>`);
+  onLanguage(() => {
+    document.documentElement.lang = getLang() === 'en' ? 'en' : 'zh-CN';
+    document.body.classList.toggle('lang-en', getLang() === 'en');
+    document.title = tr('炼丹大亨 · AI 创业肉鸽模拟器');
+    document.querySelector('.rotate-hint')?.remove();
+    document.body.insertAdjacentHTML('beforeend', `<div class="rotate-hint"><b>↻</b><span>${uh('ui.rotate.h')}</span><small>${uh('ui.rotate.tip')}</small></div>`);
+  });
   const fit = () => { document.documentElement.style.setProperty('--z', G.clamp(Math.min(innerWidth / 1280, innerHeight / 720), 0.5, 1.3).toFixed(3)); syncScene(); };
   addEventListener('resize', fit);
   reducedMotion?.addEventListener('change', syncScene);
@@ -789,6 +814,7 @@ export function boot(root, scene) {
     const f = e.target.dataset?.f;
     if (!f || !V.W) return;
     V.W[f] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    if (f in nameBits) V.W.autoNames &= ~nameBits[f];
     if (f === 'coName') { const live = ui.querySelector('[data-live="co"]'); if (live) live.textContent = e.target.value; syncScene(); }
   });
   addEventListener('keydown', e => {

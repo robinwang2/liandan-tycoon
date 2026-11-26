@@ -1,3 +1,4 @@
+import { tr } from '../i18n/index.js';
 // 3A 版场景入口：舞台（渲染/天空/镜头）+ 城市 + 办公室 + 天气。
 // 对外接口和经典版 createOffice 一样（sync / play / setInsets / dispose），另外多了画质、时间、天气、性能统计。
 import * as THREE from 'three';
@@ -117,7 +118,7 @@ export function createOffice(container) {
     setQuality(q, auto) { stage.setQuality(q, auto); },
     setScale(s) { stage.setScale(s); },
     setFpsCap(c) { stage.setFpsCap(c); },
-    quality() { return { ...stage.quality(), levels: Object.entries(QUALITY).map(([id, q]) => ({ id, name: q.name, desc: q.desc })) }; },
+    quality() { return { ...stage.quality(), levels: Object.entries(QUALITY).map(([id, q]) => ({ id, name: tr(q.name), desc: tr(q.desc) })) }; },
     stats: stage.stats,
     env: stage.env,
     get busy() { return city.busy; },
