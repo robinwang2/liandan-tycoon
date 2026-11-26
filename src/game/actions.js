@@ -112,7 +112,7 @@ function raiseDialog(x) {
       go: () => {
         if (o.fn === 'vam') S.vam = { due: S.t + o.p.期限, target };
         applyFx(S, o.fx, { rival: rv.id });
-        return { text: closeRound(x, val0 * o.vk, o.share, name.split('：')[0]) };
+        return { text: closeRound(x, val0 * o.vk, o.share, name.split(/[:：]/)[0]) };
       },
     };
   };
@@ -366,8 +366,8 @@ function build(row) {
     fx: extra => applyFx(S, extra ? { ...extra, ...row.fx } : row.fx),
     failFx: extra => applyFx(S, extra ? { ...extra, ...row.failFx } : row.failFx),
   });
-  const a = { id: row.id, tab: row.tab, name: row.name, icon: row.icon, ap: row.ap, p };
-  if (row.us != null) a.us = row.us;
+  const a = { id: row.id, tab: row.tab, get name() { return row.name; }, icon: row.icon, ap: row.ap, p };
+  if (row.us != null) Object.defineProperty(a, 'us', { enumerable: true, get: () => row.us });
   if (row.cd) a.cd = row.cd;
   if (row.shady) a.shady = true;
   if (row.region || H.show) a.show = S => (!row.region || S.co.region === row.region) && (!H.show || !!H.show(ctx(S)));

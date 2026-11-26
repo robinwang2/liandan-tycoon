@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "imports": {
+    "#english-catalogs": { "browser": "./src/i18n/catalog.browser.js", "default": "./src/i18n/catalog.node.js" }
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "node tools/tables/export.mjs && vite build && node tools/pack.mjs",
@@ -11,7 +14,9 @@
     "build:classic": "vite build classic && node tools/pack.mjs classic",
     "tables": "node tools/tables/export.mjs && node tools/validate.mjs",
     "tables:check": "node tools/tables/export.mjs --check",
-    "parity": "node tools/parity.mjs check"
+    "parity": "node tools/parity.mjs check",
+    "i18n": "node tools/i18n/check.mjs",
+    "i18n:parity": "node tools/i18n/parity.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

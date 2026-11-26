@@ -3,13 +3,15 @@
 //
 // 数据本身在表格里：tables/设定.xlsx 和 tables/平衡参数.xlsx。
 // 改表 → npm run tables（导出成 ./tables/*.json，顺便查错）→ 这里读进来，再补上几张派生的索引表和几个小函数。
+import { localize } from '../i18n/tables.js';
 import T from './tables/defs.json' with { type: 'json' };
 import PARAMS from './tables/params.json' with { type: 'json' };
 import { fillDefs, fillRefs, refMaps } from './refs.js';
 
 // 说明里的 {变量}（比如「显卡价格 {显卡价格}」读这一条自己的修正）：载入时填好，游戏里拿到的就是填好的字
-fillDefs(T, PARAMS.P);
+
 const REF = refMaps(T);
+localize('defs', T, () => fillDefs(T, PARAMS.P, REF));
 // 别的表（行动、事件、路线之争）里的说明也用它：rec = 这一条记录（{效果.热度} {临时.收入} 读它的效果），vars = 代码填的变量
 export const fillRec = (text, rec, vars) => fillRefs(text, { vars, P: PARAMS.P, rec, ...REF });
 
@@ -23,7 +25,7 @@ export const {
   ACHIEVEMENTS, GOALS, IDEO_FLAG_MODS, META_SHOP, NAMES, MOD_NAME, KIND_NAME, CAT,
 } = T;
 
-export const ATTR_NAME = Object.fromEntries(ATTRS.map(a => [a.id, a.name]));
+export const ATTR_NAME = Object.defineProperties({}, Object.fromEntries(ATTRS.map(a => [a.id, { enumerable: true, get: () => a.name }])));
 export const TRAIT = Object.fromEntries(Object.values(TRAITS).flat().map(t => [t.id, t]));
 export const PERK = Object.fromEntries(PERKS.map(p => [p.id, p]));
 export const FEAT = Object.fromEntries(FEATURES.map(f => [f.id, f]));

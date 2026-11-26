@@ -1,3 +1,4 @@
+import { tr } from '../i18n/index.js';
 // Original, hand-drawn 64-unit silhouettes. No fonts, external assets or DOM.
 export const BRAND_COLORS = ['#ff6b4a', '#3478db', '#168577', '#8555c6', '#d74482', '#bd841d', '#53677f', '#76952d'];
 
@@ -9,9 +10,9 @@ const darken = color => {
 const path = (d, fill, extra = '') => `<path d="${d}" fill="${fill}" ${extra}/>`;
 const ring = (count, draw, offset = 0) => Array.from({ length: count }, (_, i) => `<g transform="rotate(${offset + i * 360 / count} 32 32)">${draw(i)}</g>`).join('');
 const dot = (x, y, r, color) => path(`M${x-r} ${y}a${r} ${r} 0 1 0 ${r*2} 0a${r} ${r} 0 1 0 ${-r*2} 0`, color);
-const mark = (id, name, desc, artwork) => ({ id, name, desc, draw(color) {
+const mark = (id, name, desc, artwork) => ({ id, get name() { return tr(name); }, get desc() { return tr(desc); }, draw(color) {
   const c = safeColor(color);
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="${name}">${artwork(c, darken(c))}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="${tr(name)}">${artwork(c, darken(c))}</svg>`;
 } });
 
 export const LOGOS = {

@@ -1,3 +1,4 @@
+import { getLang, compact, tr, units } from '../i18n/index.js';
 // 《炼丹大亨》数值引擎：纯逻辑、无 DOM。状态 S 是可序列化的普通对象。
 import {
   MONTHS, START_YEAR, AGI_CAP, REGIONS, TRACKS, TRAIT, OFFICES, officeName, ROLES, STAFF_QUIRKS, POLICIES,
@@ -14,7 +15,8 @@ import { text, hasText } from '../data/text.js';
 
 // 引擎自己说的话在 tables/文本.xlsx「引擎」里：tx(S, 键, 变量) 按公司所在地区挑说法
 const tx = (S, key, vars) => text(key, vars, S?.co?.region === 'bay');
-const U_YI = text('unit.yi'), U_WAN = text('unit.wan');
+
+const months = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split(' ');
 
 // 路线之争（深圳版 + 湾区版）：结局后的随机事件进随机池（靠 flag 限定）；链事件、红色恐慌和动态事件 weight 0，只能被排进来
 const ALL = [...EVENTS_CORE, ...EVENTS_CHAINS, ...EVENTS_PACK, ...IDEO_STATIC, ...IDEO_DYN];
@@ -29,11 +31,12 @@ export const pick = (S, arr) => arr[Math.floor(rnd(S) * arr.length)];
 
 export function money(S, x, sign = false) {
   const a = Math.abs(x), s = x < 0 ? '-' : sign ? '+' : '';
-  const body = a >= 10000 ? (a / 10000).toFixed(a >= 1e6 ? 0 : a >= 1e5 ? 1 : 2) + U_YI : (a >= 100 ? Math.round(a) : +a.toFixed(1)) + U_WAN;
+  if (getLang() === 'en') return s + REGIONS[S.co.region].cur + compact(a * 1e4);
+  const body = a >= 10000 ? (a / 10000).toFixed(a >= 1e6 ? 0 : a >= 1e5 ? 1 : 2) + text('unit.yi') : (a >= 100 ? Math.round(a) : +a.toFixed(1)) + text('unit.wan');
   return s + REGIONS[S.co.region].cur + body;
 }
-export const fmtUsers = x => (x >= 10000 ? (x / 10000).toFixed(2) + U_YI : x >= 100 ? Math.round(x) + U_WAN : +x.toFixed(1) + U_WAN);
-export const dateStr = t => text('date', { 年: START_YEAR + Math.floor((t - 1) / 12), 月: ((t - 1) % 12) + 1 });
+export const fmtUsers = x => getLang() === 'en' ? compact(x * 1e4) : (x >= 10000 ? (x / 10000).toFixed(2) + text('unit.yi') : x >= 100 ? Math.round(x) + text('unit.wan') : +x.toFixed(1) + text('unit.wan'));
+export const dateStr = t => getLang() === 'en' ? `${months[(t - 1) % 12]} ${START_YEAR + Math.floor((t - 1) / 12)}` : text('date', { 年: START_YEAR + Math.floor((t - 1) / 12), 月: ((t - 1) % 12) + 1 });
 export const news = (S, msg) => { S.log.unshift({ t: S.t, msg }); if (S.log.length > 60) S.log.length = 60; };
 export const award = (S, id) => { if (ACHIEVEMENTS[id] && !S.ach.includes(id)) { S.ach.push(id); news(S, tx(S, 'news.award', { 成就: ACHIEVEMENTS[id].name })); } };
 
@@ -284,7 +287,7 @@ export function fmt(S, s, ctx = {}) {
   if (!s) return '';
   const r = ctx.rival && rivalOf(S, ctx.rival);
   const map = { co: S.co.name, me: S.founder.name, model: S.model?.name || S.co.modelName, rival: r?.name || tx(S, 'fmt.rival'), boss: r?.boss || tx(S, 'fmt.boss'), staff: ctx.staffName || tx(S, 'fmt.staff'), cur: REGIONS[S.co.region].cur };
-  return String(s).replace(/\{(\w+)\}/g, (m, k) => map[k] ?? m);
+  return units(String(tr(s)).replace(/\{(\w+)\}/g, (m, k) => tr(map[k]) ?? m));
 }
 function makeCtx(S, ev) {
   const ctx = {}, txt = typeof ev.text === 'string' ? ev.text + JSON.stringify(ev.options) : '';
@@ -385,12 +388,12 @@ export function nextDialog(S) {
 // 选完以后冒出来的「变化小标签」：[键, 名字, 怎么读, 方向（1 涨是好事 / -1 涨是坏事 / 0 中性）, 格式]。名字在 文本.xlsx「引擎」的 chip.*
 const chip = k => text('chip.' + k), ideoChip = k => S => text('chip.' + k, null, S.ideo?.v === 'us');
 const SNAP = [
-  ['cash', chip('cash'), S => S.cash, 1, 'money'], ['hype', chip('hype'), S => S.hype, 1], ['rep', chip('rep'), S => S.rep, 1], ['morale', chip('morale'), S => S.morale, 1],
-  ['reg', chip('reg'), S => S.reg, -1], ['bubble', chip('bubble'), S => S.bubble, 0], ['users', chip('users'), S => S.users + S.fake, 1, 'users'], ['quality', chip('quality'), S => S.quality, 1],
-  ['equity', chip('equity'), S => S.equity, 1, 'pct'], ['quota', chip('quota'), S => quota(S), 1], ['tech', chip('tech'), S => (S.ownModel ? myCap(S) : 0), 1, 'f1'], ['bench', chip('bench'), S => S.model?.bench ?? 0, 1, 'f1'],
-  ['dirt', chip('dirt'), S => S.dirt.length, -1], ['proj', chip('proj'), S => S.projects.length, 0], ['staff', chip('staff'), S => S.staff.length, 1], ['ap', chip('ap'), S => S.apNext, 1], ['perks', chip('perks'), S => S.perks.length, 1],
+  ['cash', () => chip('cash'), S => S.cash, 1, 'money'], ['hype', () => chip('hype'), S => S.hype, 1], ['rep', () => chip('rep'), S => S.rep, 1], ['morale', () => chip('morale'), S => S.morale, 1],
+  ['reg', () => chip('reg'), S => S.reg, -1], ['bubble', () => chip('bubble'), S => S.bubble, 0], ['users', () => chip('users'), S => S.users + S.fake, 1, 'users'], ['quality', () => chip('quality'), S => S.quality, 1],
+  ['equity', () => chip('equity'), S => S.equity, 1, 'pct'], ['quota', () => chip('quota'), S => quota(S), 1], ['tech', () => chip('tech'), S => (S.ownModel ? myCap(S) : 0), 1, 'f1'], ['bench', () => chip('bench'), S => S.model?.bench ?? 0, 1, 'f1'],
+  ['dirt', () => chip('dirt'), S => S.dirt.length, -1], ['proj', () => chip('proj'), S => S.projects.length, 0], ['staff', () => chip('staff'), S => S.staff.length, 1], ['ap', () => chip('ap'), S => S.apNext, 1], ['perks', () => chip('perks'), S => S.perks.length, 1],
   ['red', ideoChip('red'), S => S.ideo?.red ?? 0, 0], ['capb', ideoChip('capb'), S => S.ideo?.cap ?? 0, 0],
-  ['heat', chip('heat'), S => S.ideo?.heat ?? 0, -1],
+  ['heat', () => chip('heat'), S => S.ideo?.heat ?? 0, -1],
 ];
 const snap = S => SNAP.map(r => r[2](S));
 function diff(S, a, b) {

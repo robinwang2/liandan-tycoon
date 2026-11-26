@@ -1,3 +1,5 @@
+import { tr, getLang } from '../i18n/index.js';
+import { fill } from '../data/text.js';
 // 3A 版办公室：剖开的房间（两面后墙）、工位、机房、丹炉、招牌、小人和特效。
 // 布局规则沿用经典版（同一套 LEVELS），但所有东西都换成了 PBR 材质 + 高精度道具，静态部分全部合批。
 import * as THREE from 'three';
@@ -280,6 +282,7 @@ export function createRoom(stage, k, PROPS, art) {
   // ───────── 起步的房子：六个落脚点各有各的结构和摆设 ─────────
   // 一块写着字的招牌（画布贴图，夜里发光）。vert：竖排；legs：底下加两根支脚（立在墙头上用）
   function textSign(parent, text, w, h, x, y, z, ry, bg, fg, o = {}) {
+    text = tr(text);
     const c = document.createElement('canvas'), u = 128 / Math.min(w, h), cw = (c.width = Math.round(w * u)), ch = (c.height = Math.round(h * u)), x2 = c.getContext('2d'), chars = [...text];
     const font = s => `900 ${s}px "Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif`;
     x2.fillStyle = bg; x2.fillRect(0, 0, cw, ch); x2.strokeStyle = fg; x2.globalAlpha = 0.5; x2.lineWidth = 5; x2.strokeRect(7, 7, cw - 14, ch - 14); x2.globalAlpha = 1;
@@ -505,7 +508,7 @@ export function createRoom(stage, k, PROPS, art) {
     if (!signTex || key === st.signKey) return; st.signKey = key;
     const x = signTex.image.getContext('2d'), paint = img => {
       x.fillStyle = '#fffdf7'; x.fillRect(0, 0, 1024, 246); x.fillStyle = v.brand || '#ff6b4a'; x.fillRect(0, 228, 1024, 18);
-      const name = v.sign || '炼丹大亨', lw = img ? 200 : 0; let fs = 132; x.font = `900 ${fs}px "PingFang SC","Microsoft YaHei",sans-serif`;
+      const name = v.sign || tr('炼丹大亨'), lw = img ? 200 : 0; let fs = 132; x.font = `900 ${fs}px "PingFang SC","Microsoft YaHei",sans-serif`;
       while (x.measureText(name).width > 1024 - lw - 90 && fs > 40) { fs -= 6; x.font = `900 ${fs}px "PingFang SC","Microsoft YaHei",sans-serif`; }
       const tw = x.measureText(name).width, x0 = (1024 - tw - lw) / 2;
       if (img) x.drawImage(img, x0, 28, 170, 170);
@@ -647,7 +650,7 @@ export function createRoom(stage, k, PROPS, art) {
     x.fillStyle = 'rgba(14,18,26,0.86)'; x.beginPath(); x.roundRect(4, 4, 632, 124, 22); x.fill(); x.strokeStyle = 'rgba(242,196,109,0.55)'; x.lineWidth = 3; x.stroke();
     x.fillStyle = color; x.fillRect(4, 26, 10, 80);
     x.textBaseline = 'middle'; x.font = '900 60px "PingFang SC","Microsoft YaHei",sans-serif'; x.fillStyle = '#f2c46d'; x.fillText(text.split(' ')[0], 34, 68);
-    x.fillStyle = '#f4f1ea'; x.font = '700 50px "PingFang SC","Microsoft YaHei",sans-serif'; x.fillText(text.split(' ').slice(1).join(' '), 150, 68);
+    x.fillStyle = '#f4f1ea'; x.font = '700 50px "PingFang SC","Microsoft YaHei",sans-serif'; x.fillText(text.split(' ').slice(1).join(' '), 150, 68, sub ? 260 : 460);
     if (sub) { x.font = '500 40px "PingFang SC","Microsoft YaHei",sans-serif'; x.fillStyle = '#aeb6c2'; x.textAlign = 'right'; x.fillText(sub, 612, 70); }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   }
@@ -667,7 +670,7 @@ export function createRoom(stage, k, PROPS, art) {
     if (key === tw.labelKey) return; tw.labelKey = key;
     tw.F.forEach((F, i) => {
       const names = F.depts.map(d => DEPTS[d]?.short || d).join(' · '), top = DEPTS[F.depts.find(d => WORK[d]) || F.depts[0]], s = tw.labels[i];
-      const sub = F.depts.includes('ceo') || i === tw.boss ? (n[i] ? `${n[i]} 人 · 老板` : '老板') : F.depts.every(d => !WORK[d]) ? '' : `${n[i]} 人`;
+      const sub = F.depts.includes('ceo') || i === tw.boss ? (n[i] ? fill('{人数} 人 · 老板', { 人数: n[i] }) : tr('老板')) : F.depts.every(d => !WORK[d]) ? '' : fill('{人数} 人', { 人数: n[i] });
       s.material.map?.dispose(); s.material.map = labelTex(`${i + 1}F ${names}`, sub, top?.color || '#c9a86a'); s.material.needsUpdate = true;
     });
   }
@@ -734,7 +737,7 @@ export function createRoom(stage, k, PROPS, art) {
     const D_ = DEPTS[d], c = document.createElement('canvas'); c.width = 512; c.height = 128; const x2 = c.getContext('2d');
     x2.fillStyle = '#1b2029'; x2.fillRect(0, 0, 512, 128); x2.fillStyle = D_.color; x2.fillRect(0, 0, 14, 128);
     x2.textBaseline = 'middle'; x2.font = '64px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; x2.fillText(D_.icon, 34, 70);
-    x2.font = '900 58px "PingFang SC","Microsoft YaHei",sans-serif'; x2.fillStyle = '#f4f1ea'; x2.fillText(D_.name, 122, 68);
+    x2.font = '900 58px "PingFang SC","Microsoft YaHei",sans-serif'; x2.fillStyle = '#f4f1ea'; x2.fillText(D_.name, 122, 68, 368);
     const t = own(new THREE.CanvasTexture(c)); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
     const m = own(new THREE.MeshStandardMaterial({ map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.3, roughness: 0.5 })); k.nightMats.push([m, 0.3, 0.95]);
     k.box(2.52, 0.72, 0.05, '#2a2f36', g, x, y, z + 0.02, { metal: 0.5, rough: 0.5 });
@@ -1079,7 +1082,7 @@ export function createRoom(stage, k, PROPS, art) {
     } else if (name === 'cameo') {
       if (tw.on && tw.open < 0) return;                                        // 总览时看不见人，跳过
       if (cameo) { actorsG.remove(cameo.root); freeActor(cameo); }
-      cameo = buildActor('cameo', 'eng', 'cameo'); cameo.cT = 0; cameo.text = data.text || '你再也吃不到 Chepole 了！！！'; cameo.base = by; cameo.floor = tw.open;
+      cameo = buildActor('cameo', 'eng', 'cameo'); cameo.cT = 0; cameo.text = data.text || tr('你再也吃不到 Chepole 了！！！'); cameo.base = by; cameo.floor = tw.open;
       cameo.from = new THREE.Vector3(-L.W / 2 - 4, by, L.D / 2 + 3); cameo.to = new THREE.Vector3(-0.5, by, L.D / 2 - 1.5); cameo.root.position.copy(cameo.from); actorsG.add(cameo.root); scareAll();
     }
   }
@@ -1146,7 +1149,7 @@ export function createRoom(stage, k, PROPS, art) {
     const p = st.view, v = (st.view = { ...p, ...view, staff: view.staff || p.staff || [] });
     v.level = clamp(v.level | 0 || 1, 1, MAXLV);
     // 什么变了要重盖房子：地区、档位、品牌色；起步那档还看落脚点；套壳派没丹炉；产品赛道的摆设（多层楼里没有）
-    const key = `${v.region}|${v.level}|${v.brand || ''}|${v.level === 1 ? startKind(v.region, v.district) : ''}|${v.own === false ? 'egg' : ''}|${FLOOR_PLANS[v.level] ? '' : v.track || ''}`, rebuilt = key !== st.key; let up = false;
+    const key = `${getLang()}|${v.region}|${v.level}|${v.brand || ''}|${v.level === 1 ? startKind(v.region, v.district) : ''}|${v.own === false ? 'egg' : ''}|${FLOOR_PLANS[v.level] ? '' : v.track || ''}`, rebuilt = key !== st.key; let up = false;
     if (rebuilt) {
       up = !!st.key && p.region === v.region && v.level > p.level; st.key = key; buildRoom();
       reseatAll();
