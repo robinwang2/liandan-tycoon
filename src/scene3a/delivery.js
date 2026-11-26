@@ -8,21 +8,15 @@ export function rackSlot(layout, index) {
 }
 
 function parkVan(run, time, leave) {
-  const { van, layout, door, shutter } = run, reach = Math.max(layout.D, layout.W) + 36;
-  if (shutter) {
-    const drive = unit(time / 0.85), reverse = smooth(unit((time - 0.85) / 0.8));
-    const turn = 1.18 * reverse * (1 - smooth(unit(leave / 0.45))), radius = 3.6;
-    van.rotation.y = Math.PI / 2 + turn;
-    van.position.x = 7.22 - radius * Math.sin(turn) + reach * (unit((leave - 0.45) / 0.55) ** 2 - (1 - drive) ** 2);
-    van.position.z = -layout.D / 2 - 8.35 + radius * (1 - Math.cos(turn));
-  } else {
-    const approach = unit(time / 1.1), offset = reach * ((1 - approach) ** 2 - leave ** 2);
-    const parked = 1 - smooth(unit(Math.abs(offset) / 2.8));
-    van.position.z = door.z + 2.4 + offset;
-    van.position.x = -layout.W / 2 - 3.4 - 1.45 + 1.6 * parked;
-    van.position.y = -run.root.parent.position.y * (1 - parked);
-    van.rotation.y = Math.PI + 0.13 * parked;
-  }
+  const { van, layout, shutter, streetZ } = run, reach = Math.max(layout.D, layout.W) + 36;
+  const side = shutter ? -1 : 1, radius = shutter ? 1.34 : 2.2;
+  const drive = unit(time / 0.65), reverse = smooth(unit((time - 0.65) / 0.55));
+  const turn = (shutter ? 1.18 : 0.85) * reverse * (1 - smooth(unit(leave / 0.48)));
+  const originX = shutter ? layout.W / 2 + 0.13 : 1 - layout.rz;
+  const travel = reach * (unit((leave - 0.48) / 0.52) ** 2 - (1 - drive) ** 2);
+  van.rotation.y = -side * Math.PI / 2 + turn;
+  van.position.x = originX - side * (travel - radius * Math.sin(turn));
+  van.position.z = streetZ - side * radius * (1 - Math.cos(turn));
 }
 
 function shutterFlight(cargo, rearX, rearZ, wallZ, target, flight) {
@@ -36,10 +30,10 @@ function shutterFlight(cargo, rearX, rearZ, wallZ, target, flight) {
   else cargo.position.set(target.x * inside, mix(0.67, 0.59, inside) + 5.6 * inside * (1 - inside), mix(wallZ + 0.72, target.z, smooth(inside)));
 }
 
-export function createDelivery(k, props, parent, { makeRack, install, impact }) {
+export function createDelivery(k, props, parent, { makeRack, install, impact, traffic }) {
   let trip = null;
 
-  function start(layout, door, brand, first, count, shutter) {
+  function start(layout, brand, first, count, shutter) {
     const root = k.group(parent), cargo = k.group(root), paint = brand || '#528e88';
     root.name = 'rack-delivery';
     const model = (props.van_delivery || props.car)?.build(k, { brand: paint }) || k.group();
@@ -60,12 +54,15 @@ export function createDelivery(k, props, parent, { makeRack, install, impact }) 
     cargo.visible = false;
     if (!shutter) cargo.scale.setScalar(0.72);
     van.position.y = -parent.position.y;
-    trip = { root, cargo, van, wheels, hinge, baked, door, layout, shutter, first, count, time: 0, popped: [], landed: false };
+    const streetZ = shutter ? -layout.D / 2 - 6.95 : layout.D / 2 + 6.25;
+    trip = { root, cargo, van, wheels, hinge, baked, layout, shutter, streetZ, first, count, time: 0, popped: [], landed: false };
+    traffic?.setBlock(streetZ);
     parkVan(trip, 0, 0);
   }
 
   function cancel() {
     if (!trip) return;
+    traffic?.clearBlock();
     trip.root.removeFromParent();
     for (const batch of trip.baked) batch.userData.dispose();
     trip = null;
@@ -73,8 +70,8 @@ export function createDelivery(k, props, parent, { makeRack, install, impact }) 
 
   function step(dt) {
     if (!trip) return;
-    const run = trip, { van, hinge, cargo, door, layout, shutter } = run;
-    const time = run.time += dt, docked = time - (shutter ? 1.65 : 1.1), leave = unit((docked - 1.68) / (shutter ? 1.5 : 0.95));
+    const run = trip, { van, hinge, cargo, layout, shutter } = run;
+    const time = run.time += dt, docked = time - 1.2, leave = unit((docked - 1.68) / 0.82);
     const lastX = van.position.x, lastZ = van.position.z;
     parkVan(run, time, leave);
     const travel = (van.position.x - lastX) * Math.sin(van.rotation.y) + (van.position.z - lastZ) * Math.cos(van.rotation.y);
@@ -86,11 +83,9 @@ export function createDelivery(k, props, parent, { makeRack, install, impact }) 
       const target = rackSlot(layout, run.first), rearX = van.position.x - Math.sin(van.rotation.y) * 2.2, rearZ = van.position.z - Math.cos(van.rotation.y) * 2.2;
       if (shutter) shutterFlight(cargo, rearX, rearZ, -layout.D / 2, target, flight);
       else {
-        const entry = (door.x - rearX) / (target.x - rearX), inside = unit((flight - entry) / (1 - entry));
-        const approach = unit(flight / entry), entryZ = door.z - 0.28 * (1 - smooth(unit((approach - 0.65) / 0.18)));
-        cargo.position.set(flight < entry ? mix(rearX, door.x, smooth(approach)) : mix(door.x, target.x, inside),
-          flight < entry ? mix(1.1, 1.35, approach) + 2 * Math.sin(Math.PI * unit(approach / 0.65)) : mix(1.35, 0.59, inside) + 5.6 * inside * (1 - inside),
-          flight < entry ? mix(rearZ, entryZ, smooth(unit(approach / 0.6))) : mix(entryZ, target.z, smooth(inside)));
+        cargo.position.set(mix(rearX, target.x, smooth(flight)),
+          mix(1.1 + van.position.y, 0.59, flight) + (layout.H + 0.7) * 4 * flight * (1 - flight),
+          mix(rearZ, target.z, flight));
       }
       cargo.rotation.set(0, Math.PI * flight, 0.16 * Math.sin(Math.PI * 2 * flight));
     }

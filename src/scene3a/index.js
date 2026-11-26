@@ -73,7 +73,7 @@ export function createOffice(container) {
   const stage = createStage(container), k = makeKit();
   const art = makeArt(k);
   stage.onFrame((dt, t, env) => { for (const m of k.nightMats) m[0].emissiveIntensity = m[1] + (m[2] - m[1]) * env.night; });   // 天黑以后：灯、屏幕、招牌、车灯亮起来
-  const city = createCity(stage, k, PROPS, art.wide), room = createRoom(stage, k, PROPS, art), rain = makeRain(stage);
+  const city = createCity(stage, k, PROPS, art.wide), room = createRoom(stage, k, PROPS, art, city), rain = makeRain(stage);
   let v = { mode: '' }, lastT = null, lastNight = null, titleDrift = false, cityOpts = null, detail = 1, wasBusy = false;
   // 换画质档：城市细节跟着变（手机档只留近处，极致档多一圈街区），贴图各向异性也跟着调
   const maxAniso = stage.renderer.capabilities.getMaxAnisotropy();

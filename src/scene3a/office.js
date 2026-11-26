@@ -49,7 +49,7 @@ function themeOf(region, level, district) {
   return { floor: ['#e8e2d6', { rough: 0.22, tex: 'stone', pat: ['tile', 1.2, 0.25, 0.05] }], wall: '#fbfbfa', frame: '#2a2f36', carpet: '#526b8a', glassRoom: true, curtain: true };
 }
 
-export function createRoom(stage, k, PROPS, art) {
+export function createRoom(stage, k, PROPS, art, traffic) {
   const world = new THREE.Group(); world.position.y = Y0; stage.scene.add(world);
   const roomG = new THREE.Group(), rackG = new THREE.Group(), furnaceG = new THREE.Group(), actorsG = new THREE.Group(), fxG = new THREE.Group(), floorsG = new THREE.Group();
   world.add(roomG, floorsG, rackG, furnaceG, actorsG, fxG);
@@ -839,7 +839,7 @@ export function createRoom(stage, k, PROPS, art) {
     for (let i = k.nightMats.length - 1; i >= 0; i--) if (dead.has(k.nightMats[i][0])) k.nightMats.splice(i, 1);
     return rack;
   }
-  const delivery = createDelivery(k, PROPS, world, { makeRack, install: buildRacks, impact({ x, z }) {
+  const delivery = createDelivery(k, PROPS, world, { makeRack, install: buildRacks, traffic, impact({ x, z }) {
     burst(x, 0.25, z, 14, ['#e6ccaa', '#ffe6ae', '#fff3d7'], 2.1); st.view.onRackImpact?.();
   } });
   function buildRacks(count = st.view.racks || 0) {
@@ -1107,7 +1107,7 @@ export function createRoom(stage, k, PROPS, art) {
       const capacity = st.L.rackRow * 3, before = Math.min(p.racks || 0, capacity), after = Math.min(v.racks || 0, capacity);
       const animate = !tw.on && p.mode === 'play' && v.mode === 'play' && v.motion !== false && p.session === v.session && p.track === v.track;
       if (animate && after > before) {
-        if (delivery.active) delivery.extend(after); else delivery.start(st.L, door, v.brand, before, after, st.shutter);
+        if (delivery.active) delivery.extend(after); else delivery.start(st.L, v.brand, before, after, st.shutter);
       } else if (before !== after || (delivery.active && (!animate || v.racks < p.racks))) {
         delivery.cancel(); buildRacks(); if (tw.on) rackG.position.y = tw.F[tw.res].y;
       }
