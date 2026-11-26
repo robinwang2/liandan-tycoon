@@ -4,6 +4,7 @@ import { fill } from '../data/text.js';
 // 布局规则沿用经典版（同一套 LEVELS），但所有东西都换成了 PBR 材质 + 高精度道具，静态部分全部合批。
 import * as THREE from 'three';
 import { FX } from './stage.js';
+import { createDelivery, rackSlot } from './delivery.js';
 import { batchPool } from './kit.js';
 import { lookOf, FOUNDER_OUTFITS } from '../scene/looks.js';
 import { FLOOR_PLANS, DEPTS } from '../data/defs.js';
@@ -116,7 +117,7 @@ export function buildElevatorCabin(k, accent) {
   return {car,shell,doors};
 }
 
-export function createRoom(stage, k, PROPS, art) {
+export function createRoom(stage, k, PROPS, art, traffic) {
   const world = new THREE.Group(); world.position.y = Y0; stage.scene.add(world);
   const roomG = new THREE.Group(), rackG = new THREE.Group(), furnaceG = new THREE.Group(), actorsG = new THREE.Group(), fxG = new THREE.Group(), floorsG = new THREE.Group();
   world.add(roomG, floorsG, rackG, furnaceG, actorsG, fxG);
@@ -223,7 +224,7 @@ export function createRoom(stage, k, PROPS, art) {
     owned = []; bakes = []; ticks = []; seats = []; stands = []; drops = []; dropsNew = []; roomG.clear(); floorsG.clear(); tw.on = false; tw.F = []; tw.ride = null; tw.labels = []; tw.queue = []; tw.pending = [];
     furnaceG.position.y = rackG.position.y = 0; furnaceG.visible = rackG.visible = true;
     const v = st.view, T = themeOf(v.region, v.level, v.district), L0 = LEVELS[v.level] || LEVELS[1], L = (st.L = T.H ? { ...L0, H: T.H } : L0), brand = v.brand || '#ff6b4a', { W, D, H } = L, bay = v.region === 'bay', lv = v.level, g = k.group();
-    st.kind = T.kind || '';
+    st.kind = T.kind || ''; st.shutter = !!T.shutter;
     if (FLOOR_PLANS[lv]) return buildTower();
     // 地块：铺地、草坪（起步的房子有的没草坪：阁楼临街、握手楼和档口门口是水泥地）
     k.box(W + 6.8, 0.5, D + 6.8, '#c4c7cc', g, 0, -0.25, 0, { r: 0.06, rough: 0.85, tex: 'concrete', pat: ['tile', 0.9, 0.24, 0.07] });
@@ -892,16 +893,25 @@ export function createRoom(stage, k, PROPS, art) {
   // ── 机柜：指示灯全部实例化（一个 draw call），随机闪 ──
   let leds = null;
   const LEDC = [new THREE.Color(0.3, 3.2, 1.6), new THREE.Color(3.2, 2.2, 0.4), new THREE.Color(0.5, 1.8, 3.4), new THREE.Color(0.04, 0.05, 0.06)];
-  function buildRacks() {
+  function makeRack(index) {
+    const rack = PROPS.server_rack?.build(k, { seed: index }) || k.group();
+    if (!rack.children.length) k.box(0.7, 2.05, 0.95, '#2b303b', rack, 0, 1.03, 0);
+    rack.getObjectByName('leds')?.removeFromParent();
+    const dead = new Set(rack.userData.own);
+    for (const material of dead) material.dispose();
+    for (let i = k.nightMats.length - 1; i >= 0; i--) if (dead.has(k.nightMats[i][0])) k.nightMats.splice(i, 1);
+    return rack;
+  }
+  const delivery = createDelivery(k, PROPS, world, { makeRack, install: buildRacks, traffic, impact({ x, z }) {
+    burst(x, 0.25, z, 14, ['#e6ccaa', '#ffe6ae', '#fff3d7'], 2.1); st.view.onRackImpact?.();
+  } });
+  function buildRacks(count = st.view.racks || 0) {
     for (const x of rackOwned) x.dispose?.(); rackOwned = []; rackG.clear(); leds = null;
-    const dead = new Set(); const L = st.L, n = Math.min(st.view.racks || 0, L.rackRow * 3), x0 = L.W / 2 - L.rz + 0.75, sp = Math.min(1.05, (L.rz - 1.3) / Math.max(1, L.rackRow - 1)), g = k.group(), pts = [];
+    const L = st.L, n = Math.min(count, L.rackRow * 3), x0 = rackSlot(L, 0).x, g = k.group(), pts = [];
     for (let i = 0; i < n; i++) {
-      const r = i / L.rackRow | 0, c = i % L.rackRow, x = x0 + c * sp, z = -L.D / 2 + 0.85 + r * 1.6, R = PROPS.server_rack?.build(k, { seed: i });
-      if (R) { R.getObjectByName('leds')?.removeFromParent(); for (const m of R.userData.own || []) { m.dispose(); dead.add(m); } R.position.set(x, 0.12, z); g.add(R); }
-      else k.box(0.7, 2.05, 0.95, '#2b303b', g, x, 1.15, z, { r: 0.03, metal: 0.5, rough: 0.5 });
+      const { x, z } = rackSlot(L, i), rack = makeRack(i); rack.position.set(x, 0.12, z); g.add(rack);
       for (let row = 0; row < 12; row++) for (let j = 0; j < 3; j++) pts.push([x + 0.165 + j * 0.03, 0.12 + 0.19 + row * 0.15, z + 0.43]);
     }
-    for (let i = k.nightMats.length - 1; i >= 0; i--) if (dead.has(k.nightMats[i][0])) k.nightMats.splice(i, 1);
     if (n && furnace) {                                                       // 线缆和冷却管：从机柜底下通到炉子
       const a = [x0 + 0.4, 0.1, -L.D / 2 + 1.5], b = furnace.g.position;
       for (const [off, col, o] of [[-0.1, '#20242b', { rough: 0.6, tex: 'rubber' }], [0.02, '#c8402f', { rough: 0.5, tex: 'rubber' }], [0.14, '#39c6ff', { glow: '#39c6ff', glowK: 0.5, night: 2.4 }]]) k.tube([[a[0] + off, a[1], a[2]], [a[0] + 0.3 + off, 0.1, (a[2] + b.z) / 2 - 0.4], [b.x - 0.6 + off, 0.1, b.z - 1.2], [b.x + off * 0.5, 0.14, b.z - 0.5]], 0.04, col, g, 0, 0, 0, o);
@@ -1101,6 +1111,7 @@ export function createRoom(stage, k, PROPS, art) {
   let scrT = 0;
   const off = stage.onFrame((dt, t, env) => {
     st.t = t; const v = st.view, n = env.night;
+    delivery.step(dt);
     if (tw.on) towerStep(dt);
     for (const f of ticks) f(t, dt);
     lampA.intensity = lampB.intensity = tw.on && (tw.open < 0 || tw.ride) ? 0 : n * 9;      // 总览、坐电梯途中没有哪层是「打开」的
@@ -1151,11 +1162,18 @@ export function createRoom(stage, k, PROPS, art) {
     // 什么变了要重盖房子：地区、档位、品牌色；起步那档还看落脚点；套壳派没丹炉；产品赛道的摆设（多层楼里没有）
     const key = `${getLang()}|${v.region}|${v.level}|${v.brand || ''}|${v.level === 1 ? startKind(v.region, v.district) : ''}|${v.own === false ? 'egg' : ''}|${FLOOR_PLANS[v.level] ? '' : v.track || ''}`, rebuilt = key !== st.key; let up = false;
     if (rebuilt) {
+      delivery.cancel();
       up = !!st.key && p.region === v.region && v.level > p.level; st.key = key; buildRoom();
       reseatAll();
       buildFounder(); if (up) play('levelup');
     } else {
-      if ((v.racks || 0) !== (p.racks || 0)) { buildRacks(); if (tw.on) rackG.position.y = tw.F[tw.res].y; }
+      const capacity = st.L.rackRow * 3, before = Math.min(p.racks || 0, capacity), after = Math.min(v.racks || 0, capacity);
+      const animate = !tw.on && p.mode === 'play' && v.mode === 'play' && v.motion !== false && p.session === v.session && p.track === v.track;
+      if (animate && after > before) {
+        if (delivery.active) delivery.extend(after); else delivery.start(st.L, v.brand, before, after, st.shutter);
+      } else if (before !== after || (delivery.active && (!animate || v.racks < p.racks))) {
+        delivery.cancel(); buildRacks(); if (tw.on) rackG.position.y = tw.F[tw.res].y;
+      }
       if ((v.founder?.outfit || '') !== (p.founder?.outfit || '')) buildFounder();
       drawSign();
     }
@@ -1168,12 +1186,13 @@ export function createRoom(stage, k, PROPS, art) {
     return { rebuilt, up, L: st.L, floors: tw.on ? tw.N : 1, frame: tw.on ? tw.frame : null, lift: tw.on ? tw.camY - 0.3 * tw.frame.H : 0, top: tw.on ? tw.N * tw.FH + 3 : st.L.H + 2 };
   }
   return {
-    sync, play, get L() { return st.L; },
+    sync, play, get L() { return st.L; }, get deliveryIdleSince() { return delivery.idleSince; },
     // 手机档：关掉三盏点光源（室内暖灯、炉火），每个像素少算三盏灯；屏幕、招牌、炉火这些自发光照样亮
     setLite(on) { lampA.visible = lampB.visible = fireLight.visible = !on; },
     // 电梯现在的状态：给界面上的楼层面板用
     lift: () => ({ on: tw.on, N: tw.N, open: tw.open, target: tw.target, pos: tw.cut, moving: !!tw.ride, dir: tw.ride ? Math.sign(tw.ride.to - tw.ride.from) : 0, eta: tw.ride ? Math.max(0, tw.ride.dur - tw.ride.t) : 0, res: tw.res, boss: tw.boss }),
     dispose() {
+      delivery.cancel();
       off(); for (const b of bakes) b.userData.dispose?.(); for (const b of furnaceBakes) b.userData.dispose?.(); for (const x of owned) x.dispose?.(); for (const x of rackOwned) x.dispose?.();
       for (const a of actors.values()) freeActor(a); if (founder) freeActor(founder); if (pool) { stage.scene.remove(pool.mesh); pool.dispose(); } for (const s of screens) { s.t.dispose(); s.m.dispose(); } for (const t of emojiTex.values()) t.dispose(); glowTex.dispose(); fireMat.dispose(); coreMat.dispose(); stage.scene.remove(world);
     },

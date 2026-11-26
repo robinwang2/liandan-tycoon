@@ -112,6 +112,7 @@ const SIGN_COL = [['#c8402f', '#fff6e0'], ['#f2c14e', '#3a2a10'], ['#1f6f8b', '#
 
 export function createCity(stage, k, PROPS, artMat) {
   const CM = new THREE.Matrix4();
+  let blockedStreetZ = 0, parkedVanX = 0;
   let root = new THREE.Group(), live = null, job = null;                      // live：正在显示的城；job：后台正在搭的城
   let owned = [], bakes = [], blds = [], cars = [], peds = null, night = [], wetMats = [], ticks = [], frameInfo = null, built = '';
   const own = x => { owned.push(x); return x; };
@@ -470,7 +471,7 @@ export function createCity(stage, k, PROPS, artMat) {
     for (const g of tmpGeo) g.dispose(); tmpGeo.length = 0;
 
     // ── 车流：绕着办公室的环路 + 外面的直街 ──
-    const mkCar = (name, color, seed) => { const g = P(name, { brand: color, seed }); if (!g) return null; const wheels = g.userData.wheels || [], b = k.bake(g); bakes.push(b); root.add(b); return { o: b, wheels }; };
+    const mkCar = (name, color, seed) => { const g = P(name, { brand: color, seed }); if (!g) return null; const wheels = g.userData.wheels || [], b = k.bake(g); bakes.push(b); root.add(b); return { o: b, wheels, halfLength: PROPS[name].size[1] / 2 }; };
     const moving = (HD?.moving || (bay ? ['car_sedan', 'robotaxi', 'car_suv', 'car_hatch', 'bus_city', 'car_pickup', 'robotaxi', 'van_delivery'] : ['car_taxi', 'scooter_delivery', 'car_sedan', 'scooter_delivery', 'bus_city', 'car_suv', 'van_delivery', 'car_taxi'])).slice();
     if (det === 0) moving.length = 4;                                                       // 手机档：只留环路上的四辆车
     if (det >= 2) moving.push(...moving.slice(0, 6));                                     // 极致档：车多一些
@@ -505,10 +506,24 @@ export function createCity(stage, k, PROPS, artMat) {
       if (q !== b.shown) { b.shown = q; CM.makeScale(1, Math.max(q, 0.001), 1).setPosition(0, GF * (1 - q), 0); for (const [bm, id] of b.refs) { bm.setMatrixAt(id, CM); bm.setVisibleAt(id, q > 0); } }
     }
     for (const c of cars) {
-      let ry;
-      if (c.loop) { c.p += c.v * dt; const [x, z, r] = loopPos(c.p, c.a, c.b); c.o.position.set(x, 0, z); ry = c.v > 0 ? r : r + Math.PI; }
-      else { c.p += c.v * c.sg * dt; if (Math.abs(c.p) > c.E) c.p = -c.sg * c.E; c.o.position.set(c.alongX ? c.p : c.lane, 0, c.alongX ? c.lane : c.p); ry = c.alongX ? c.sg * Math.PI / 2 : c.sg > 0 ? 0 : Math.PI; }
-      c.o.rotation.y = ry; for (const w of c.wheels) w.rotation.x += Math.abs(c.v) * dt / 0.3;
+      let ry, distance = c.v * dt;
+      if (c.loop) {
+        const side = Math.sign(blockedStreetZ);
+        if (side) {
+          const [currentX, currentZ] = loopPos(c.p, c.a, c.b), [nextX, nextZ] = loopPos(c.p + distance, c.a, c.b);
+          const waitGap = 4, vanEnvelope = 3.6, stopOffset = c.halfLength + vanEnvelope + waitGap;
+          let gap = -1;
+          if (side * (nextZ - currentZ) > 0) gap = Math.abs(blockedStreetZ) - side * currentZ - stopOffset;
+          else if (side * currentZ >= c.b - 0.01) gap = Math.sign(nextX - currentX) * (parkedVanX - currentX) - stopOffset;
+          if (gap >= 0) distance = Math.sign(distance) * Math.min(gap, Math.abs(distance) * clamp(gap / 2.5, 0, 1));
+        }
+        c.p += distance; const [x, z, r] = loopPos(c.p, c.a, c.b);
+        const clearance = Math.max(0, Math.abs(blockedStreetZ) + 2.05 - c.b);
+        const detour = side * clearance * clamp((side * z - c.b + 5) / 2, 0, 1);
+        c.offsetZ = lerp(c.offsetZ || 0, detour, 1 - Math.exp(-dt * 10));
+        c.o.position.set(x, 0, z + c.offsetZ); ry = c.v > 0 ? r : r + Math.PI;
+      } else { c.p += distance * c.sg; if (Math.abs(c.p) > c.E) c.p = -c.sg * c.E; c.o.position.set(c.alongX ? c.p : c.lane, 0, c.alongX ? c.lane : c.p); ry = c.alongX ? c.sg * Math.PI / 2 : c.sg > 0 ? 0 : Math.PI; }
+      c.o.rotation.y = ry; for (const w of c.wheels) w.rotation.x += Math.abs(distance) / 0.3;
     }
     if (peds) {
       const { body, head, N, a, b, M } = peds;
@@ -520,5 +535,6 @@ export function createCity(stage, k, PROPS, artMat) {
     }
   });
   function dispose() { if (job) abort(); if (live) { stage.scene.remove(live.root); release(live); live = null; } }
-  return { build, dispose, destroy() { off(); dispose(); }, get root() { return live?.root; }, get busy() { return !!job; } };
+  return { build, dispose, destroy() { off(); dispose(); }, get root() { return live?.root; }, get busy() { return !!job; },
+    setBlock(streetZ, vanX) { blockedStreetZ = streetZ; parkedVanX = vanX; }, clearBlock() { blockedStreetZ = 0; } };
 }

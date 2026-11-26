@@ -41,6 +41,9 @@ audio.setMuted(muted);
 const sfx = (kind, o) => audio.sfx(kind, o);
 function setMuted(m) { muted = m; audio.setMuted(m); try { localStorage.setItem('ldt_mute', m ? '1' : '0'); } catch { /* 存不了就算了 */ } }
 const FX_SOUND = { money: 'coin', confetti: 'confetti', levelup: 'levelup', alarm: 'alarm', boom: 'boom', cameo: 'cameo', release: 'release' };
+const onRackImpact = () => sfx('stamp');
+const reducedMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+let sceneSession = 0, previewRacks = null;
 const CLICK_SND = { ltab: 'tab', rtab: 'tab', dlg: 'choose', next: null, floor: null };
 // 界面框架里的图标（事件、卡牌等内容里的 emoji 保留）
 const TAB_IC = { rd: 'flask', team: 'people', cap: 'coins', pr: 'megaphone', ops: 'gear', ideo: 'flag' };
@@ -373,7 +376,7 @@ function setting(s, el) {
   }
   else if (s === 'hints') { V.hintsOff = !el.checked; try { localStorage.setItem('ldt_hints', V.hintsOff ? '0' : '1'); } catch { /* 存不了就算了 */ } render(); }
   else if (s === 'fps') { V.fps = el.checked; try { localStorage.setItem('ldt_fps', V.fps ? '1' : '0'); } catch { /* 存不了就算了 */ } render(); }
-  else if (s === 'themefx') { V.themeFxOff = !el.checked; if (V.themeFxOff) stopThemeFx(); try { localStorage.setItem('ldt_themefx', el.checked ? '1' : '0'); } catch { /* 存不了就算了 */ } }
+  else if (s === 'themefx') { V.themeFxOff = !el.checked; if (V.themeFxOff) stopThemeFx(); syncScene(); try { localStorage.setItem('ldt_themefx', el.checked ? '1' : '0'); } catch { /* 存不了就算了 */ } }
   else if (s.startsWith('vol:')) {
     audio.setVolume({ [s.slice(4)]: +el.value / 100 }); if (el.nextElementSibling) el.nextElementSibling.textContent = el.value;
     try { localStorage.setItem('ldt_audio_v1', JSON.stringify(audio.getState().volume)); } catch { /* 存不了就算了 */ }
@@ -532,7 +535,8 @@ function syncScene() {
       mode: V.screen === 'end' ? 'end' : 'play', t: S.t, region: S.co.region, level: S.co.office, sign: playerName(S, 'coName'),
       logo: S.co.logo ? logoDataURL(S.co.logo, S.co.brand) : undefined, brand: S.co.brand, founder: { outfit: S.founder.outfit || 'turtleneck' },
       staff: S.staff.map(e => ({ id: e.uid, role: e.role, mood: G.clamp(S.morale + (parseInt(e.uid.slice(1), 10) * 7) % 21 - 10, 0, 100) })),
-      racks: S.ownModel ? G.clamp(Math.ceil(Math.log2(S.gpu / 8 + 1)), 0, 12) : 0,
+      racks: previewRacks ?? (S.ownModel ? G.clamp(Math.ceil(Math.log2(S.gpu / 8 + 1)), 0, 12) : 0),
+      motion: !V.themeFxOff && !reducedMotion?.matches, onRackImpact, session: sceneSession,
       furnace: S.ownModel && S.furnace?.on && free > 0 ? { heat: G.clamp(0.25 + free / Math.max(1, G.quota(S)) * 0.75, 0, 1) } : null,
       night: String(S.policies.work) === '996', alert: crisisNow() >= 2, floor: floorNow(), bci: !!S.flags.bci_ok,
       district: S.founder.traits.find(id => id.startsWith('d_')), own: !!S.ownModel, track: S.co.track,   // 开局的差异：落脚点决定起步的房子和街区，套壳派没有丹炉，产品赛道有各自的摆设
@@ -638,7 +642,7 @@ function nextMonth() {
   if (!S.over) toast({ text: ut('ui.month.toast', { 日期: G.dateStr(S.t - 1), 收入: G.money(S, S.last.rev), 支出: G.money(S, S.last.cost), 净: G.money(S, S.last.net, true) }) + (feat ? '\n' + ut('ui.month.feat', { 图标: feat.icon, 功能: feat.name }) : '') });
   pump();
 }
-const resetView = () => { V.theme = undefined; V.crisis = 0; V.summary = null; V.toast = null; V.pop = null; V.tipKey = null; V.hintSeen = {}; V.floorLv = null; V.hintsReady = false; V.hintsAll = false; V.flash = null; };
+const resetView = () => { sceneSession++; previewRacks = null; V.theme = undefined; V.crisis = 0; V.summary = null; V.toast = null; V.pop = null; V.tipKey = null; V.hintSeen = {}; V.floorLv = null; V.hintsReady = false; V.hintsAll = false; V.flash = null; };
 function startGame(setup) { S = G.newGame(setup, meta); V.screen = 'play'; V.ltab = 'rd'; V.rtab = 'board'; resetView(); pump(); }
 
 const CMD = {
@@ -782,6 +786,20 @@ export function boot(root, scene) {
   });
   const fit = () => { document.documentElement.style.setProperty('--z', G.clamp(Math.min(innerWidth / 1280, innerHeight / 720), 0.5, 1.3).toFixed(3)); syncScene(); };
   addEventListener('resize', fit);
+  reducedMotion?.addEventListener('change', syncScene);
+  if (import.meta.env.DEV && office?.debug?.room && new URLSearchParams(location.search).get('truck') === '1') {
+    const room = office.debug.room, delay = 6000;
+    let nextRackAt = performance.now() + delay;
+    setInterval(() => {
+      const now = performance.now();
+      if (V.screen !== 'play' || !S || document.hidden) { nextRackAt = now + delay; return; }
+      if (room.deliveryIdleSince === null || now < Math.max(nextRackAt, room.deliveryIdleSince + delay)) return;
+      const capacity = room.L.rackRow * 3;
+      const current = previewRacks ?? (S.ownModel ? Math.min(capacity, Math.ceil(Math.log2(S.gpu / 8 + 1))) : 0);
+      nextRackAt = now + delay;
+      previewRacks = current >= capacity ? 0 : current + 1; syncScene();
+    }, 250);
+  }
   ui.addEventListener('click', e => {
     const el = e.target.closest('[data-a]');
     if (!el || el.disabled) return;
