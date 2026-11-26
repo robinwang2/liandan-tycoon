@@ -3,7 +3,7 @@
 //
 // 数据本身在表格里：tables/设定.xlsx 和 tables/平衡参数.xlsx。
 // 改表 → npm run tables（导出成 ./tables/*.json，顺便查错）→ 这里读进来，再补上几张派生的索引表和几个小函数。
-import { localize } from '../i18n/tables.js';
+import { localize, sourceField } from '../i18n/tables.js';
 import T from './tables/defs.json' with { type: 'json' };
 import PARAMS from './tables/params.json' with { type: 'json' };
 import { fillDefs, fillRefs, refMaps } from './refs.js';
@@ -29,6 +29,9 @@ export const ATTR_NAME = Object.defineProperties({}, Object.fromEntries(ATTRS.ma
 export const TRAIT = Object.fromEntries(Object.values(TRAITS).flat().map(t => [t.id, t]));
 export const PERK = Object.fromEntries(PERKS.map(p => [p.id, p]));
 export const FEAT = Object.fromEntries(FEATURES.map(f => [f.id, f]));
+
+export const rivalDefs = Object.fromEntries(RIVALS.map(row => [row.id, Object.fromEntries(
+  ['name', 'boss', 'model'].map(key => [key, sourceField(row, key)]))]));
 
 export const MAX_OFFICE = OFFICES.length - 1;
 // 起步那一档叫什么，看落脚点（3A 版里六个落脚点的房子和街区各不一样；「特质」表的「起步办公室叫什么」列）；

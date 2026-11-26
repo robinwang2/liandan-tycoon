@@ -13,6 +13,30 @@ if (!process.argv.includes('--worker')) {
   const run = lang => execFileSync(process.execPath, [fileURLToPath(import.meta.url), '--worker'], { env: { ...process.env, LDT_LANG: lang }, encoding: 'utf8' });
   const baseline = run('zh');
   assert.deepEqual(run('en').trim().split('\n'), baseline.trim().split('\n'));
+  for (const start of ['zh', 'en']) {
+    setLang(start);
+    const game = G.newGame({ ...mkSetup(setups[0], 'clean'), region: 'bay', route: 'model', name: '叉AI', coName: '第一性原理', modelName: '太上', autoNames: 6 }, {});
+    const byte = G.rivalOf(game, 'bytejump');
+    assert.deepEqual([byte.name, byte.model, game.co.modelName], ['字跳', '豆沙包', '太上']);
+    const saved = JSON.stringify(game);
+    for (const lang of ['en', 'zh', 'en']) {
+      setLang(lang);
+      const rows = G.board(game), en = lang === 'en';
+      assert.deepEqual(rows.filter(row => !row.me).map(row => row.name).sort(), (en
+        ? ['OpenBI', 'Misanthropic', 'Goggle DeepMine', 'CrossAI', 'DeepSlack', 'ByteHop']
+        : ['OpenBI', '厌世智能', 'Goggle 深矿', '叉AI', '深度摸鱼', '字跳']).sort());
+      assert.equal(rows.find(row => row.id === byte.id).model, `${en ? 'Bean Bun' : '豆沙包'}-${byte.ver}`);
+      assert.equal(G.fmt(game, '{co}|{me}|{model}|{rival}', { rival: byte.id }), en ? 'First Principles|叉AI|High Sage-1|ByteHop' : '第一性原理|叉AI|太上-1|字跳');
+      assert.equal(JSON.stringify(game), saved);
+    }
+    const copy = JSON.parse(saved);
+    delete copy.flags.autoNames;
+    assert.equal(G.fmt(copy, '{co}|{model}'), '第一性原理|太上-1');
+    byte.next = 1;
+    G.endMonth(game);
+    assert.ok(game.log.some(entry => entry.msg.includes(`ByteHop drops Bean Bun-${byte.ver}`)));
+  }
+  console.log('Names: both starting languages, raw save values, repeated switches, custom names and rival news passed.');
   setLang('zh');
   const state = G.newGame(mkSetup(setups[0], 'clean'), {}), view = dialogView(state, G.nextDialog);
   const title = view.original.title, before = JSON.stringify(state);

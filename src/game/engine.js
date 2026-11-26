@@ -1,8 +1,10 @@
 import { getLang, compact, tr, units } from '../i18n/index.js';
+import { sourceField } from '../i18n/tables.js';
+import { playerName, playerModel } from '../data/player-names.js';
 // 《炼丹大亨》数值引擎：纯逻辑、无 DOM。状态 S 是可序列化的普通对象。
 import {
   MONTHS, START_YEAR, AGI_CAP, REGIONS, TRACKS, TRAIT, OFFICES, officeName, ROLES, STAFF_QUIRKS, POLICIES,
-  PERKS, PERK, FEAT, RIVALS, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, NAMES, ATTR_NAME, META_SHOP, MOD_NAME,
+  PERKS, PERK, FEAT, RIVALS, rivalDefs, STAGES, DATA_SOURCES, DIRT, ENDINGS, ACHIEVEMENTS, NAMES, ATTR_NAME, META_SHOP, MOD_NAME,
   GOALS, IDEO_FLAG_MODS, OLD_QUOTA_MULT, EAST_RIVALS, ROSE_RIVALS, P,
 } from '../data/defs.js';
 import { EVENTS_CHAINS } from '../data/events_chains.js';
@@ -74,13 +76,14 @@ export function power(S, role) {
 }
 export const researchEff = S => (1 + power(S, 'res') / P['model.resDiv']) * (1 + P['model.techK'] * (S.founder.attrs.tech - 5)) * mod(S, 'researchMult') ** P['model.resModExp'];
 export const rivalOf = (S, id) => S.rivals.find(r => r.id === id);
+export const rivalName = (rival, field = 'name') => rival ? tr(rivalDefs[rival.id]?.[field] ?? rival[field]) : '';
 export const upCap = S => (rivalOf(S, S.upstream)?.cap ?? 30) - P['app.upLag'];
 export const usesOwn = S => !!S.model && (S.co.route === 'model' || S.model.cap >= upCap(S) - P['app.ownGap']);
 export const usedCap = S => (usesOwn(S) ? S.model.cap : upCap(S));
 export const qCeil = S => P['quality.ceil0'] + P['quality.ceilK'] * usedCap(S);                 // 产品体验的天花板：取决于背后的模型有多强
 export function board(S) {
-  const rows = S.rivals.map(r => ({ id: r.id, name: r.name, model: `${r.model}-${r.ver}`, bench: r.bench, me: false }));
-  if (S.model) rows.push({ id: 'me', name: S.co.name, model: S.model.name, bench: S.model.bench, me: true });
+  const rows = S.rivals.map(r => ({ id: r.id, name: rivalName(r), model: `${rivalName(r, 'model')}-${r.ver}`, bench: r.bench, me: false }));
+  if (S.model) rows.push({ id: 'me', name: playerName(S, 'coName'), model: playerModel(S), bench: S.model.bench, me: true });
   return rows.sort((a, b) => b.bench - a.bench);
 }
 export const rank = S => { const i = board(S).findIndex(r => r.me); return i < 0 ? 99 : i + 1; };
@@ -182,7 +185,7 @@ export function addDirt(S, v) {
   S.hadDirt = true;
   const old = S.dirt.find(d => d.type === type);
   if (old) { old.sev = Math.min(P['dirt.stackMax'], old.sev + sev * P['dirt.stackK']); return old; }
-  const d = { uid: 'd' + S.uid++, type, name: (typeof v === 'object' && v.name) || D.name, sev, t: S.t };
+  const d = { uid: 'd' + S.uid++, type, name: (typeof v === 'object' && sourceField(v, 'name')) || sourceField(D, 'name'), sev, t: S.t };
   S.dirt.push(d);
   if (S.dirt.length >= P['ach.dirty']) award(S, 'dirty');
   return d;
@@ -233,7 +236,7 @@ const FX = {
   perk: S => { S.q.push({ type: 'draft' }); },
   project: (S, v, ctx) => {
     if (S.projects.some(p => p.id === v.id)) return;
-    S.projects.push({ uid: 'p' + S.uid++, id: v.id, chain: v.chain || null, name: v.name, desc: v.desc || '', kind: v.kind || 'res', need: v.need || P['proj.need'], done: 0, t: S.t, due: S.t + (v.months || P['proj.months']), ok: v.ok || null, fail: v.fail || null, ctx });
+    S.projects.push({ uid: 'p' + S.uid++, id: v.id, chain: v.chain || null, name: sourceField(v, 'name'), desc: sourceField(v, 'desc') || '', kind: v.kind || 'res', need: v.need || P['proj.need'], done: 0, t: S.t, due: S.t + (v.months || P['proj.months']), ok: v.ok || null, fail: v.fail || null, ctx });
     news(S, tx(S, 'news.project', { 项目: v.name }));
   },
   chain: (S, v) => {
@@ -286,8 +289,8 @@ function whyNot(S, req) {
 export function fmt(S, s, ctx = {}) {
   if (!s) return '';
   const r = ctx.rival && rivalOf(S, ctx.rival);
-  const map = { co: S.co.name, me: S.founder.name, model: S.model?.name || S.co.modelName, rival: r?.name || tx(S, 'fmt.rival'), boss: r?.boss || tx(S, 'fmt.boss'), staff: ctx.staffName || tx(S, 'fmt.staff'), cur: REGIONS[S.co.region].cur };
-  return units(String(tr(s)).replace(/\{(\w+)\}/g, (m, k) => tr(map[k]) ?? m));
+  const map = { co: playerName(S, 'coName'), me: playerName(S, 'name'), model: playerModel(S), rival: r ? rivalName(r) : tx(S, 'fmt.rival'), boss: r ? rivalName(r, 'boss') : tx(S, 'fmt.boss'), staff: ctx.staffName || tx(S, 'fmt.staff'), cur: REGIONS[S.co.region].cur };
+  return units(String(tr(s))).replace(/\{(\w+)\}/g, (m, k) => map[k] ?? m);
 }
 function makeCtx(S, ev) {
   const ctx = {}, txt = typeof ev.text === 'string' ? ev.text + JSON.stringify(ev.options) : '';
@@ -348,7 +351,7 @@ function scandalDialog(S, d) {
   if (S.cash < fee) { pay.disabled = true; pay.why = tx(S, 'scandal.noCash'); }
   return {
     kind: 'event', cat: 'dirt', icon: tx(S, 'scandal.icon'), art: tx(S, 'scandal.art'), title: tx(S, 'scandal.title', { 黑料: d.name }),
-    text: tx(S, D.crime ? 'scandal.text.crime' : 'scandal.text', { 爆料: D.blurb || tx(S, 'scandal.blurb'), 严重度: Math.round(sev), 公司: S.co.name }),
+    text: tx(S, D.crime ? 'scandal.text.crime' : 'scandal.text', { 爆料: D.blurb || tx(S, 'scandal.blurb'), 严重度: Math.round(sev), 公司: playerName(S, 'coName') }),
     options: [
       optCheck(S, tx(S, 'scandal.deny'), tx(S, 'scandal.deny.hint'), 'cha', P['scandal.denyDc'] + sev / P['scandal.denyDiv'],
         () => { removeDirt(S, d.uid); applyFx(S, { rep: P['scandal.denyOkRep'] }); return tx(S, 'scandal.deny.ok'); },
@@ -437,9 +440,10 @@ export function newGame(setup, meta) {
     last: { rev: 0, cost: 0, net: 0 }, vam: null, streak: { profit: 0, x996: 0 }, stats: { maxUsers: 0, raised: 0, events: 0 }, hist: [], ach: [], over: null,
   };
   for (const id of S.founder.traits) { const a = TRAIT[id]?.attr; if (a) for (const k in a) S.founder.attrs[k] += a[k]; }
+  if (setup.autoNames) S.flags.autoNames = setup.autoNames;
   S.rivals = RIVALS.map(r => {
     const off = r.off + rf(S, -P['start.rivalJitter'], P['start.rivalJitter']), cap = frontier(1) + off;
-    return { id: r.id, name: r.name, boss: r.boss, model: r.model, color: r.color, off, drift: 0, cheat: r.cheat, ver: ri(S, P['start.rivalVerMin'], P['start.rivalVerMax']), cap, bench: cap + r.cheat, hype: P['start.rivalHype'], rel: 0, next: ri(S, P['start.rivalNextMin'], P['start.rivalNextMax']) };
+    return { id: r.id, ...rivalDefs[r.id], color: r.color, off, drift: 0, cheat: r.cheat, ver: ri(S, P['start.rivalVerMin'], P['start.rivalVerMax']), cap, bench: cap + r.cheat, hype: P['start.rivalHype'], rel: 0, next: ri(S, P['start.rivalNextMin'], P['start.rivalNextMax']) };
   });
   S.upstream = pick(S, setup.region === 'sz' ? ['deepsleep', 'bytejump', 'openbi'] : ['openbi', 'misan', 'goggle']);
   if (S.ownModel) { const cap = myCap(S); S.model = { cap, bench: cap, ver: 1, name: `${S.co.modelName}-1`, infl: 0 }; S.gpu = P['start.gpu']; S.furnace = { on: true, data: 'open', months: 0 }; }
@@ -471,7 +475,7 @@ export function newGame(setup, meta) {
   refreshCands(S);
   S.ap = apMax(S);
   if (setup.tutorial) S.tut = { on: true, open: {}, queue: [], dirt0: S.dirt.length };
-  news(S, tx(S, 'news.founded', { 公司: S.co.name, 地区: R.name, 办公室: officeName(S) }));
+  news(S, tx(S, 'news.founded', { 公司: playerName(S, 'coName'), 地区: R.name, 办公室: officeName(S) }));
   return S;
 }
 
@@ -621,7 +625,7 @@ export function endMonth(S) {
     r.drift = clamp(r.drift + rf(S, -P['rival.driftStep'], P['rival.driftStep']), -P['rival.driftMax'], P['rival.driftMax']);
     r.cap = Math.min(AGI_CAP - P['rival.agiGap'], frontier(S.t + 1) + r.off + r.drift);
     r.hype *= P['rival.hypeDecay'];
-    if (--r.next <= 0) { r.ver++; r.bench = r.cap + r.cheat + rf(S, P['rival.benchMin'], P['rival.benchMax']); r.next = ri(S, P['rival.releaseMin'], P['rival.releaseMax']); r.hype = clamp(r.hype + P['rival.releaseHype'], 0, 100); news(S, tx(S, 'news.rivalRelease', { 对手: r.name, 模型: r.model, 版本: r.ver, 跑分: r.bench.toFixed(1), 老板: r.boss })); }
+    if (--r.next <= 0) { r.ver++; r.bench = r.cap + r.cheat + rf(S, P['rival.benchMin'], P['rival.benchMax']); r.next = ri(S, P['rival.releaseMin'], P['rival.releaseMax']); r.hype = clamp(r.hype + P['rival.releaseHype'], 0, 100); news(S, tx(S, 'news.rivalRelease', { 对手: rivalName(r), 模型: rivalName(r, 'model'), 版本: r.ver, 跑分: r.bench.toFixed(1), 老板: rivalName(r, 'boss') })); }
   }
   // 6. 团队
   if (S.morale < P['morale.quitLine'] && S.staff.length && rnd(S) < P['morale.quitOdds']) { const e = pick(S, S.staff.filter(x => x.quirk !== 'loyal').length ? S.staff.filter(x => x.quirk !== 'loyal') : S.staff); removeStaff(S, e.uid); news(S, tx(S, 'news.quit', { 名字: e.name, 岗位: ROLES[e.role].name })); }

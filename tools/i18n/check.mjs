@@ -13,7 +13,7 @@ const ui = new Set();
 const argumentPositions = new Map(Object.entries({ tr: [0], fill: [0], mark: [1, 2], textSign: [1] }));
 function collectUI(node, file, visible = false) {
   if (!node || typeof node !== 'object') return;
-  if (node.type === 'Literal' && visible && typeof node.value === 'string' && /\p{Script=Han}/u.test(node.value)) ui.add(node.value);
+  if (node.type === 'Literal' && visible && typeof node.value === 'string' && /[\p{Script=Han}「」]/u.test(node.value)) ui.add(node.value);
   if (node.type === 'CallExpression') {
     collectUI(node.callee, file);
     const positions = argumentPositions.get(node.callee.name) || [];

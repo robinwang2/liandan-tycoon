@@ -1,4 +1,4 @@
-import { tr, units } from '../i18n/index.js';
+import { tr, trVar, units } from '../i18n/index.js';
 // 表格文字里引用「数」的 {变量}：说明里的数直接读这一条记录自己的数、或者平衡参数，改了数，字跟着变。
 //
 // 写法：{名字} 或者 {名字:格式}（冒号写全角的也行，几个格式可以连着写：{抬价倍数:增:去号}）
@@ -66,7 +66,7 @@ export function fillRefs(text, { vars, P, ...ctx } = {}) {
   if (text == null) return text;
   return units(String(tr(text)).replace(/\{([^{}\s:：]+)((?:[:：][^{}\s:：]+)*)\}/g, (m, name, f) => {
     const fmts = f ? f.split(/[:：]/).filter(Boolean) : [];
-    if (vars && name in vars) { const v = vars[name]; return fmts.length ? fmtNum(v, fmts) ?? m : tr(v); }
+    if (vars && name in vars) { const v = vars[name]; return fmts.length ? fmtNum(v, fmts) ?? m : trVar(name, v); }
     if (P && name in P) return fmtNum(P[name], fmts) ?? m;
     const r = findRef(name, ctx);
     if (!r || r.ambiguous) return m;

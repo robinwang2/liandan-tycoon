@@ -6,11 +6,11 @@ import T from './tables/text.json' with { type: 'json' };
 import params from './tables/params.json' with { type: 'json' };
 import { fillRefs } from './refs.js';
 
-import { tr, units } from '../i18n/index.js';
+import { tr, trVar, units } from '../i18n/index.js';
 localize('text', T);
 export const TEXT = T.TEXT;                      // 键 → { text, bay? }
 export const fill = (s, v) => units(String(tr(s)).replace(/\{([^{}\s]+)\}/g, (match, key) =>
-  v && key in v ? tr(v[key]) : key.split(/[:：]/)[0].includes('.') ? fillRefs(match, { P: params.P }) : match));
+  v && key in v ? trVar(key, v[key]) : key.split(/[:：]/)[0].includes('.') ? fillRefs(match, { P: params.P }) : match));
 export const hasText = key => key in TEXT;
 export function text(key, vars, bay = false) {
   const e = TEXT[key];

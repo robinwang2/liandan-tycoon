@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 const ROOT = path.resolve(import.meta.dirname, '..');
 // 文件 → 这个文件里哪些函数是从 文本.xlsx 取字（actions.js 里的 T / say 取的是 行动.xlsx，不算）
 const FILES = {
+  'src/data/player-names.js': ['text'],
   'src/game/engine.js': ['tx', 'text'], 'src/game/ideology.js': ['vt', 'text'], 'src/game/advice.js': ['T', 'text'], 'src/game/actions.js': ['vt'],
   'src/ui/ui.js': ['ut', 'uh', 'ivh', 'lines', 'text', 'vt'], 'src/ui/tutorial.js': ['text'],
 };

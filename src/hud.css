@@ -787,5 +787,6 @@ body.lang-en #ui { font-family: "Segoe UI", Arial, sans-serif; }
 .lang-en #ui .pdx-opts { min-height: 0; overflow-y: auto; max-height: 50vh; }
 .lang-en #ui .pdx-text { line-height: 1.5; }
 .lang-en #ui .gauges .g span { width: 76px; }
+.lang-en #ui .lb .nm { width: 128px; }
 .lang-en #ui .tabs .tab { flex: 1 1 auto; }
 .lang-en #ui .tabs .tab span { font-size: 10px; }

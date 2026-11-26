@@ -14,6 +14,8 @@
 //   ok(x) / fail(x)  有检定、成功或失败时要多做点事。写了它，对应的效果列就不会自动生效（要的话在里面调 x.fx() / x.failFx()）
 // 脚本拿到的 x：{ S 状态, p 参数, a 表里这一行, T(键, 变量) 取「行动文本」里的一段话, fx(额外效果?) / failFx(额外效果?) 让效果列生效 }
 import * as G from './engine.js';
+import { playerName, playerModel } from '../data/player-names.js';
+import { tr } from '../i18n/index.js';
 import { DATA_SOURCES, FEATURES, FEAT, OFFICES, MAX_OFFICE, officeName, floorsOf, STAGES, INVESTORS, INVESTORS_EAST, INVESTORS_PROGRESSIVE, EAST_RIVALS, INVEST_RIVALS, ROSE_RIVALS, ROLES, DIRT, AGI_CAP, P, fillRec } from '../data/defs.js';
 import { TAB_ROWS, ACTION_ROWS, RAISE_OFFERS, ACT_TEXT } from '../data/actions.js';
 import * as IDEO from './ideology.js';
@@ -48,10 +50,10 @@ function launch(x, cap, infl, dirt, vol, costK, repK) {
   applyFx(S, { hype: p.名次热度[rk - 1] * vol, usersPct: (p.名次用户基数 - rk) * p.每名次用户 * vol, rep: (infl === 0 && rk <= p.前排 ? p.老实加口碑 : 0) + repK });
   S.fxq.push(['release']);                                              // 丹炉开盖、金光出炉（经典版场景没有这个特效，会直接忽略）
   if (rk <= p.撒花名次) S.fxq.push(['confetti']);
-  news(S, T('release.news', { 公司: S.co.name, 模型: S.model.name, 跑分: S.model.bench.toFixed(1), 名次: rk }));
+  news(S, T('release.news', { 公司: playerName(S, 'coName'), 模型: playerModel(S), 跑分: S.model.bench.toFixed(1), 名次: rk }));
   if (cap >= AGI_CAP) S.q.push({ type: 'event', id: 'agi' });
   const tail = T(infl > p.多注水线 ? 'release.tail.heavy' : infl > 0 ? 'release.tail.light' : 'release.tail.honest');
-  return { text: T(rk === 1 ? 'release.done.top1' : rk <= p.前排 ? 'release.done.top3' : 'release.done.other', { 模型: S.model.name, 名次: rk }) + tail };
+  return { text: T(rk === 1 ? 'release.done.top1' : rk <= p.前排 ? 'release.done.top3' : 'release.done.other', { 模型: playerModel(S), 名次: rk }) + tail };
 }
 function releaseDialog(x) {
   const { S, p, T } = x;
@@ -88,7 +90,7 @@ function closeRound(x, val, share, who) {
   S.cash += cash; S.equity *= 1 - share; S.stage++; S.lastRaiseT = S.t; S.raiseBoost = 0; S.stats.raised += cash;
   x.fx();
   S.q.push({ type: 'draft' }); S.fxq.push(['money']);
-  news(S, T('raise.news', { 公司: S.co.name, 轮次: STAGES[S.stage].name, 机构: who, 金额: money(S, cash), 估值: money(S, val) }));
+  news(S, T('raise.news', { 公司: playerName(S, 'coName'), 轮次: STAGES[S.stage].name, 机构: who, 金额: money(S, cash), 估值: money(S, val) }));
   return T('raise.done', { 轮次: STAGES[S.stage].name, 金额: money(S, cash) });
 }
 function raiseDialog(x) {
@@ -103,7 +105,7 @@ function raiseDialog(x) {
   const now = S.users + S.fake, target = Math.max(now * p.对赌倍数, STAGES[Math.min(STAGES.length - 1, k + 1)].users * p.对赌下限);
   const rv = pick(S, S.rivals.filter(r => (red ? EAST_RIVALS : rose ? ROSE_RIVALS : INVEST_RIVALS).includes(r.id)));
   const offer = o => {
-    const v = { 对手: rv.name };
+    const v = { 对手: G.rivalName(rv) };
     if (o.label.includes('{机构}')) v.机构 = pick(S, vcs);
     const name = fill(o.label, v), note = o.note != null ? fill(o.note, { 目标: fmtUsers(target) }, o) : '';
     const hv = { 估值: money(S, val0 * o.vk), 出让: Math.round(o.share * 100), 到账: money(S, val0 * o.vk * o.share), 备注: note };
@@ -202,7 +204,7 @@ const HOOKS = {
     block: ({ S, T }) => (S.co.office >= MAX_OFFICE ? T('office.block') : null),
     run: x => {
       const { S, T } = x;
-      S.co.office++; x.fx(); S.fxq.push(['levelup']); news(S, T('office.news', { 公司: S.co.name, 办公室: officeName(S) }));
+      S.co.office++; x.fx(); S.fxq.push(['levelup']); news(S, T('office.news', { 公司: playerName(S, 'coName'), 办公室: officeName(S) }));
       return floorsOf(S.co.office) ? T('office.done.tower', { 分法: T(S.co.office === MAX_OFFICE ? 'office.done.top' : 'office.done.split') }) : T('office.done', { 办公室: officeName(S) });
     },
   },
@@ -229,7 +231,7 @@ const HOOKS = {
       if (crime.length) {
         for (const d of crime.slice(0, p.最多引爆)) S.q.push({ type: 'scandal', uid: d.uid });
         x.failFx();
-        return { ok: false, text: T('ipo.fail', { 黑料: crime.map(d => d.name).join('」「') }) };
+        return { ok: false, text: T('ipo.fail', { 黑料: crime.map(d => tr(d.name)).join(tr('」「')) }) };
       }
       G.endGame(S, 'ipo');
       return { ok: true, text: found.length ? T('ipo.found', { 黑料: found[0].name }) : T('ipo.clean') };
@@ -272,7 +274,7 @@ const HOOKS = {
         kind: 'event', cat: 'dirt', icon: T('wash.icon'), art: T('wash.art'), title: T('wash.title'), text: T('wash.text'),
         options: S.dirt.slice().sort((x, y) => y.sev - x.sev).slice(0, p.最多几张).map(d => {
           const fee = unit(S) * d.sev / p.费用除数;
-          const o = optCheck(S, d.name, T('wash.hint', { 严重度: Math.round(d.sev), 花费: money(S, fee) }), a.check.attr, a.check.dc + d.sev / p.难度除数,
+          const o = optCheck(S, tr(d.name), T('wash.hint', { 严重度: Math.round(d.sev), 花费: money(S, fee) }), a.check.attr, a.check.dc + d.sev / p.难度除数,
             () => { G.removeDirt(S, d.uid); return T('wash.ok', { 黑料: d.name }); },
             () => { d.sev += p.失败加重; return T('wash.fail', { 黑料: d.name }); },
             () => { S.cash -= fee; });
@@ -287,9 +289,9 @@ const HOOKS = {
     run: ({ S, p, a, T }) => ({
       dialog: {
         kind: 'event', cat: 'rival', icon: T('digdirt.icon'), art: T('digdirt.art'), title: T('digdirt.title'), text: T('digdirt.text'),
-        options: S.rivals.slice().sort((x, y) => y.bench - x.bench).slice(0, p.最多几家).map(r => optCheck(S, r.name, T('digdirt.hint', { 老板: r.boss, 跑分: r.bench.toFixed(1) }), a.check.attr, r.cheat >= p.注水线 ? p.注水难度 : a.check.dc,
-          () => { r.bench -= p.对手跑分; applyFx(S, a.fx, { rival: r.id }); return T('digdirt.ok', { 对手: r.name, 模型: r.model, 老板: r.boss }); },
-          () => { applyFx(S, a.failFx, { rival: r.id }); return T('digdirt.fail', { 对手: r.name, 老板: r.boss }); })),
+        options: S.rivals.slice().sort((x, y) => y.bench - x.bench).slice(0, p.最多几家).map(r => optCheck(S, G.rivalName(r), T('digdirt.hint', { 老板: G.rivalName(r, 'boss'), 跑分: r.bench.toFixed(1) }), a.check.attr, r.cheat >= p.注水线 ? p.注水难度 : a.check.dc,
+          () => { r.bench -= p.对手跑分; applyFx(S, a.fx, { rival: r.id }); return T('digdirt.ok', { 对手: G.rivalName(r), 模型: G.rivalName(r, 'model'), 老板: G.rivalName(r, 'boss') }); },
+          () => { applyFx(S, a.failFx, { rival: r.id }); return T('digdirt.fail', { 对手: G.rivalName(r), 老板: G.rivalName(r, 'boss') }); })),
       },
     }),
   },
@@ -306,7 +308,7 @@ const HOOKS = {
   utopia: {
     show: ({ S }) => IDEO.isRed(S) && !S.flags.utopia_on,
     cost: ({ p }) => p.花费,
-    run: ({ S }) => { S.flags.utopia_on = 1; G.queueEvent(S, IDEO.chainStart(S, 'utopia')); news(S, IDEO.vt(S, 'ideo.utopia.news', { 公司: S.co.name })); return IDEO.actText(S, 'utopia', G); },
+    run: ({ S }) => { S.flags.utopia_on = 1; G.queueEvent(S, IDEO.chainStart(S, 'utopia')); news(S, IDEO.vt(S, 'ideo.utopia.news', { 公司: playerName(S, 'coName') })); return IDEO.actText(S, 'utopia', G); },
   },
   selfcrit: {
     show: ({ S }) => IDEO.isRed(S),

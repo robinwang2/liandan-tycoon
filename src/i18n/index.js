@@ -13,6 +13,7 @@ export function setLang(next) {
   for (const fn of listeners) fn();
 }
 export const tr = value => lang === 'en' && typeof value === 'string' ? english[value] ?? value : value;
+export const trVar = (key, value) => ['公司', '名字', '模型'].includes(key) ? value : tr(value);
 export function compact(value) {
   const rounded = Number(value.toPrecision(3)), abs = Math.abs(rounded);
   const [scale, suffix] = abs >= 1e9 ? [1e9, 'B'] : abs >= 1e6 ? [1e6, 'M'] : abs >= 1e3 ? [1e3, 'K'] : [1, ''];
