@@ -196,6 +196,8 @@ for v in sorted(views, key=lambda view: view == 'color'):
         lamp.location = center + Vector((-1.2, -2, 2)) * span
         lamp.rotation_euler = (center-lamp.location).to_track_quat('-Z','Y').to_euler()
     d = DIRS['persp' if v == 'color' else v].normalized()
+    if v == 'color' and any(obj.name == 'door_left' for obj in meshes):
+        d = Vector((-1.4,1,.65)).normalized()
     cam.location = center + d * dist
     cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
     if v in ('persp','color'):

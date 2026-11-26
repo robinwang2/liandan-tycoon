@@ -224,6 +224,24 @@ def triangles(obj):
     return len(obj.data.loop_triangles)
 
 
+def components(mesh):
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    pending = set(bm.faces)
+    count = 0
+    while pending:
+        count += 1
+        stack = [pending.pop()]
+        while stack:
+            for edge in stack.pop().edges:
+                for face in edge.link_faces:
+                    if face in pending:
+                        pending.remove(face)
+                        stack.append(face)
+    bm.free()
+    return count
+
+
 def reduce(obj, ratio):
     if ratio < 1:
         bpy.context.view_layer.objects.active = obj
@@ -233,6 +251,52 @@ def reduce(obj, ratio):
         bpy.ops.object.modifier_apply(modifier=mod.name)
         # 微小连通件折到最后可能剩下一对重复的三角面，FBX 导入器会删掉其中一面。
         obj.data.validate(clean_customdata=False)
+
+
+def piece_ids(mesh):
+    attribute = mesh.attributes['_PIECE'].data
+    return {round(attribute[face.vertices[0]].value) for face in mesh.polygons}
+
+
+def reduce_procedural(obj, ratio):
+    source = obj.data
+    expected = piece_ids(source)
+    target = math.ceil(triangles(obj)*ratio)
+    obj.data = source.copy()
+    reduce(obj, ratio)
+    fixed = expected - piece_ids(obj.data)
+
+    def subset(include_fixed):
+        result = bmesh.new()
+        result.from_mesh(source)
+        tag = result.verts.layers.float['_PIECE']
+        excluded = [v for v in result.verts if (int(v[tag]) in fixed) != include_fixed]
+        bmesh.ops.delete(result, geom=excluded, context='VERTS')
+        return result
+
+    while fixed:
+        discarded = obj.data
+        obj.data = source.copy()
+        bpy.data.meshes.remove(discarded)
+        kept = subset(True)
+        rest = subset(False)
+        rest.to_mesh(obj.data)
+        rest.free()
+        reserved = sum(len(face.verts)-2 for face in kept.faces)
+        remaining = triangles(obj)
+        if remaining:
+            reduce(obj, min(1., max(1, target-reserved)/remaining))
+        missing = expected - fixed - piece_ids(obj.data) if remaining else set()
+        if not missing:
+            if remaining:
+                kept.from_mesh(obj.data)
+            kept.to_mesh(obj.data)
+        kept.free()
+        if not missing:
+            break
+        fixed.update(missing)
+    bpy.data.meshes.remove(source)
+    return sorted(fixed)
 
 
 def hybrid_reduction(counts, goal, limit, legacy):
@@ -443,7 +507,7 @@ for index, mat in enumerate(materials):
     records.append(textures(mat, stem))
     if extra_levels and 'baseMapEmission' in mat and records[-1].get('BaseColor'):
         records[-1]['baseMapEmission'] = float(mat['baseMapEmission'])
-    if (args.hybrid and mat.name == 'M_'+args.name+'_Glass') or (extra_levels and mat.get('transparentProp')):
+    if (args.hybrid and mat.name in ('M_'+args.name+'_Glass','M_'+args.name+'_DoorGlass')) or (extra_levels and mat.get('transparentProp')):
         bsdf = next(n for n in mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
         records[-1]['baseColor'][3] = bsdf.inputs['Alpha'].default_value
         records[-1]['glass'] = True
@@ -480,8 +544,19 @@ limits = [args.budget, *map(int, args.lod_limits.split(','))] if args.lod_limits
 targets = [0, *map(int, args.lod_targets.split(','))]
 for level, ratio in enumerate([1,.4,.12]):
     group = []
+    protected = {}
     goal = targets[level]
-    if args.hybrid and level:
+    procedural = args.hybrid and args.source.name == 'game.glb'
+    if procedural and level:
+        fixed = {name for name in part_names if counts[name] <= 32 or (name != 'Shell' and not name.startswith('wheel_'))}
+        reserved = sum(counts[name] for name in fixed)
+        reducible = sum(counts.values()) - reserved
+        goal = goal or min(limits[level], reserved + math.ceil(reducible*(.62 if level == 1 else .25)))
+        ratio = min(1., (goal-reserved-2*(len(part_names)-len(fixed)))/max(1,reducible))
+        if ratio <= 0:
+            raise ValueError('活动件没有足够的 LOD 预算')
+        part_ratios = {name: 1. if name in fixed else ratio for name in part_names}
+    elif args.hybrid and level:
         # 首轮保留原常用的 40% / 12% 目标，重试只增加外壳预算。
         goal = goal or min(limits[level], math.ceil(args.budget * ratio))
         part_ratios, goal = hybrid_reduction(counts, goal, limits[level], args.legacy_hybrid and not targets[level])
@@ -499,7 +574,10 @@ for level, ratio in enumerate([1,.4,.12]):
             if args.hybrid:
                 part_ratio = part_ratios[part_names[index]]
                 if part_ratio < 1:
-                    reduce(obj,part_ratio)
+                    if procedural:
+                        protected[part_names[index]] = reduce_procedural(obj,part_ratio)
+                    else:
+                        reduce(obj,part_ratio)
                     lo, hi = bounds([obj])
                     base, top = part_boxes[index]
                     if np.any((top-base > 1e-7) & (hi-lo < 1e-8)):
@@ -522,6 +600,8 @@ for level, ratio in enumerate([1,.4,.12]):
         suffix = '' if len(objects)==1 else ('_'+part_names[index] if args.hybrid or repair_rack or part_names[index] in ('Upper','Lower','Fish') else f'_Part{index+1:02}')
         obj.name = f'SM_{args.name}{suffix}_LOD{level}'
         obj.data.name = obj.name
+        if procedural and piece_ids(obj.data) != piece_ids(original.data):
+            raise ValueError('减面丢失原始程序件：'+obj.name)
         group.append(obj)
     count = sum(map(triangles,group))
     if count > args.budget or not count:
@@ -557,6 +637,9 @@ for level, ratio in enumerate([1,.4,.12]):
     floor, ceiling = bounds(group)
     lods.append(dict(level=level, triangles=count, size=dimensions(floor,ceiling), origin=list(anchor(floor,ceiling)), parts=[obj.name for obj in group]))
     lods[-1]['budget'] = limits[level]
+    if procedural:
+        lods[-1]['sourcePieces'] = dict(zip(part_names, (len(piece_ids(obj.data)) for obj in group)))
+        lods[-1]['rescuedPieceIds'] = {name: ids for name, ids in protected.items() if ids}
     lods[-1]['targetTriangles'] = goal or count
     lods[-1]['retainedRatio'] = count / sum(counts.values())
     if args.hybrid:
@@ -598,12 +681,18 @@ for lod in lods:
     lod['fbxSurfaceAnchorMeters'] = measured
     if args.hybrid:
         lod['partPivotsBlender'] = {}
+        if procedural:
+            lod['partComponents'] = {}
         for name, pivot in expected_pivots.items():
             obj = next(o for o in group if o.name == f"SM_{args.name}_{name}_LOD{lod['level']}")
             actual = obj.matrix_world.translation
             if (actual-Vector(pivot)).length > 1e-4 or triangles(obj) == 0:
                 raise ValueError('FBX 回读枢轴或几何不匹配：'+obj.name)
             lod['partPivotsBlender'][name] = list(actual)
+            if procedural:
+                lod['partComponents'][name] = components(obj.data)
+                if lod['partComponents'][name] != lods[0]['partComponents'][name]:
+                    raise ValueError('FBX 回读连通部件数量改变：'+obj.name)
     if repair_rack:
         front = next(obj for obj in group if '_Front_LOD' in obj.name)
         signature = panel_signature(front)

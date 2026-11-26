@@ -27,7 +27,7 @@ const shotBatch = /^art-(batch[1-9]\d*)$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
 async function run() {
-  const resource = shotBatch==='batch6'?'Batch6':shotBatch && batchConfig(shotBatch).resource;
+  const resource = shotBatch==='batch7'?'Batch7':shotBatch==='batch6'?'Batch6':shotBatch && batchConfig(shotBatch).resource;
   if (shotBatch) methods.set(mode, 'CaptureSelectedBatch');
   const gamePath = folder => join(project, 'Build', folder, 'Liandan.exe');
   const testPlayer = process.env.LIANDAN_PLAYER ? resolve(process.env.LIANDAN_PLAYER) : gamePath('Game');
@@ -162,6 +162,11 @@ async function run() {
     const {props}=JSON.parse(readFileSync(join(project,'Assets/Shell/Resources/PropPolicyBatch6.json'),'utf8'));
     const tiles=await Promise.all(props.map(async ({id},index)=>({input:await sharp(join(folder,id+'.png')).resize(320,240,{fit:'contain'}).png().toBuffer(),left:index%4*320,top:Math.floor(index/4)*240})));
     await sharp({create:{width:1280,height:720,channels:3,background:'#f2f2f2'}}).composite(tiles).jpeg({quality:90}).toFile(join(folder,'contact.jpg'));
+  }
+  if(shotBatch==='batch7') {
+    const {default:sharp}=await import('sharp');
+    const folder=join(project,'Build/art-batch7');
+    await sharp(join(folder,'comparison.png')).jpeg({quality:92}).toFile(join(folder,'contact.jpg'));
   }
 }
 
