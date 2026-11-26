@@ -1,0 +1,10 @@
+{
+  "props": [
+    {"id":"elevator_car","name":"观光电梯轿厢","procedural":true,"origin":"bottom","w":1.62,"d":1.72,"h":2.57,"budget":40000,"x":-4,"z":-4,"parts":["Glass","Lights","Handrails","Controls","door_left","door_right"],"actions":[{"node":"door_left","axis":"slideZ","peak":-0.42},{"node":"door_right","axis":"slideZ","peak":0.42}]},
+    {"id":"car_pickup","name":"皮卡","procedural":true,"origin":"bottom","x":3,"y":0,"z":-4.7,"parts":["wheel_1","wheel_2","wheel_3","wheel_4","Lights","Glass"],"actions":[{"node":"wheel_1","axis":"x","degrees":90},{"node":"wheel_2","axis":"x","degrees":90},{"node":"wheel_3","axis":"x","degrees":90},{"node":"wheel_4","axis":"x","degrees":90}]},
+    {"id":"car_taxi","name":"出租车","procedural":true,"origin":"bottom","x":6,"y":0,"z":-4.7,"parts":["wheel_1","wheel_2","wheel_3","wheel_4","Lights","Glass"],"actions":[{"node":"wheel_1","axis":"x","degrees":90},{"node":"wheel_2","axis":"x","degrees":90},{"node":"wheel_3","axis":"x","degrees":90},{"node":"wheel_4","axis":"x","degrees":90}]},
+    {"id":"robotaxi","name":"无人出租车","procedural":true,"origin":"bottom","x":-6,"y":0,"z":0,"parts":["wheel_1","wheel_2","wheel_3","wheel_4","lidar","Lights","Glass"],"actions":[{"node":"wheel_1","axis":"x","degrees":90},{"node":"wheel_2","axis":"x","degrees":90},{"node":"wheel_3","axis":"x","degrees":90},{"node":"wheel_4","axis":"x","degrees":90},{"node":"lidar","axis":"y","degrees":90}]},
+    {"id":"van_delivery","name":"配送面包车","procedural":true,"origin":"bottom","x":-3,"y":0,"z":0,"parts":["wheel_1","wheel_2","wheel_3","wheel_4","Lights","Glass"],"actions":[{"node":"wheel_1","axis":"x","degrees":90},{"node":"wheel_2","axis":"x","degrees":90},{"node":"wheel_3","axis":"x","degrees":90},{"node":"wheel_4","axis":"x","degrees":90}]},
+    {"id":"bus_city","name":"城市公交","procedural":true,"origin":"bottom","x":0,"y":0,"z":0,"parts":["wheel_1","wheel_2","wheel_3","wheel_4","Lights","Glass","screen-surface"],"actions":[{"node":"wheel_1","axis":"x","degrees":90},{"node":"wheel_2","axis":"x","degrees":90},{"node":"wheel_3","axis":"x","degrees":90},{"node":"wheel_4","axis":"x","degrees":90}]}
+  ]
+}

@@ -49,6 +49,72 @@ function themeOf(region, level, district) {
   return { floor: ['#e8e2d6', { rough: 0.22, tex: 'stone', pat: ['tile', 1.2, 0.25, 0.05] }], wall: '#fbfbfa', frame: '#2a2f36', carpet: '#526b8a', glassRoom: true, curtain: true };
 }
 
+export function buildElevatorCabin(k, accent) {
+  const car = k.group(), shell = k.group(car);
+  car.name = 'elevator_car';
+  const frame = k.mat('#37434b', { rough: .38, metal: .78, tex: 'metal' });
+  const steel = k.mat('#bac5ca', { rough: .31, metal: .85, tex: 'metal' });
+  const dark = k.mat('#232d33'), light = k.mat('#fff3d6', { glow: '#fff3d6', glowK: .9, night: 2.6 });
+  const amber = k.mat('#ffcf77', { glow: '#ffb653', glowK: .55, night: 1.2 });
+  const glass = k.mat('#bfe3f0', { alpha: .28, rough: .05, metal: .2, env: 1.5, side: true });
+  const doorGlass = k.mat('#cfe9f3', { alpha: .36, rough: .05, metal: .2, env: 1.5, side: true });
+  const box = (w,h,d,mat,x,y,z,r=0) => k.box(w,h,d,mat,shell,x,y,z,{r});
+  const rail = k.group(shell), panel = k.group(shell); rail.name = 'Handrails'; panel.name = 'Controls';
+  box(1.62,.14,1.72,frame,0,.07,0,.018);
+  box(1.59,.027,1.69,steel,0,.149,0);
+  for (const x of [-.375,.375]) for (const z of [-.39,.39])
+    box(.746,.021,.775,k.mat('#818984',{tex:'stone',rough:.64}),x,.171,z);
+  box(1.62,.1,1.72,frame,0,2.23,0,.022);
+  for (const x of [-.75,.75]) for (const z of [-.8,.8]) box(.09,2.1,.09,frame,x,1.17,z,.014);
+  for (const side of [-1,0,1]) {
+    const rear = side === 0, wall = rear ? .75 : side*.8;
+    const strip = (span,h,thick,mat,along,y,inset=0) => rear
+      ? box(thick,h,span,mat,wall-inset,y,along) : box(span,h,thick,mat,along,y,wall-side*inset);
+    k.plane(rear?1.51:1.41,1.98,glass,shell,rear?wall:0,1.18,rear?0:wall,{ry:rear?Math.PI/2:side<0?Math.PI:0,cast:false});
+    for (const y of [.206,2.154]) strip(rear?1.52:1.42,.043,.036,steel,0,y);
+    for (const pos of [-1,1]) {
+      strip(.026,1.97,.032,frame,pos*(rear?.747:.697),1.18);
+      for (const y of [.39,1.94]) strip(.074,.092,.044,steel,pos*(rear?.693:.643),y);
+      k.box(rear?.105:.04,.048,rear?.04:.105,steel,rail,rear?.70:pos*.54,1.06,rear?pos*.58:side*.745);
+    }
+    k.cyl(.025,.025,rear?1.42:1.32,steel,rail,rear?.65:0,1.06,rear?0:side*.70,{rx:rear?Math.PI/2:0,rz:rear?0:Math.PI/2,seg:12});
+    strip(rear?1.48:1.38,.048,.015,accent,0,.88,-.013);
+  }
+  box(.79,.035,.90,dark,0,2.172,0); box(.74,.024,.85,light,0,2.148,0,.008);
+  for (const x of [-.54,.54]) {
+    box(.19,.022,.75,dark,x,2.17,0);
+    for (let index=0;index<9;index++) box(.17,.014,.024,steel,x,2.155,(index-4)*.078);
+  }
+  for (const y of [.195,2.1]) box(.082,.032,1.58,steel,-.75,y,0);
+  const doors = [-1,1].map(sign => {
+    const pane=k.geo('elevator-door-pane',()=>new THREE.PlaneGeometry(.774,1.87).rotateY(-Math.PI/2));
+    const door=k.put(pane,doorGlass,car,-.75,1.146,sign*.4,{cast:false});
+    door.name=sign<0?'door_left':'door_right';
+    for(const z of [-.386,.386]) k.box(.033,1.89,.021,steel,door,0,0,z);
+    for(const y of [-.935,.935]) k.box(.033,.032,.79,frame,door,0,y,0);
+    return door;
+  });
+  k.box(.21,.62,.035,frame,panel,-.55,1.22,.773,{r:.012});
+  for(let row=0;row<4;row++) for(const sign of [-1,1]) {
+    const x=-.55+sign*.048, y=1.41-row*.114;
+    k.cyl(.030,.030,.019,steel,panel,x,y,.747,{rx:Math.PI/2,seg:12});
+    if(row<3) k.cyl(.016,.016,.004,amber,panel,x,y,.735,{rx:Math.PI/2,seg:10});
+    else for(const half of [-1,1]) k.cone(.009,.015,amber,panel,x+half*.012,y,.733,{rz:half*sign*Math.PI/2,seg:3});
+  }
+  box(.073,.115,.42,dark,-.75,2.163,0);
+  for(const y of [2.145,2.18]) box(.008,.031,.011,amber,-.790,y,.008);
+  for(const sign of [-1,1]) box(.008,.013,.05,amber,-.790,2.16,sign*.017-.09).rotation.x=sign*.73;
+  for(const x of [-.63,.63]) {
+    for(const z of [-.69,.69]) box(.031,.22,.031,steel,x,2.38,z);
+    box(.032,.031,1.41,steel,x,2.49,0);
+  }
+  box(1.29,.032,.032,steel,0,2.49,-.69);
+  box(.26,.088,.53,frame,0,2.323,0,.014);
+  for(let index=0;index<4;index++) k.cyl(.018,.018,.21,steel,shell,0,2.465,(index-1.5)*.093,{seg:10});
+  for(const z of [-.69,.69]) box(.17,.092,.14,dark,.66,2.321,z,.012);
+  return {car,shell,doors};
+}
+
 export function createRoom(stage, k, PROPS, art, traffic) {
   const world = new THREE.Group(); world.position.y = Y0; stage.scene.add(world);
   const roomG = new THREE.Group(), rackG = new THREE.Group(), furnaceG = new THREE.Group(), actorsG = new THREE.Group(), fxG = new THREE.Group(), floorsG = new THREE.Group();
@@ -569,17 +635,11 @@ export function createRoom(stage, k, PROPS, art, traffic) {
     else { pp('roof_hvac', W / 2 - 4.6, -D / 2 + 3.8); pp('water_tank', -W / 2 + 2.0, -D / 2 + 2.4); pp('ac_unit', 1.5, D / 2 - 1.6); pp('ac_unit', 3.2, D / 2 - 1.6); if (lv >= 7) pp('solar_array', -W / 2 + 4.8, D / 2 - 3.2); else pp('roof_vent', -2, D / 2 - 2.4); }
     const b = k.bake(g); b.position.y = tw.N * tw.FH; bakes.push(b); floorsG.add(b); tw.roof = b;
   }
-  // 观光电梯轿厢：玻璃盒子，顶灯，朝楼里那面是两扇会滑开的玻璃门
   function buildCar() {
-    const { W } = st.L, g = new THREE.Group(), sg = k.group(), fr = k.mat('#2b3138', { rough: 0.4, metal: 0.7 }), gl = k.mat('#bfe3f0', { alpha: 0.28, rough: 0.05, metal: 0.2, env: 1.5 }), cw = 1.5, cd = 1.6, ch = 2.5;
-    k.box(cw + 0.12, 0.16, cd + 0.12, fr, sg, 0, 0.08, 0); k.box(cw + 0.12, 0.14, cd + 0.12, fr, sg, 0, ch, 0);
-    for (const [x, z] of [[-cw / 2, -cd / 2], [cw / 2, -cd / 2], [-cw / 2, cd / 2], [cw / 2, cd / 2]]) k.box(0.08, ch, 0.08, fr, sg, x, ch / 2, z);
-    k.box(0.04, ch - 0.2, cd, gl, sg, cw / 2, ch / 2, 0, { cast: false }); k.box(cw, ch - 0.2, 0.04, gl, sg, 0, ch / 2, cd / 2, { cast: false }); k.box(cw, ch - 0.2, 0.04, gl, sg, 0, ch / 2, -cd / 2, { cast: false });
-    k.box(0.9, 0.04, 0.9, '#fff3d6', sg, 0, ch - 0.09, 0, { glow: '#fff3d6', glowK: 0.9, night: 2.6 }); k.box(cw - 0.1, 0.05, 0.05, brand(), sg, 0, 1.0, cd / 2 - 0.05);
-    const b = k.bake(sg); bakes.push(b); g.add(b);
-    const dm = k.mat('#cfe9f3', { alpha: 0.36, rough: 0.05, metal: 0.2, env: 1.5 });
-    tw.doors = [k.box(0.04, ch - 0.2, cd / 2, dm, g, -cw / 2, ch / 2, -cd / 4, { cast: false }), k.box(0.04, ch - 0.2, cd / 2, dm, g, -cw / 2, ch / 2, cd / 4, { cast: false })];
-    g.position.set(W / 2 + 0.8, 0, tw.EZ); floorsG.add(g); tw.car = g;
+    const { car, shell, doors } = buildElevatorCabin(k, brand());
+    const baked = k.bake(shell); shell.removeFromParent(); bakes.push(baked); car.add(baked);
+    tw.doors = doors; tw.car = car;
+    car.position.set(st.L.W / 2 + 0.8, 0, tw.EZ); floorsG.add(car);
   }
   const brand = () => st.view.brand || '#ff6b4a';
   // 总览时每层挂一块牌子：楼层号、部门、人数

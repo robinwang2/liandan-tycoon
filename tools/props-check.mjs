@@ -29,6 +29,37 @@ const small = new Set('plant_small trash_bin coffee_table desk_lamp pendant_lamp
 for (const name of 'picket_fence news_rack kick_scooter guitar_stand pizza_stack string_lights led_ticker manhole_steam road_barrier'.split(' ')) small.add(name);
 const budget = n => ['crane_tower','glass_room','roof_garden','scaffold'].includes(n) ? 40000 : /^(car|robotaxi|van_|bus_city|scooter|food_truck)/.test(n) ? 20000 : /tree|bush|plant_tall/.test(n) ? 14000 : small.has(n) ? 6000 : 15000;
 const errors = [], rows = [], k = makeKit();
+const coachIds = new Set(['car_pickup','car_taxi','robotaxi','van_delivery','bus_city']);
+function checkCoach(name, g, [width, depth, height], mats) {
+  const branded = PROPS[name].build(k, {brand:'#3f7fd6'});
+  const body = branded.children.find(part => part.geometry?.type === 'ExtrudeGeometry');
+  assert.equal(body?.material.color.getHexString(), '3f7fd6', 'body paint must follow brand');
+  const radius = name === 'bus_city' ? .42 : name === 'van_delivery' ? .32 : .27;
+  const close = (actual, target) => Math.abs(actual-target) < 1e-5;
+  const checkBox = () => {
+    const bounds = new THREE.Box3().setFromObject(g,true);
+    assert(close(bounds.min.y,0) && bounds.max.y <= height+1e-5,'height or ground contact changed');
+    assert(bounds.min.x >= -width/2-1e-5 && bounds.max.x <= width/2+1e-5,'outside nominal width');
+    assert(bounds.min.z >= -depth/2-1e-5 && bounds.max.z <= depth/2+1e-5,'outside nominal length');
+  };
+  checkBox();
+  g.userData.wheels.forEach((wheel,index) => {
+    const [x,y,z] = wheel.getWorldPosition(new THREE.Vector3()).toArray();
+    assert(close(x,(index<2?-1:1)*width*.43) && close(z,(index%2?1:-1)*depth*.31) && close(y,radius),'wheel export pivot/order changed');
+    const bounds = new THREE.Box3().setFromObject(wheel,true);
+    assert(close(bounds.min.y,0) && close(bounds.max.y,2*radius),'wheel radius changed');
+  });
+  assert(mats.size <= 14,'vehicle material budget exceeded');
+  const glass = [...mats].filter(m=>m.transparent);
+  assert.equal(glass.length,1,'expected one shared glazing material');
+  assert.equal(glass[0].color.getHexString(),'192f3e','export glazing identity changed');
+  const nightColors = k.nightMats.filter(([mat,day,night])=>mats.has(mat) && night>day).map(([mat])=>mat.emissive.getHexString());
+  assert(nightColors.includes('fff2cc') && nightColors.includes('d33138'),'front/rear night lighting missing');
+  if(name==='robotaxi') {
+    const lidar=g.getObjectByName('lidar'); assert(lidar?.userData.dynamic,'missing retained lidar');
+    g.userData.tick(2,0); assert(close(lidar.rotation.y,3),'lidar rotation changed'); checkBox(); g.userData.tick(0,0);
+  }
+}
 function stats(g) {
   let tris = 0, meshes = 0; const mats = new Set();
   g.traverse(n => { if (n.isMesh) { assert(n.geometry?.attributes.position, 'mesh without positions'); tris += (n.geometry.index?.count ?? n.geometry.attributes.position.count) / 3; meshes++; (Array.isArray(n.material) ? n.material : [n.material]).forEach(m => mats.add(m)); } assert(!n.isLight, 'prop creates a light'); });
@@ -74,6 +105,7 @@ for (const [name,spec] of Object.entries(PROPS)) {
       assert(s.tris <= budget(name), `triangles ${s.tris} > ${budget(name)}`);
       peak = Math.max(peak,s.tris); materials = Math.max(materials,s.mats.size); hasTick ||= !!g.userData.tick;
       within(name,g,spec.size);
+      if(coachIds.has(name)) checkCoach(name,g,spec.size,s.mats);
       const original = transforms(g), originalMaterials = new Map([...s.mats].map(m=>[m,JSON.stringify([m.color.toArray(),m.emissive?.toArray(),m.emissiveIntensity,m.opacity])]));
       for (const t of [.2,1.5,3,6,7.5,10,13.49,13.5,27,35,100]) {
         g.userData.tick?.(t,1/60); within(name,g,spec.size);
