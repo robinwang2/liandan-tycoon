@@ -10,7 +10,9 @@
 // 平衡参数.xlsx 里 ideo. 开头的系数。这里只管规则。
 // 这里不 import 引擎（避免循环依赖）：用到的引擎函数由调用方以参数 G 传进来——事件里就是引擎的 API，行动里是引擎模块本身。
 import { ROLES, STAFF_QUIRKS, GOALS, TRAIT, officeName, P } from '../data/defs.js';
-import { text, fill } from '../data/text.js';
+import { playerName } from '../data/player-names.js';
+import { sourceField } from '../i18n/tables.js';
+import { TEXT, text, fill } from '../data/text.js';
 import * as CN from '../data/ideology.js';
 import * as US from '../data/ideology_us.js';
 
@@ -67,7 +69,7 @@ export function startIdeo(S, G) {
   S.flags[X.flag.on] = 1;
   if (X.flag.chain) S.flags[X.flag.chain] = 1;
   const R = castOf(S).rep.name;
-  note(S, vt(S, 'ideo.start.note', { 代表: R })); G.news(S, vt(S, 'ideo.start.news', { 代表: R, 公司: S.co.name }));
+  note(S, vt(S, 'ideo.start.note', { 代表: R })); G.news(S, vt(S, 'ideo.start.news', { 代表: R, 公司: playerName(S, 'coName') }));
   G.queueEvent(S, 'ideo_1');
   return true;
 }
@@ -144,9 +146,9 @@ function slotsFor(S, n) {
 const stageOf = (S, n) => { const L = D(S).IDEO_STAGES; return L[n - 1] || L[L.length - 1]; };
 function stageOptions(S, n, G) {
   const I = ensure(S), st = stageOf(S, n);
-  const own = (st.opts || []).map((o, j) => ({ ...o, key: `s${n}.${j}` }));
+  const own = (st.opts || []).map((o, j) => ({ ...o, sourceLabel: sourceField(o, 'label'), key: `s${n}.${j}` }));
   // 卡池：在本级范围内、局势条件满足、没选过、上一级没刚露过面
-  const pool = D(S).IDEO_POOL.filter(c => c.from <= n && n <= c.to && !I.used[c.id] && I.shown[c.id] !== n - 1 && G.cond(S, c.when)).map(c => ({ ...c, key: c.id }));
+  const pool = D(S).IDEO_POOL.filter(c => c.from <= n && n <= c.to && !I.used[c.id] && I.shown[c.id] !== n - 1 && G.cond(S, c.when)).map(c => ({ ...c, sourceLabel: sourceField(c, 'label'), key: c.id }));
   const taken = new Set(), out = [];
   const take = side => {
     const mine = own.find(o => o.side === side && !taken.has(o.key));
@@ -188,7 +190,7 @@ function toOpt(c, n) {
 }
 function afterPick(S, n, c, G) {
   const I = ensure(S);
-  I.picks.push({ n, side: c.side, label: c.label });
+  I.picks.push({ n, side: c.side, label: c.sourceLabel ?? c.label });
   if (c.id) I.used[c.id] = 1;
   I.n = Math.max(I.n, n);
   // 员工跟着风向走：往左选，有人加入读书会；往资本选，有人退出
@@ -208,7 +210,7 @@ export function verdict(S) {
   return red >= 100 && cap >= 100 ? I.full || 'red' : red >= 100 ? 'red' : cap >= 100 ? 'cap' : red > cap ? 'red' : cap > red ? 'cap' : ideoLean(S).v > 0 ? 'red' : 'cap';
 }
 function resolve(S, G) {
-  const I = ensure(S), X = ver(S), want = verdict(S), r = S.equity < IDEO_EQUITY ? 'fail' : want, co = { 公司: S.co.name };
+  const I = ensure(S), X = ver(S), want = verdict(S), r = S.equity < IDEO_EQUITY ? 'fail' : want, co = { 公司: playerName(S, 'coName') };
   Object.assign(I, { on: 0, result: r, want, tEnd: S.t });
   S.chains.ideo && (S.chains.ideo.done = true);
   if (X.flag.chain) delete S.flags[X.flag.chain];
@@ -236,7 +238,7 @@ function purge(S, act, G) {
   const reds = S.staff.filter(e => e.red), loyal = reds.filter(e => e.quirk === 'loyal'), sal = e => e.salary * G.mod(S, 'salaryMult');
   if (act === 'fire_all') {                                           // 死忠也不例外
     for (const e of reds) G.removeStaff(S, e.uid);
-    if (reds.length) G.addDirt(S, { type: 'unfair_fire', sev: Math.min(P['ideo.purge.fireSevMax'], P['ideo.purge.fireSev'] + reds.length * P['ideo.purge.fireSevPer']), name: vt(S, 'ideo.purge.dirt') });
+    if (reds.length) G.addDirt(S, { type: 'unfair_fire', sev: Math.min(P['ideo.purge.fireSevMax'], P['ideo.purge.fireSev'] + reds.length * P['ideo.purge.fireSevPer']), name: sourceField(TEXT['ideo.purge.dirt'], verOf(S) === 'us' ? 'bay' : 'text') });
     G.applyFx(S, { morale: -(P['ideo.purge.fireMorale'] + reds.length * P['ideo.purge.fireMoralePer']), rep: P['ideo.purge.fireRep'] });
     return vt(S, 'ideo.purge.fireAll', { 人数: reds.length, 死忠: loyalBit(S, 'ideo.purge.fireAll.loyal', loyal.length, { 办公室: officeName(S, 1) }) });
   }
@@ -284,7 +286,7 @@ export function planDialog(S, G) {
             ensure(S).plan = { kind: o.fn, goal, due: S.t + months, t: S.t };
             G.applyFx(S, o.fx);
             S.sched.push({ id: 'ideo_plan_due', at: S.t + months });
-            G.news(S, vt(S, 'ideo.plan.news', { 公司: S.co.name, 日期: G.dateStr(S.t + months), 目标: K.fmt(S, G, goal) }));
+            G.news(S, vt(S, 'ideo.plan.news', { 公司: playerName(S, 'coName'), 日期: G.dateStr(S.t + months), 目标: K.fmt(S, G, goal) }));
             return { text: actText(S, 'plan', G) };
           },
         };

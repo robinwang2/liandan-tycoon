@@ -1,3 +1,4 @@
+import { tr, units } from '../i18n/index.js';
 // 「表格里的事件」+「代码里的脚本」→ 引擎认识的事件。
 //
 // 表格管文字和数字：正文、选项、提示、结果、效果、检定难度、参数。
@@ -20,7 +21,7 @@
 // run / ok / fail 的返回值：不返回 = 用表里的结果文本；返回字符串 = 用它当结果文本；返回 { vars } = 给结果文本补几个变量。
 //
 // 带 run / ok / fail / dc / odds 的选项，以及「不预览」列填了「是」的选项，不显示效果预览（脚本会做什么，预览算不出来）。
-const fill = (s, v) => (s == null ? s : String(s).replace(/\{([^{}\s]+)\}/g, (m, k) => (v && k in v ? v[k] : m)));
+const fill = (s, v) => (s == null ? s : units(String(tr(s)).replace(/\{([^{}\s]+)\}/g, (m, k) => (v && k in v ? tr(v[k]) : m))));
 
 export function bindEvents(events, HOOKS, TEXT) {
   const T = (key, v) => { if (!(key in TEXT)) throw new Error(`「系统文本」表里没有「${key}」`); return fill(TEXT[key], v); };
@@ -32,9 +33,10 @@ export function bindEvents(events, HOOKS, TEXT) {
     const base = (S, c, G) => ({ S, c, G, ep, p: ep, T });
     const varsOf = (S, c, G) => { let v = cache.get(c); if (!v) { v = H?.vars?.(base(S, c, G)) || {}; cache.set(c, v); } return v; };
     const scripted = o => { const k = o.fn && O[o.fn]; return !!o.noTip || !!(k && (k.run || k.ok || k.fail || k.dc || k.odds)); };
-    const ev = { ...e };
+    const ev = { ...e, get title() { return e.title; } };
     if (H?.enter) ev.enter = (S, c, G) => H.enter(base(S, c, G));
     if (H?.vars || e.textBay) ev.text = (S, c, G) => fill(e.textBay && S.co.region === 'bay' ? e.textBay : e.text, varsOf(S, c, G));
+    if (typeof ev.text !== 'function') Object.defineProperty(ev, 'text', { enumerable: true, get: () => e.text });
     if (!opts.some(o => o.fn || o.noTip || o.when || /\{[^{}\s]+\}/.test(`${o.label}${o.hint}`))) return ev;
     ev.options = (S, c, G) => {
       const v = varsOf(S, c, G), out = [];

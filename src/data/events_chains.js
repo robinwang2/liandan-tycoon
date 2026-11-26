@@ -5,6 +5,8 @@
 //   project: { id, chain, name, desc, kind, need, months, ok, fail }   开启一个特殊项目，完成触发 ok 事件，超期触发 fail 事件（表里写「项目:id」）
 //   chain:   { id, note, done }                                         更新「情境日志」里这条链的进展；done 表示这条链结束（表里写「链:id」或「链结束:id」，文字填在「链进展」列）
 // 事件上的 chain 字段标明它属于哪条链；art 指定背景图。
+import { localize } from '../i18n/tables.js';
 import T from './tables/chains.json' with { type: 'json' };
 
+localize('chains', T);
 export const { CHAINS, EVENTS_CHAINS } = T;

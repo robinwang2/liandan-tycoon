@@ -774,3 +774,19 @@ html, body { background: var(--base); color: var(--ink-1); font-family: var(--fo
 .fx-old { z-index: 40; }
 .fx-old, .fx-old * { pointer-events: none !important; }
 .fx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 45; pointer-events: none; }
+
+#ui .lang-toggle { min-width: 32px; padding: 4px 8px; flex: none; }
+body.lang-en #ui { font-family: "Segoe UI", Arial, sans-serif; }
+.lang-en #ui :is(.title h1,.pdx h2,.wsteps,.stage) { letter-spacing: .015em; }
+.lang-en #ui .brand { min-width: 0; flex: 0 1 260px; }
+.lang-en #ui .chips { min-width: 0; }
+.lang-en #ui :is(.chip,.chip > div,.brand > div) { min-width: 0; }
+.lang-en #ui :is(.chip small,.brand small) { overflow: hidden; text-overflow: ellipsis; display: block; white-space: nowrap; }
+.lang-en #ui :is(.tabs,.seg) { flex-wrap: wrap; }
+.lang-en #ui :is(.pick,.lgp,.pcard,.tutor,.act,.opt) { overflow-wrap: anywhere; }
+.lang-en #ui .pdx-opts { min-height: 0; overflow-y: auto; max-height: 50vh; }
+.lang-en #ui .pdx-text { line-height: 1.5; }
+.lang-en #ui .gauges .g span { width: 76px; }
+.lang-en #ui .lb .nm { width: 128px; }
+.lang-en #ui .tabs .tab { flex: 1 1 auto; }
+.lang-en #ui .tabs .tab span { font-size: 10px; }
