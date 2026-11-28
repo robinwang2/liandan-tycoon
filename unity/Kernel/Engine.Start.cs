@@ -39,6 +39,7 @@ namespace Liandan.Kernel
             foreach (var k in "staff cands dirt perks feats projects temp rivals sched q fxq log hist ach".Split(' ')) Snapshot[k] = new JsonArray();
             foreach (var k in "chains flags seen cd".Split(' ')) Snapshot[k] = new JsonObject();
             foreach (var k in "stage raiseBoost apNext burstT outage fake E gpu quotaAdd quotaEarn exposed exposedCrime".Split(' ')) Snapshot[k] = 0;
+            if (setup["autoNames"] != null) Map("flags")["autoNames"] = setup["autoNames"]!.DeepClone();
             Snapshot["policies"] = Obj(("work", "965"), ("price", "std"), ("safety", "std"));
             Snapshot["last"] = Obj(("rev", 0), ("cost", 0), ("net", 0));
             Snapshot["streak"] = Obj(("profit", 0), ("x996", 0));

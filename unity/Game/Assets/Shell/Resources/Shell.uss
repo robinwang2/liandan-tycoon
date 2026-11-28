@@ -49,6 +49,8 @@
 .left, .right { min-height: 0; } .right { width: 28%; }
 .alerts { align-items: center; } .alerts .unity-button { font-size: 14px; }
 .gauge { width: 32%; padding: 3px; font-size: 14px; } .action-card { -unity-text-align: middle-left; padding: 8px; }
+.english .gauge { width: 49%; }
+.english .panel .row > .unity-button { max-width: 100%; white-space: normal; }
 .card-choices { flex-direction: row; flex-wrap: wrap; }
 .card-choices .unity-button { width: 31%; min-height: 110px; }
 .rarity-2 { border-top-color: rgb(109,177,233); border-top-width: 3px; } .rarity-3 { border-top-color: rgb(234,195,104); border-top-width: 3px; }

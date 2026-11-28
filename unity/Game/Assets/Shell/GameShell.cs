@@ -12,6 +12,12 @@ namespace Liandan.Shell
     public sealed partial class GameShell : MonoBehaviour
     {
         internal Tables Tables = null!;
+        internal ShellLanguage Language = null!;
+        internal Tables DisplayTables => Language.DisplayTables;
+        internal GameState View = null!;
+        private TurnView? turn;
+        internal JsonObject? DialogView => turn?.Read(Language).dialog?.View;
+        internal JsonObject? ResultView => turn?.Read(Language).result;
         internal GameStore Store = null!;
         internal JsonObject Meta = null!;
         internal GameState State = null!;
@@ -31,7 +37,7 @@ namespace Liandan.Shell
         private static readonly string[] TitleRoles={"res","eng","eng","ops","biz","legal","res"};
         internal double RandomValue() => GameState.NextRandom(ref Seed);
         internal static double Number(JsonNode value) => double.Parse(value.ToString(), System.Globalization.CultureInfo.InvariantCulture);
-        internal string Text(string key, params (string, object)[] vars) => Tables.Text(key, ScreenId == "wizard" ? Wizard.Region == "bay" : State?.Company.Region == "bay", vars);
+        internal string Text(string key, params (string, object)[] vars) => DisplayTables.Text(key, ScreenId == "wizard" ? Wizard.Region == "bay" : State?.Company.Region == "bay", vars);
         internal static T Required<T>(string name) where T : UnityEngine.Object
         {
             var asset = Resources.Load<T>(name);
@@ -51,7 +57,8 @@ namespace Liandan.Shell
                 bool gallery = eggShots != null || args.Contains("-eggs");
                 var driver = auto && !gallery ? new Autoplay(this, args) : null;
                 if (!auto) Seed = Environment.TickCount;
-                Tables = new Tables(Path.Combine(Application.streamingAssetsPath, "tables"));
+                Language = new ShellLanguage(Path.Combine(Application.streamingAssetsPath, "tables"), Path.Combine(Application.streamingAssetsPath, "i18n/en.json"));
+                Tables = Language.Source;
                 Rows = Tables.GetActionRows().ToDictionary(row => row!["id"]!.ToString(), row => row!);
                 var saveDirectory = eggShots == null ? driver?.SaveDirectory ?? Application.persistentDataPath : Path.Combine(eggShots, "save-" + Guid.NewGuid().ToString("N"));
                 Store = new GameStore(saveDirectory, Tables); Meta = Store.LoadMeta();
@@ -72,8 +79,8 @@ namespace Liandan.Shell
                 Root = doc.rootVisualElement;
                 Transition = new ThemeFx(doc);
                 SuppressThemeFx = auto;
-                captureDirectory=driver?.Shots;
-                InitSettings(auto || eggShots != null);
+                captureDirectory=driver?.LanguageShots==true ? null : driver?.Shots;
+                InitSettings(auto || eggShots != null, driver?.LanguageShots == true ? driver.SaveDirectory : null);
                 Root.styleSheets.Add(Required<StyleSheet>("Shell")); Root.AddToClassList("shell");
                 Root.style.unityFontDefinition = FontDefinition.FromSDFFont(Required<UnityEngine.TextCore.Text.FontAsset>("ShellFont"));
                 Draw(); if (eggShots != null) StartCoroutine(RunEggTest(eggShots, saveDirectory));
@@ -139,7 +146,9 @@ namespace Liandan.Shell
         internal void Pump(GameState.Dialog? next = null)
         {
             if(next==null)ActionId="";
-            Result = null!; Dialog = next ?? State.NextDialog();
+            Result = null!;
+            if (next == null) turn = new TurnView(State, Tables, s => (s.NextDialog(), null));
+            Dialog = next ?? turn!.Original.dialog;
             ConsumeFx();
             if (Dialog != null) { ScreenId = "event"; Cue(Dialog.View["kind"]?.ToString()=="cards"?"card":"open"); }
             else if (State.Snapshot["over"] != null)
@@ -152,14 +161,22 @@ namespace Liandan.Shell
         }
         internal void Act(string id)
         {
-            ActionId=id; var result = State.Perform(id, out var dialog);
+            ActionId=id;
+            turn = new TurnView(State, Tables, s => { var r = s.Perform(id, out var d); return (d, r); });
+            var (dialog, result) = turn.Original;
             if (id=="code" && result!=null) Cue("type");
             if (dialog != null || result == null) Pump(dialog); else ShowResult(result);
         }
         internal void Choose(int index)
         {
-            var result = State.Choose(Dialog!, index);
+            turn!.Choose(State, index);
+            var result = turn.Original.result;
             if (Dialog!.Next != null) Pump(Dialog.Next); else if (result != null) ShowResult(result,true);
+        }
+        internal JsonObject? LocalResult(Func<GameState, JsonObject?> action)
+        {
+            turn = new TurnView(State, Tables, s => (null, action(s)));
+            return turn.Original.result;
         }
         internal void ShowResult(JsonObject result,bool choice=false)
         {
@@ -169,7 +186,7 @@ namespace Liandan.Shell
             if (result["chips"] is JsonArray chips && chips.Any(c=>c!["k"]?.ToString()=="cash" && (bool?)c["good"]==false)) Cue("spend");
             Result = result; ScreenId = "result"; Draw();
         }
-        internal void Title() { ScreenId = "title"; State = null!; Summary = null!; Dialog = null; Draw(); }
+        internal void Title() { ScreenId = "title"; State = null!; Summary = null!; Dialog = null; turn = null; Draw(); }
         private void SyncOffice()
         {
             if(!office)return;
@@ -213,10 +230,11 @@ namespace Liandan.Shell
 
         internal void Draw()
         {
-            Root.Clear(); bubble=null; Controls.Clear(); ApplyTheme(); SyncSound();
+            Root.Clear(); Root.EnableInClassList("english", Language.English); bubble=null; Controls.Clear(); ApplyTheme(); SyncSound();
             SyncOffice();
             if (ScreenId == "eggs") { DrawEggGallery(); return; }
-            if(State!=null && State.Snapshot["over"]==null && ScreenId!="wizard") PrepareTutorial();
+            if (State != null && State.Snapshot["over"] == null && ScreenId is "main" or "event" or "result" or "local") PrepareTutorial();
+            View = State == null ? null! : Language.View(State);
             if (ScreenId == "main")
             {
                 Advice=VisibleAdvice();TrackSoundHints();TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); var stage=Box(body,"stage"); Dashboard.Hints(this,stage); DrawTutorial(stage); if(Open("team")) SidePanel.Draw(this, Box(body, "right")); DrawFooter();
@@ -234,6 +252,7 @@ namespace Liandan.Shell
                 stage.RegisterCallback<GeometryChangedEvent>(_=>FrameStage(stage));
             }
             if (ScreenId != "title" && ScreenId != "end") panel.AddToClassList("scroll-panel");
+            if (ScreenId is "event" or "result" or "end" or "wizard") Button(panel,"settings",Text("ui.set.h"),OpenSettings);
             switch (ScreenId)
             {
                 case "menu": DrawMenu(panel); break;
@@ -247,7 +266,7 @@ namespace Liandan.Shell
                 case "meta":
                     Label(panel, Text("ui.meta.shop") + " · " + Text("ui.points", ("点数", Meta["points"]!)), "heading");
                     var shop = Scroll(panel);
-                    foreach (var item in Tables.Definition("META_SHOP").AsArray())
+                    foreach (var item in DisplayTables.Definition("META_SHOP").AsArray())
                     {
                         var row = item!; var id = row["id"]!.ToString(); bool owned = Meta["own"]![id] != null;
                         bool locked = row["need"] != null && Meta["own"]![row["need"]!.ToString()] == null;
@@ -255,7 +274,7 @@ namespace Liandan.Shell
                     }
                     foreach (var group in new[]{("ends","ENDINGS"),("ach","ACHIEVEMENTS")})
                     {
-                        var catalogue = Tables.Definition(group.Item2).AsObject(); var known = Meta[group.Item1]!.AsObject();
+                        var catalogue = DisplayTables.Definition(group.Item2).AsObject(); var known = Meta[group.Item1]!.AsObject();
                         Label(shop, Text("ui.meta."+group.Item1)+"   "+known.Count+" / "+catalogue.Count,"heading");
                         foreach (var entry in catalogue.Where(pair=>known.ContainsKey(pair.Key))) Label(shop,entry.Value!["name"]+"   "+(group.Item1=="ends"?Text("ui.meta.endCount",("次数",known[entry.Key]!)):entry.Value["desc"]?.ToString()));
                     }
@@ -263,8 +282,8 @@ namespace Liandan.Shell
                 default:
                     Label(panel, Text("ui.title.name"), "heading"); Label(panel, Text("ui.title.fine"));
                     Button(panel, "new", Text("ui.title.new"), NewWizard);
-                    var save = Store.LoadGame(); if (save != null) Button(panel, "continue", Text("ui.title.continue") + " · " + save.Company.Name, () => Resume(save));
-                    Button(panel, "meta", Text("ui.title.meta"), () => Page("meta")); Button(panel,"menu","菜单",OpenMenu); break;
+                    var save = Store.LoadGame(); if (save != null) Button(panel, "continue", Text("ui.title.continue") + " · " + Language.CompanyName(save), () => Resume(save));
+                    Button(panel, "meta", Text("ui.title.meta"), () => Page("meta")); Button(panel,"menu",Language.Tr("菜单"),OpenMenu); break;
             }
         }
     }

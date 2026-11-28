@@ -41,9 +41,12 @@ namespace Liandan.Shell
                 caption.AddToClassList("button-caption");button.Add(caption);
             }
         }
-        private void InitSettings(bool autoplay) {
+        private void InitSettings(bool autoplay, string? testDirectory) {
             BrandData=JsonNode.Parse(File.ReadAllText(ArtPath("brand.json")))!.AsObject();
-            LoadAudioSettings(autoplay?"":Path.Combine(Application.persistentDataPath,"ldt_settings.json"));
+            string path = testDirectory != null ? Path.Combine(testDirectory,"ldt_settings.json") :
+                autoplay ? "" : Path.Combine(Application.persistentDataPath,"ldt_settings.json");
+            LoadAudioSettings(path);
+            Language.English = Pref("language", !autoplay && Application.systemLanguage == SystemLanguage.English ? 1 : 0) == 1;
             InitSound();ApplyGraphics();ApplyVolume();
         }
         private void LoadAudioSettings(string path) {
@@ -76,23 +79,36 @@ namespace Liandan.Shell
         private void Page(string page){ScreenId=page;Draw();}
         internal void OpenMenu()=>Page("menu");
         private void Resume(GameState save){State=save;Tab="rd";Side="board";floorOffice=-1;lastTip=null;heardHints=null;crisis=0;quietTheme=true;AllHints=false;Summary=null!;Pump();}
+        private string settingsReturn = "menu";
+        private void OpenSettings() { settingsReturn = ScreenId; Page("settings"); }
+        private void CloseSettings() => Page(settingsReturn);
+        internal void SetLanguage(bool english)
+        {
+            Language.English = english;
+            SetPref("language", english ? 1 : 0);
+            Draw();
+        }
         private void DrawMenu(VisualElement panel){Label(panel,Text("ui.menu.title"),"heading");var save=State??Store.LoadGame();
-            Button(panel,"resume","继续",()=>{if(State!=null)Page("main");else Resume(save!);},save!=null);
-            Button(panel,"new","新游戏",NewWizard); Button(panel,"meta","局外商店",()=>Page("meta")); Button(panel,"ach","成就",()=>Page("ach"));Button(panel,"ends","结局图鉴",()=>Page("ends"));
-            Button(panel,"settings","设置",()=>Page("settings"));Button(panel,"title","返回标题",Title);Button(panel,"quit","退出游戏",()=>Application.Quit());}
-        private void DrawCatalogue(VisualElement panel){var ends=ScreenId=="ends";var catalogue=Tables.Definition(ends?"ENDINGS":"ACHIEVEMENTS").AsObject();var known=Meta[ScreenId]!.AsObject();Label(panel,Text("ui.meta."+ScreenId)+"   "+known.Count+" / "+catalogue.Count,"heading");var body=Scroll(panel);
+            Button(panel,"resume",Language.Tr("继续"),()=>{if(State!=null)Page("main");else Resume(save!);},save!=null);
+            Button(panel,"new",Text("ui.title.new"),NewWizard); Button(panel,"meta",Text("ui.meta.shop"),()=>Page("meta")); Button(panel,"ach",Text("ui.meta.ach"),()=>Page("ach"));Button(panel,"ends",Text("ui.meta.ends"),()=>Page("ends"));
+            Button(panel,"settings",Text("ui.set.h"),OpenSettings);Button(panel,"title",Text("ui.end.title"),Title);Button(panel,"quit",Language.Tr("退出游戏"),()=>Application.Quit());}
+        private void DrawCatalogue(VisualElement panel){var ends=ScreenId=="ends";var catalogue=DisplayTables.Definition(ends?"ENDINGS":"ACHIEVEMENTS").AsObject();var known=Meta[ScreenId]!.AsObject();Label(panel,Text("ui.meta."+ScreenId)+"   "+known.Count+" / "+catalogue.Count,"heading");var body=Scroll(panel);
             foreach(var pair in catalogue){bool unlocked=known.ContainsKey(pair.Key);var row=pair.Value!;
-                Label(body,ends&&!unlocked?Text("ui.meta.unknown"):(unlocked?row["icon"]?.ToString():"未解锁")+"  "+row["name"]+"   "+(ends?Text("ui.meta.endCount",("次数",known[pair.Key]!)):row["desc"]?.ToString()));}
-            Button(panel,"back","返回菜单",OpenMenu);}
+                Label(body,ends&&!unlocked?Text("ui.meta.unknown"):(unlocked?row["icon"]?.ToString():"🔒")+"  "+row["name"]+"   "+(ends?Text("ui.meta.endCount",("次数",known[pair.Key]!)):row["desc"]?.ToString()));}
+            Button(panel,"back",Text("ui.back"),OpenMenu);}
         private void DrawSettings(VisualElement panel){Picture(panel,"icon-settings",28,28);Label(panel,Text("ui.set.h"),"heading");var body=Scroll(panel);
             void TogglePref(string key,string title,int fallback,Action? apply=null){var field=new Toggle(title){value=Pref(key,fallback)!=0};body.Add(field);field.RegisterValueChangedCallback(change=>{SetPref(key,change.newValue?1:0);apply?.Invoke();});}
             void SliderPref(string key,string title,int min,int max,int value,Action apply,int step=1){var field=new SliderInt(title,min,max){value=value,showInputField=true};body.Add(field);field.RegisterValueChangedCallback(change=>{int next=Mathf.Clamp(Mathf.RoundToInt(change.newValue/(float)step)*step,min,max);field.SetValueWithoutNotify(next);SetPref(key,next);apply();});}
-            Label(body,Text("ui.set.gfx"),"section");string[] levels={"手机","极简","流畅","均衡","高","电影","极致"};var tiers=Box(body,"row");for(int index=0;index<levels.Length;index++){int tier=index;Button(tiers,"tier:"+tier,levels[tier],()=>{SetPref("tier",tier);SetPref("auto",0);ApplyGraphics();Draw();},true,tier==effectiveTier);}
-            SliderPref("scale",Text("ui.set.scale")+" %",50,150,Pref("scale",100),()=>ApplyGraphics(),10);Label(body,Text("ui.set.fps"));var caps=Box(body,"row");foreach(int cap in new[]{-1,30,60,0})Button(caps,"cap:"+cap,cap==-1?"自动":cap==0?"不限":cap.ToString(),()=>{SetPref("cap",cap);ApplyGraphics();Draw();},true,Pref("cap",-1)==cap);
+            Label(body,Language.Tr("语言"),"section");
+            var languages=Box(body,"row");
+            Button(languages,"lang:zh","中文",()=>SetLanguage(false),true,!Language.English);
+            Button(languages,"lang:en","English",()=>SetLanguage(true),true,Language.English);
+            Label(body,Text("ui.set.gfx"),"section");string[] levels={"手机","极简","流畅","均衡","高","电影","极致"};var tiers=Box(body,"row");for(int index=0;index<levels.Length;index++){int tier=index;Button(tiers,"tier:"+tier,Language.Tr(levels[tier]),()=>{SetPref("tier",tier);SetPref("auto",0);ApplyGraphics();Draw();},true,tier==effectiveTier);}
+            SliderPref("scale",Text("ui.set.scale")+" %",50,150,Pref("scale",100),()=>ApplyGraphics(),10);Label(body,Text("ui.set.fps"));var caps=Box(body,"row");foreach(int cap in new[]{-1,30,60,0})Button(caps,"cap:"+cap,cap==-1?Text("ui.set.fps.auto"):cap==0?Text("ui.set.fps.none"):cap.ToString(),()=>{SetPref("cap",cap);ApplyGraphics();Draw();},true,Pref("cap",-1)==cap);
             TogglePref("auto",Text("ui.set.auto"),1,()=>ApplyGraphics());Label(body,SystemInfo.graphicsDeviceName+" · "+Screen.width+" × "+Screen.height);
             Label(body,Text("ui.set.sound"),"section");foreach(var pair in audio["VOLUMES"]!.AsObject())SliderPref(pair.Key,Text("ui.set.vol."+pair.Key)+" %",0,100,Volume(pair.Key),ApplyVolume);
             TogglePref("mute",Text("ui.set.mute"),0,ApplyVolume);Label(body,Text("ui.set.display"),"section");TogglePref("hints",Text("ui.set.hints"),1);TogglePref("fps",Text("ui.set.showFps"),0);
-            TogglePref("themefx",Text("ui.set.themefx"),1,ApplyTheme);Button(panel,"back",Text("ui.set.done"),OpenMenu);}
+            TogglePref("themefx",Text("ui.set.themefx"),1,ApplyTheme);Button(panel,"back",Text("ui.set.done"),CloseSettings);}
         private void ApplyTheme(){var next=State==null || ScreenId=="wizard" || ScreenId=="title"?"default":ScreenId=="result" && theme!=""?(pendingTheme??theme):State.InterfaceTheme;
             bool effect=!quietTheme;quietTheme=false;
             bool audible=theme!="" && effect && State!=null && AudioPlayPage(ScreenId) && next!="default";
@@ -122,7 +138,7 @@ namespace Liandan.Shell
         }
         private void OnDestroy(){Transition?.Stop();audit?.Dispose();if(soundSource!=null)soundSource.Stop();if(soundClip!=null)Destroy(soundClip);foreach(var texture in textures.Values)Destroy(texture);}
         private void HandleKeys(){
-            if(Input.GetKeyDown(KeyCode.Escape)){if(ScreenId=="main" || ScreenId=="settings" || ScreenId=="ach" || ScreenId=="ends" || ScreenId=="meta")OpenMenu();else if(ScreenId=="menu")Page(State==null?"title":"main");else if(ScreenId=="local")CloseLocal();return;}
+            if(Input.GetKeyDown(KeyCode.Escape)){if(ScreenId=="settings")CloseSettings();else if(ScreenId=="main" || ScreenId=="ach" || ScreenId=="ends" || ScreenId=="meta")OpenMenu();else if(ScreenId=="menu")Page(State==null?"title":"main");else if(ScreenId=="local")CloseLocal();return;}
             if(ScreenId!="main")return;bool up=Input.GetKeyDown(KeyCode.UpArrow)||Input.GetKeyDown(KeyCode.PageUp),down=Input.GetKeyDown(KeyCode.DownArrow)||Input.GetKeyDown(KeyCode.PageDown),all=Input.GetKeyDown(KeyCode.Home);
             if(!(up||down||all) || Tables.Definition("FLOOR_PLANS")[floorOffice.ToString()] is not JsonArray plan)return;
             int next=all?plan.Count:Mathf.Clamp((floor<0?plan.Count:floor)+(up?1:-1),0,plan.Count);MoveFloor(next==plan.Count?-1:next,plan.Count);Draw();}

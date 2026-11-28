@@ -11,11 +11,12 @@ namespace Liandan.Kernel
         private string Money(double value, bool sign = false)
         {
             double n = Abs(value);
+            if (tables.English) return (value < 0 ? "-" : sign ? "+" : "") + D("REGIONS")[Region].Str("cur") + ShellLanguage.Compact(n * 10000);
             string amount = n >= 10000 ? Fixed(n / 10000, n >= 1e6 ? 0 : n >= 1e5 ? 1 : 2) + Tx("unit.yi") :
                 WanAmount(n) + Tx("unit.wan");
             return (value < 0 ? "-" : sign ? "+" : "") + D("REGIONS")[Region].Str("cur") + amount;
         }
-        public string UsersText(double n) => n >= 10000 ? Fixed(n / 10000, 2) + Tx("unit.yi") :
+        public string UsersText(double n) => tables.English ? ShellLanguage.Compact(n * 10000) : n >= 10000 ? Fixed(n / 10000, 2) + Tx("unit.yi") :
             WanAmount(n) + Tx("unit.wan");
         private static string WanAmount(double value)
         {

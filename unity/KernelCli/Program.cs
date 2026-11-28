@@ -18,6 +18,8 @@ catch (Exception error)
 
 static int Run(string[] args)
 {
+    if (args.Length == 2 && args[0] == "i18n-parity")
+        return LanguageChecks.Run("src/data/tables", args[1], Console.Out);
     if ((args.Length == 3 || args.Length == 4) && args[0] == "save-roundtrip")
     {
         var tablesForSave = new Tables("src/data/tables");

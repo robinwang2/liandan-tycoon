@@ -33,6 +33,10 @@ for (const dir of ['ui', 'scene3a', 'game', 'data']) {
     collectUI(parseAst(code), file);
   }
 }
+const shell = 'unity/Game/Assets/Shell/';
+for (const file of readdirSync(new URL('../../' + shell, import.meta.url)).filter(name => name.endsWith('.cs'))) {
+  for (const match of read(shell + file).matchAll(/Language\.Tr\("([^"]+)"\)/g)) ui.add(match[1]);
+}
 sources.set('ui', ui);
 const allSources = new Set([...sources.values()].flatMap(keys => [...keys]));
 const tokens = value => JSON.stringify((value.match(/\{[^{}\s]+\}/g) || []).sort());
