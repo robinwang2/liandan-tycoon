@@ -30,8 +30,12 @@ if (!process.argv.includes('--worker')) {
       assert.equal(JSON.stringify(game), saved);
     }
     const copy = JSON.parse(saved);
-    delete copy.flags.autoNames;
+    copy.flags.autoNames = 0;
     assert.equal(G.fmt(copy, '{co}|{model}'), '第一性原理|太上-1');
+    delete copy.flags.autoNames; // 中英切换前的旧存档：随机池里的名字也按随机名翻译
+    assert.equal(G.fmt(copy, '{co}|{model}'), 'First Principles|High Sage-1');
+    Object.assign(copy.co, { name: '自己起的名', modelName: '自研' }); copy.model.name = '自研-1';
+    assert.equal(G.fmt(copy, '{co}|{model}'), '自己起的名|自研-1');
     byte.next = 1;
     G.endMonth(game);
     assert.ok(game.log.some(entry => entry.msg.includes(`ByteHop drops Bean Bun-${byte.ver}`)));

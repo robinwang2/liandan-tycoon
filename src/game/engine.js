@@ -440,7 +440,7 @@ export function newGame(setup, meta) {
     last: { rev: 0, cost: 0, net: 0 }, vam: null, streak: { profit: 0, x996: 0 }, stats: { maxUsers: 0, raised: 0, events: 0 }, hist: [], ach: [], over: null,
   };
   for (const id of S.founder.traits) { const a = TRAIT[id]?.attr; if (a) for (const k in a) S.founder.attrs[k] += a[k]; }
-  if (setup.autoNames) S.flags.autoNames = setup.autoNames;
+  if (setup.autoNames != null) S.flags.autoNames = setup.autoNames;
   S.rivals = RIVALS.map(r => {
     const off = r.off + rf(S, -P['start.rivalJitter'], P['start.rivalJitter']), cap = frontier(1) + off;
     return { id: r.id, ...rivalDefs[r.id], color: r.color, off, drift: 0, cheat: r.cheat, ver: ri(S, P['start.rivalVerMin'], P['start.rivalVerMax']), cap, bench: cap + r.cheat, hype: P['start.rivalHype'], rel: 0, next: ri(S, P['start.rivalNextMin'], P['start.rivalNextMax']) };

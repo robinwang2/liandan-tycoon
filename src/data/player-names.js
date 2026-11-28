@@ -16,8 +16,13 @@ export function displayName(field, value, region, autoNames) {
   const list = pool(field, region), index = list.split('\n').indexOf(value);
   return index < 0 ? tr(value) : tr(list).split('\n')[index];
 }
-export const playerName = (state, field) => displayName(field,
-  field === 'name' ? state.founder.name : field === 'coName' ? state.co.name : state.co.modelName,
-  state.co.region, state.flags?.autoNames);
-export const playerModel = state => state.model && (state.flags?.autoNames & nameBits.modelName)
+const rawName = (state, field) => field === 'name' ? state.founder?.name : field === 'coName' ? state.co.name : state.co.modelName;
+// 中英切换之前的旧存档没有 autoNames 标记：名字恰好是随机池或默认名的原文，就按随机名在显示时翻译。
+const legacyBits = state => Object.keys(nameBits).reduce((bits, field) => {
+  const value = rawName(state, field);
+  return value && (value === defaultName(field) || namePool(field, state.co.region).includes(value)) ? bits | nameBits[field] : bits;
+}, 0);
+const autoBits = state => state.flags?.autoNames ?? legacyBits(state);
+export const playerName = (state, field) => displayName(field, rawName(state, field), state.co.region, autoBits(state));
+export const playerModel = state => state.model && (autoBits(state) & nameBits.modelName)
   ? `${playerName(state, 'modelName')}-${state.model.ver}` : state.model?.name || playerName(state, 'modelName');
