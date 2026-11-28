@@ -21,6 +21,10 @@ namespace Liandan.Shell
             camera.transform.position = new Vector3(8,8,-10); camera.transform.LookAt(Vector3.zero); camera.orthographic = true; camera.orthographicSize = 5.5f;
             camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.17f,.25f,.33f);
             var light = new GameObject("Sun").AddComponent<Light>(); light.type = LightType.Directional; light.intensity = 1.5f; light.transform.rotation = Quaternion.Euler(48,-30,0);
+            if(placeFurnace && !batch && eggRows==0){
+                light.color=new Color(1,.94f,.85f);light.shadows=LightShadows.Soft;
+                var office=camera.gameObject.AddComponent<Office>();office.Initialize(camera);return camera;
+            }
             var material = GameShell.Required<Material>("Whitebox");
             void Block(string name, Vector3 position, Vector3 size, Color color)
             {
@@ -36,14 +40,9 @@ namespace Liandan.Shell
                 light.transform.rotation = Quaternion.Euler(44, 155, 0);
                 return camera;
             }
-            bool original = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-furnace-original") >= 0;
-            bool extended = batch || !placeFurnace || PlaceFurnace(original);
-            if (extended)
-            {
-                var focus = new Vector3(2,1,0);
-                camera.transform.position += focus; camera.transform.LookAt(focus); camera.orthographicSize = 6.5f;
-            }
-            Block("Floor",new Vector3(0,-.15f,0),extended ? new Vector3(16,.3f,11.5f) : new Vector3(6,.3f,5),new Color(.54f,.64f,.69f));
+            var focus = new Vector3(2,1,0);
+            camera.transform.position += focus; camera.transform.LookAt(focus); camera.orthographicSize = 6.5f;
+            Block("Floor",new Vector3(0,-.15f,0),new Vector3(16,.3f,11.5f),new Color(.54f,.64f,.69f));
             if(batch){ PropBatch.Overview(camera); return camera; }
             for(int desk=0;desk<4;desk++)
             {

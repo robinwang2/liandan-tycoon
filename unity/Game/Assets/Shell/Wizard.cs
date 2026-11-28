@@ -16,6 +16,10 @@ namespace Liandan.Shell
         private readonly Dictionary<string, string> names = new Dictionary<string, string>();
         private readonly string[] groups = "edu bg quirk motto cofounder seed district mission".Split(' ');
         internal string Region => picks["region"];
+        internal string District => picks.TryGetValue("district",out var district)?district:"";
+        internal string Track => picks["track"];
+        internal string Outfit => picks["outfit"];
+        internal bool OwnModel => picks["route"]=="model";
         internal int Step;
         internal bool Tutorial;
         private string? logo;

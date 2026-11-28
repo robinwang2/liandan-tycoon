@@ -26,6 +26,9 @@ namespace Liandan.Shell
         internal bool Recommended(string id)=>Advice.Any(row=>row!["act"]?.ToString()==id && row["later"]?.GetValue<bool>()!=true);
         internal Dictionary<string, JsonNode> Rows = null!;
         internal int Seed;
+        private Office? office;
+        private bool officeRelease;
+        private static readonly string[] TitleRoles={"res","eng","eng","ops","biz","legal","res"};
         internal double RandomValue() => GameState.NextRandom(ref Seed);
         internal static double Number(JsonNode value) => double.Parse(value.ToString(), System.Globalization.CultureInfo.InvariantCulture);
         internal string Text(string key, params (string, object)[] vars) => Tables.Text(key, ScreenId == "wizard" ? Wizard.Region == "bay" : State?.Company.Region == "bay", vars);
@@ -58,7 +61,7 @@ namespace Liandan.Shell
                     Whitebox.Create(false,true);
                     PropBatch.Place(args.Contains("-art-batch2") ? "Batch2" : "Batch1");
                 }
-                else Whitebox.Create();
+                else office=Whitebox.Create().GetComponent<Office>();
                 var panel = Required<PanelSettings>("ShellPanel");
                 var ui = new GameObject("Shell UI");
                 ui.SetActive(false);
@@ -167,16 +170,69 @@ namespace Liandan.Shell
             Result = result; ScreenId = "result"; Draw();
         }
         internal void Title() { ScreenId = "title"; State = null!; Summary = null!; Dialog = null; Draw(); }
+        private void SyncOffice()
+        {
+            if(!office)return;
+            if(ScreenId=="wizard")
+                office!.Show(Wizard.Region,1,Wizard.District,Wizard.Track,-1,Wizard.OwnModel?1:0,Array.Empty<string>(),Wizard.OwnModel,
+                    outfit:Wizard.Outfit,session:Wizard,animateRacks:false);
+            else if(State==null)
+                office!.Show("bay",3,"","",-1,4,TitleRoles,titleView:true);
+            else
+            {
+                var snapshot=State.Snapshot;
+                int level=(int)State.Company.Office;
+                string district=State.Founder.Traits.Select(value=>value!.ToString()).FirstOrDefault(value=>value.StartsWith("d_"))??"";
+                bool own=(bool)snapshot["ownModel"]!;
+                int racks=own?(int)Math.Ceiling(Math.Log(Number(snapshot["gpu"]!)/8+1,2)):0;
+                var members=snapshot["staff"]!.AsArray();
+                var roles=members.Select(row=>row!["role"]!.ToString()).ToArray();
+                var ids=members.Select(row=>row!["uid"]!.ToString()).ToArray();
+                float morale=(float)Number(snapshot["morale"]!);
+                var moods=ids.Select(id=>int.TryParse(id.AsSpan(1),out int n)?Mathf.Clamp(morale+n*7%21-10,0,100):morale).ToArray();
+                double free=Math.Max(0,Number(snapshot["gpu"]!)-State.ReadBotValue("inferNeed"));
+                float heat=own && (bool?)snapshot["furnace"]?["on"]==true && free>0?
+                    (float)(.25+.75*free/Math.Max(1,State.ReadBotValue("quota"))):0;
+                office!.Show(State.Company.Region,level,district,State.Company.Track,level==floorOffice?floor:-1,racks,roles,own,
+                    ids:ids,moods:moods,heat:heat,outfit:snapshot["founder"]?["outfit"]?.ToString()??"turtleneck",session:State,
+                    animateRacks:ScreenId!="end" && !SuppressThemeFx && Pref("themefx",1)!=0);
+                if(officeRelease && own)office.PlayRelease();
+            }
+            officeRelease=false;
+            if(ScreenId!="main")office!.Viewport(new Rect(0,0,1,1));
+        }
+
+        private void FrameStage(VisualElement stage)
+        {
+            var bounds=stage.worldBound;
+            var root=Root.worldBound;
+            if(stage.panel==null || bounds.width<=0 || bounds.height<=0 || root.width<=0 || root.height<=0)return;
+            office!.Viewport(new Rect((bounds.x-root.x)/root.width,(root.yMax-bounds.yMax)/root.height,
+                bounds.width/root.width,bounds.height/root.height));
+        }
+
         internal void Draw()
         {
             Root.Clear(); bubble=null; Controls.Clear(); ApplyTheme(); SyncSound();
+            SyncOffice();
             if (ScreenId == "eggs") { DrawEggGallery(); return; }
             if(State!=null && State.Snapshot["over"]==null && ScreenId!="wizard") PrepareTutorial();
             if (ScreenId == "main")
             {
-                Advice=VisibleAdvice();TrackSoundHints();TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); var stage=Box(body,"stage"); Dashboard.Hints(this,stage); DrawTutorial(stage); if(Open("team")) SidePanel.Draw(this, Box(body, "right")); DrawFooter(); return;
+                Advice=VisibleAdvice();TrackSoundHints();TopBar.Draw(this); var body = Box(Root, "body"); ActionList.Draw(this, Box(body, "left")); var stage=Box(body,"stage"); Dashboard.Hints(this,stage); DrawTutorial(stage); if(Open("team")) SidePanel.Draw(this, Box(body, "right")); DrawFooter();
+                if(office)stage.RegisterCallback<GeometryChangedEvent>(_=>FrameStage(stage));
+                return;
             }
             var overlay = Box(Root, "veil"); var panel = Box(overlay, "panel");
+            if(office && ScreenId=="title")
+            {
+                overlay.style.flexDirection=FlexDirection.Row;
+                overlay.style.backgroundColor=Color.clear;
+                panel.style.width=Length.Percent(35);
+                var stage=Box(overlay,"stage");
+                stage.style.alignSelf=Align.Stretch;
+                stage.RegisterCallback<GeometryChangedEvent>(_=>FrameStage(stage));
+            }
             if (ScreenId != "title" && ScreenId != "end") panel.AddToClassList("scroll-panel");
             switch (ScreenId)
             {

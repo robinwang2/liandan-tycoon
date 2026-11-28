@@ -13,6 +13,7 @@ const player = join(project, 'Build/ParityProbe/ParityProbe.exe');
 const methods = new Map([
   ['compile', 'ConfigureUrp'],
   ['art-furnace', 'Capture'],
+  ['office-shots', 'Capture'],
   ['art-repair', 'CaptureRepair'],
   ['build-game-art','BuildArtProbe'],
   ['editor-parity', 'RunEditor'],
@@ -23,6 +24,8 @@ const methods = new Map([
   ['build-game-il2cpp', 'BuildGameIl2cpp'],
 ]);
 const [mode, input, ...extra] = process.argv.slice(2);
+const motionShots=mode==='office-shots' && input==='motion';
+if(motionShots)methods.set(mode,'CaptureMotion');
 const shotBatch = /^art-(batch[1-9]\d*)$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
@@ -109,17 +112,21 @@ async function run() {
     }
     checkMix(shots); return;
   }
-  if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
-    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | audio-render | art-furnace | art-batchN | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900|1920x1080]');
+  if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking && !motionShots))
+    throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | office-shots | audio-render | art-furnace | art-batchN | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900|1920x1080]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
+  if (mode==='office-shots' || mode==='setup-ui' || mode==='build-game' || mode==='build-game-il2cpp') {
+    const exportRun=spawnSync(process.execPath,[join(root,'tools/unity/export-office.mjs'),project],{stdio:'inherit'});
+    if(exportRun.error || exportRun.status!==0)throw exportRun.error || new Error('办公室导出失败');
+  }
   mkdirSync(logs, { recursive: true });
   const log = join(logs, mode + '.log');
   const result = join(logs, mode === 'run-probe' ? 'parity-il2cpp.txt' : 'parity-editor.txt');
-  const args = ['-batchmode', ...(mode.startsWith('art-') ? [] : ['-nographics']), '-logFile', log];
+  const args = ['-batchmode', ...(mode.startsWith('art-') || mode==='office-shots' ? [] : ['-nographics']), '-logFile', log];
   if(shotBatch || mode==='art-repair') { const dest=join(project,'Assets/StreamingAssets/tables');mkdirSync(dest,{recursive:true});copyFileSync(join(root,'src/data/tables/art.json'),join(dest,'art.json')); }
   if (methods.has(mode))
-    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (shotBatch||mode==='art-repair'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
+    args.push('-quit', '-projectPath', project, '-buildTarget', 'Win64', '-executeMethod', 'Liandan.EditorTools.' + (mode==='office-shots'?'OfficeShots.':shotBatch||mode==='art-repair'?'PropShots.':mode==='art-furnace'?'FurnaceShots.':mode==='audio-render'?'Audio.':mode.startsWith('build-game') || mode === 'setup-ui' ? 'Build.' : 'Parity.') + methods.get(mode));
   if (shotBatch) args.push('-artSelection', resource);
   if (checking) {
     const bits = input ? resolve(input) : join(logs, 'math-bits.bin');
@@ -146,6 +153,7 @@ async function run() {
     console.log(result + '\n' + report);
   }
   if (proc.status !== 0 || errors.length || !contents ||
+      (mode==='office-shots' && !contents.includes(motionShots?'Liandan office motion OK:':'Liandan office shots OK:')) ||
       (shotBatch && !contents.includes('Liandan '+shotBatch+' shots OK:')) ||
       (mode==='art-repair' && !contents.includes('Liandan repair shots OK:')) ||
       (mode === 'art-furnace' && (!contents.includes('Liandan furnace shots OK:') || ['original','tripo','tripo-close','tripo-front','tripo-back-high'].some(name=>!existsSync(join(project,'Build/art-furnace',name+'.png'))))) ||
@@ -156,6 +164,37 @@ async function run() {
       (mode.startsWith('build-game') && (!contents.includes('Liandan build OK:') || !existsSync(gamePath(mode === 'build-game' ? 'Game' : mode==='build-game-art'?'ArtProbe':'GameIl2cpp')))) ||
       (mode === 'build-probe' && (!existsSync(player) || !contents.includes('IL2CPP 探针构建完成'))))
     throw new Error('执行失败（进程退出码 ' + proc.status + '），请查看 ' + log);
+  if(motionShots){
+    const {default:sharp}=await import('sharp');
+    const folder=join(project,'Build/office-shots/motion');
+    for(const scene of ['typing','arrival','furnace','delivery','street','signal','lift','fan']){
+      let previous,changedPairs=0;
+      for(let frame=0;frame<4;frame++){
+        const {data,info}=await sharp(join(folder,`${scene}-${frame}.png`)).removeAlpha().raw().toBuffer({resolveWithObject:true});
+        if(info.width!==1280 || info.height!==720 || info.channels!==3)throw Error('办公室动效截图尺寸错误：'+scene);
+        if(previous){
+          let pixels=0;
+          for(let p=0;p<data.length;p+=3){
+            if((Math.abs(data[p]-previous[p])>8 || Math.abs(data[p+1]-previous[p+1])>8 ||
+                Math.abs(data[p+2]-previous[p+2])>8) && ++pixels>=32)break;
+          }
+          if(pixels>=32)changedPairs++;
+        }
+        previous=data;
+      }
+      if(changedPairs<(scene==='signal'?1:2))throw Error(scene+' 固定镜头只有 '+changedPairs+' 组相邻帧发生可见变化');
+      console.log(scene+' 可见变化 '+changedPairs+'/3');
+    }
+    console.log('办公室动效截图：'+folder);
+  }else if(mode==='office-shots'){
+    const folder=join(project,'Build/office-shots');
+    for(const region of ['sz','bay'])for(let level=1;level<=8;level++){
+      const name=region+'-'+level+'.png', png=readFileSync(join(folder,name));
+      if(png.length<24 || png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a' ||
+          png.readUInt32BE(16)!==1280 || png.readUInt32BE(20)!==720)throw Error('办公室截图损坏：'+name);
+    }
+    console.log(contents.split(/\r?\n/).find(line=>line.startsWith('Liandan office shots OK:')));
+  }
   if(shotBatch==='batch6') {
     const {default:sharp}=await import('sharp');
     const folder=join(project,'Build/art-batch6');
