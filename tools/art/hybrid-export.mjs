@@ -36,6 +36,8 @@ root.traverse(node => {
   names.set(node, name);
 });
 const glass = mat => mat.transparent || (batchName === 'batch3' && ['192f3e','253946'].includes(mat.color.getHexString()));
+const meshRules = spec.meshRules ?? [];
+const ruleHits = meshRules.map(() => 0);
 root.traverse(mesh => {
   if (!mesh.isMesh) return;
   const mat = mesh.material, color = mat.color.getHexString();
@@ -46,11 +48,15 @@ root.traverse(mesh => {
     if (guards.has(node)) { part = 'Guard'; break; }
   }
   if (part === 'Shell') {
-    if (glass(mat)) part = 'Glass';
+    const ruleIndex = meshRules.findIndex(rule => Object.entries(rule.at).every(([axis,values]) =>
+      values.some(value => Math.abs(mesh.position[axis]-value)<1e-5)));
+    if (ruleIndex >= 0) { part = meshRules[ruleIndex].part; ruleHits[ruleIndex]++; }
+    else if (glass(mat)) part = 'Glass';
     else if (id === 'news_rack' && ['e4ddcb','4a5160'].includes(color)) part = 'Papers';
     else if (spec.partColors?.[color]) part = spec.partColors[color];
     else if (mat.emissive?.getHex() && parts.includes('Lights')) part = 'Lights';
   }
+  if (spec.pivots?.[part]) pivot.fromArray(spec.pivots[part]);
   if (glass(mat)) mat.name = 'M_' + id + '_Glass';
   if (!bins.has(part)) bins.set(part, {pivot, materials:new Map()});
   const bucket = bins.get(part).materials;
@@ -59,6 +65,7 @@ root.traverse(mesh => {
   geo.applyMatrix4(new Matrix4().makeTranslation(-pivot.x,-pivot.y,-pivot.z).multiply(mesh.matrixWorld));
   bucket.get(mat).push(geo);
 });
+meshRules.forEach((rule,index) => { if (ruleHits[index] !== rule.count) throw Error(`${id} ${rule.part} 匹配 ${ruleHits[index]}，预期 ${rule.count}`); });
 if ([...bins.keys()].sort().join() !== ['Shell',...parts].sort().join()) throw Error(id+' 分件不匹配：'+[...bins.keys()]);
 const model = new Group();
 for (const [name,{pivot,materials}] of bins) {

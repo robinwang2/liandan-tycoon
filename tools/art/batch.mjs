@@ -1,5 +1,6 @@
 // 各批次：政策只存选件与场景例外，库道具的尺寸和预算始终读表。
 import { batchOptions } from './batch-options.mjs';
+import { budgetFor, geometryErrors } from './prop-geometry.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -33,7 +34,7 @@ function proceduralRecipe({id,w,d,h,budget,origin,parts}) {
   for(const file of files) digest.update('\0'+file+'\0'+fs.readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
   return digest.digest('hex');
 }
-const sourceHash = file=>eggs && file.endsWith('.py') ? createHash('sha256').update(fs.readFileSync(file,'utf8').replaceAll('\r\n','\n')).digest('hex') : hash(file);
+const sourceHash = file=>(eggs || batchName==='batch8') && file.endsWith('.py') ? createHash('sha256').update(fs.readFileSync(file,'utf8').replaceAll('\r\n','\n')).digest('hex') : hash(file);
 const specs = read(path.join(root,'src/data/tables/art.json')).PROPS;
 const selection = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json'));
 const batch = selection.props.map(entry=>{
@@ -64,7 +65,7 @@ function prepared(item,p) {
     (!isHybrid(item) || (fs.existsSync(shell) && report.shellSha===hash(shell)));
 }
 function manifest() {
-  const entries=batch.filter(item=>prepared(item,paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
+  const entries=batch.filter(item=>!item.referenceOnly && prepared(item,paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
     views:Object.fromEntries(views.map(view=>[view,path.join(paths(id).ref,view+'.png')])),tripoSlots:{正面:'front.png',左侧:'right.png',右侧:'left.png',背面:'back.png'},settings:'按 tripoSlots 填网页格子，不按文件名同名上传。私有；H3.1 四视图，正面 +Z；先审轮廓，再生成微缩玩具风底色，普通 1K / 大件最多 2K；下载 GLB。不要烘焙文字或灯光。'}));
   if (withColor) {
     const lines = ['# '+batchName+' 网页上传清单', '', '私有 · H3.1 多视图。先核对几何正反与轮廓，再选图片贴图，上传彩色参考。'];
@@ -77,6 +78,7 @@ function manifest() {
       entry.color = path.join(paths(entry.id).ref,'color.png');
       lines.push('', '## '+entry.name+'（'+entry.id+'）','');
       const item=chosen(entry.id);
+      if(batchName==='batch8') lines.push(`${isHybrid(item)?'混合':'整件'} · 私有 H3.1 四视图 → 2K 图片贴图 · 预计 40 分。`, '', item.review, '');
       if(selection.creditLimit) {
         entry.reserve=!!item.reserve;
         lines.push(item.reserve ? '候补，首轮请跳过。' : '首轮上传。', '');
@@ -88,56 +90,92 @@ function manifest() {
       for (const [slot,file] of Object.entries(entry.tripoSlots)) lines.push('- '+slot+'　`'+path.join(paths(entry.id).ref,file)+'`');
       lines.push('- 图片贴图　`'+entry.color+'`');
       entry.settings='按 tripoSlots 上传四向灰模，审几何后用 color 路径做图片贴图。';
+      if(batchName==='batch8') entry.settings+=' 私有 H3.1 四视图；2K 图片贴图。';
+    }
+    if(batchName==='batch8') {
+      lines.push('', '## 不排单（仅本地原模对照，0 分）');
+      for(const item of batch.filter(item=>item.referenceOnly)) lines.push('', `- ${item.id}：${item.review}`);
+      lines.push('', '## 新彩蛋 · 概念图待生成', '', '逐件在私有图片工具生成一张概念图，保存到下列目标路径；同一张图用于私有 H3.1 单图几何和 2K 图片贴图。没有原模，不传四视图。每件预计 10＋30＋10＝50 分。');
+      for(const item of batch.filter(item=>item.egg)) lines.push('', `### ${item.name}（${item.id}）`, '', `摆放：${item.placement}。目标宽×深×高：${item.w}×${item.d}×${item.h} m。`, '', item.prompt, '', `验收：${item.review}`, '', `概念图待存：\`${path.join(local,item.id,'concept.png')}\``);
+      const paidProps=batch.filter(item=>!item.egg && !item.referenceOnly).length, concepts=batch.filter(item=>item.egg).length;
+      lines.push('', `预算：${paidProps} 件库道具 × 40＋${concepts} 件彩蛋 × 50＝${paidProps*40+concepts*50} 分；不含返工。本地实耗 0。`);
     }
     fs.mkdirSync(local,{recursive:true});
     fs.writeFileSync(path.join(local,'upload.md'),lines.join('\n')+'\n');
   }
   save(path.join(local,'upload.json'),entries);
 }
-// 选件表 replacement：整件改用第三方模型（如 CC0 的 ficus），不走 Tripo 下载件。
+// The B8 worktree may mount the main checkout's Art outside its writable root.
+function eggDelivery(item) {
+  return path.join(local,'eggs-delivery','Props',item.id,'Resources',resource,item.id);
+}
 function replacementState(item) {
-  const r=item.replacement, p=paths(item.id), report=read(p.report), blend=path.join(root,r.blend);
+  const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend);
+  const staged=r.sourceSha && (process.env.BATCH8_EGGS_STAGE==='1' || !fs.existsSync(p.report));
+  const dest=staged?eggDelivery(item):p.dest, reportFile=path.join(dest,'report.json'), report=read(reportFile);
   const lod0=path.join(p.dir,r.name,'lod0.glb');
-  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && report.blendSha===sourceHash(blend) && report.blendSha===r.blendSha &&
+  const recordedSha=r.sourceSha?report?.sourceSha:report?.blendSha;
+  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && recordedSha===sourceHash(blend) && recordedSha===(r.sourceSha??r.blendSha) &&
     (!r.prepSha || (report.prepSha===r.prepSha && sourceHash(path.join(root,r.prep))===r.prepSha)) &&
-    fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(p.dest,report.model));
+    fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(dest,report.model));
   const qc=normal?{pass:true,triangles:report.lods[0].triangles,size:report.lods[0].size,problems:[]}:null;
-  const receipt=normal && read(path.join(shots,item.id+'.json'));
+  const receipt=normal && !staged && read(path.join(shots,item.id+'.json'));
   return {prep:true,downloaded:fs.existsSync(blend),qc,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png'))};
 }
 function replace(item) {
   const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend), dir=path.join(p.dir,r.name);
   if(!fs.existsSync(blend)) throw Error('缺少第三方原件：'+blend);
-  if(sourceHash(blend)!==r.blendSha) throw Error('原件哈希与选件表不符：'+blend);
+  if(sourceHash(blend)!==(r.sourceSha??r.blendSha)) throw Error('原件哈希与选件表不符：'+blend);
   if(r.prepSha && sourceHash(path.join(root,r.prep))!==r.prepSha) throw Error('prep 哈希与选件表不符：'+r.prep);
-  // 下载的 .blend 可能带脚本，始终禁用自动执行。
-  const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
-    ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',...(!eggs || blend.endsWith('.blend')?[blend]:[]),'-P',path.join(root,r.prep),'--',dir,...(eggs?[item.id,blend]:[])],
-    {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
-  if(run.error || run.status!==0) throw run.error??Error('第三方模型整理失败：'+item.id);
+  if(r.sourceSha) {
+    blender(path.relative(import.meta.dirname,path.resolve(root,r.prep)),dir,blend,item.h,r.lodBase??'source',...[0,1,2].map(level=>budgetFor(item.budget,level)));
+  } else {
+    // 下载的 .blend 可能带脚本，始终禁用自动执行。
+    const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
+      ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',...(!eggs || blend.endsWith('.blend')?[blend]:[]),'-P',path.join(root,r.prep),'--',dir,...(eggs?[item.id,blend]:[])],
+      {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+    if(run.error || run.status!==0) throw run.error??Error('第三方模型整理失败：'+item.id);
+  }
   const lods=[0,1,2].map(n=>path.join(dir,'lod'+n+'.glb')), ref=path.join(p.dir,r.name+'-ref');
   tool('qc',lods[0],'--tight-frame','--out',ref,'--flat','--bg',1,'--views',[...views,'color'].join(','));
   // 等比缩放到表内高度，树冠宽深须与选件表登记一致（Unity 按它验尺寸，按表内宽深放碰撞）。
   const size=read(path.join(ref,'report.json')).size, k=item.h/size.height;
   const w=eggs?item.w:+(size.width*k).toFixed(4), d=eggs?item.d:+(size.depth*k).toFixed(4);
-  if(!eggs && (Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001)) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
+  if(!eggs && !r.sourceSha && (Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001)) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
   const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
   tool('normalize',lods[0],'--lod-sources',lods.slice(1).join(','),'--min-iou',r.minIoU.join(','),'--max-interior-loss',r.maxInteriorLoss,
-    '--out',stage,'--name',item.id,'--width',w,'--depth',d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
+    '--out',stage,'--name',item.id,...(r.sourceSha?[]:['--width',w,'--depth',d]),'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
   const report=read(path.join(stage,'report.json'));
+  if(r.sourceSha) {
+    for(const lod of report.lods) {
+      const check=read(path.join(p.dir,r.name+'-lod-qc','LOD'+lod.level,'report.json'));
+      const errors=geometryErrors(check,{...item,w,d},lod.level);
+      if(errors.length) throw Error('LOD'+lod.level+'：'+errors.join('；'));
+    }
+  }
   if((!eggs || r.textured) && !report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
-  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
+  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sourceSha:r.sourceSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
   // 原交付（Tripo 版）首次替换前整体留底；之后只覆盖。
   const backup=path.join(p.dir,'tripo-delivery');
   if(fs.existsSync(p.dest) && !fs.existsSync(backup) && read(p.report)?.replacement===undefined) fs.cpSync(p.dest,backup,{recursive:true});
-  fs.mkdirSync(p.dest,{recursive:true});
-  const fresh=new Set(fs.readdirSync(stage));
-  for(const name of fs.readdirSync(p.dest)) {
-    const stem=name.endsWith('.meta')?name.slice(0,-5):name;
-    if(!fresh.has(stem)) fs.rmSync(path.join(p.dest,name));
+  let dest=r.sourceSha && process.env.BATCH8_EGGS_STAGE==='1'?eggDelivery(item):p.dest;
+  try {
+    installReplacement(stage,dest,report.model);
+  } catch(error) {
+    if(!r.sourceSha || dest!==p.dest || !['EPERM','EACCES','EROFS'].includes(error.code)) throw error;
+    dest=eggDelivery(item);
+    installReplacement(stage,dest,report.model);
   }
-  for(const name of [...[...fresh].filter(name=>name!==report.model),report.model]) fs.copyFileSync(path.join(stage,name),path.join(p.dest,name));
-  console.log('已替换为 '+r.name+'：'+p.dest+'；原交付留底 '+backup);
+  console.log('已交付 '+r.name+'：'+dest);
+}
+function installReplacement(stage,dest,model) {
+  fs.mkdirSync(dest,{recursive:true});
+  const fresh=new Set(fs.readdirSync(stage));
+  for(const name of fs.readdirSync(dest)) {
+    const stem=name.endsWith('.meta')?name.slice(0,-5):name;
+    if(!fresh.has(stem)) fs.rmSync(path.join(dest,name));
+  }
+  for(const name of [...[...fresh].filter(name=>name!==model),model]) fs.copyFileSync(path.join(stage,name),path.join(dest,name));
 }
 function state(item) {
   if(item.procedural) {
@@ -204,12 +242,47 @@ async function ingest(item,file,mirrorDepth) {
   }
   deliver(item,p,mirrorDepth,sha,refSha);
 }
+function blender(script,...args) {
+  const result=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
+    ['-b','--factory-startup','--python-exit-code','1','-P',path.join(import.meta.dirname,script),'--',...args.map(String)],
+    {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+  if(result.error || result.status!==0) throw result.error??Error(script+' 未完成');
+}
+
+// 预定的远级面数走同一 Blender 规范化与逐级 FBX 质检。保留近、中级的原额度。
+function normalizeWithFarBudget(item,p,stage,options) {
+  const limits=[budgetFor(item.budget,1),item.lod2Budget];
+  blender('normalize.py',p.source,...options,'--lod-limits',limits.join(','),'--lod-targets',[0,item.lod2Budget].join(','));
+  const report=read(path.join(stage,'report.json'));
+  for(const lod of report.lods) {
+    const out=path.join(p.dir,'lod-qc','LOD'+lod.level);
+    tool('qc',path.join(stage,report.model),'--lod',lod.level,'--out',out,'--budget',lod.budget,'--height',item.h,'--ref',p.ref,'--res',512);
+    const check=read(path.join(out,'report.json'));
+    // qc 按上面的绝对额度验面数，geometryErrors 仍按本级百分比核对尺寸及锚点。
+    const budget=Math.ceil(lod.budget*100/budgetFor(100,lod.level));
+    const errors=[...check.problems,...geometryErrors(check,{...item,budget},lod.level)];
+    if(check.triangles!==lod.triangles || Object.keys(lod.size).some(k=>Math.abs(check.size[k]-lod.size[k])>.002))
+      errors.push('FBX 回读的面数或尺寸与规范化报告不符');
+    if(errors.length) throw Error('LOD'+lod.level+'：'+errors.join('；')+'；见 '+out);
+  }
+}
 function deliver(item,p,mirrorDepth,sha,refSha,previous=null) {
   const hybrid=isHybrid(item);
   const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
   // 旧版已经交付的混合件在 reexport 时复现原配方。重新 ingest 则使用独立程序件预算。
   const legacy = hybrid && previous && (previous.legacyHybridRecipe ?? !previous.lods[0].partRatios);
-  tool('normalize',p.source,'--out',stage,'--name',item.id,'--width',item.w,'--depth',item.d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,'lod-qc'),'--ref',hybrid?path.join(p.dir,'game-ref'):p.ref,'--res',512,...(hybrid?['--hybrid']:[]),...(legacy?['--legacy-hybrid']:[]),...(mirrorDepth?['--mirror-depth']:[]));
+  const options=['--out',stage,'--name',item.id,'--width',item.w,'--depth',item.d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,
+    ...(hybrid?['--hybrid']:[]),...(legacy?['--legacy-hybrid']:[]),...(mirrorDepth?['--mirror-depth']:[])];
+  if(item.lod2Budget) {
+    normalizeWithFarBudget(item,p,stage,options);
+  } else {
+    if(item.boxLods) {
+      const folder=path.join(p.dir,'box-lods');
+      blender('repair/common.py',p.source,folder,item.boxLods.triangles.join(','),item.boxLods.voxelHeight);
+      options.push('--lod-sources',[1,2].map(n=>path.join(folder,'lod'+n+'.glb')).join(','));
+    }
+    tool('normalize',p.source,...options,'--qc',path.join(p.dir,'lod-qc'),'--ref',hybrid?path.join(p.dir,'game-ref'):p.ref,'--res',512);
+  }
   const report=read(path.join(stage,'report.json'));
   if(mirrorDepth) {
     const check=path.join(p.dir,'verified-lod0');
@@ -254,6 +327,7 @@ try {
   else if(command==='prep') {
     if(!fs.existsSync(ledgerFile)) save(ledgerFile,{});
     for(const item of args.length?args.map(chosen):batch) {
+      if(batchName==='batch8' && item.egg) continue;
       const p=paths(item.id), shell=path.join(p.dir,'shell.glb');
       const hybrid=isHybrid(item);
       if(hybrid || !legacyBatch) tool('hybrid-export',item.id,p.dir,'--batch',batchName);
@@ -284,7 +358,9 @@ try {
     for(const {id} of batch) {
       const entry=notes?.[id];
       if(!entry || ![entry.credits,entry.rework].every(n=>Number.isSafeInteger(n)&&n>=0) || typeof entry.note!=='string') throw Error('缺少有效的实测记录：'+id);
-      ledger[id]={...ledger[id],source:'Tripo Studio 网页（H3.1，私有四视图）',credits:entry.credits,reworks:entry.rework,note:entry.note};
+      if(batchName==='batch8' && !entry.source) throw Error('实测记录缺少素材来源：'+id);
+      ledger[id]={...ledger[id],source:entry.source??'Tripo Studio 网页（H3.1，私有四视图）',credits:entry.credits,reworks:entry.rework,note:entry.note,
+        ...(entry.status?{status:entry.status}:{})};
     }
     save(ledgerFile,ledger);
   } else if(command==='credit' && args.length>=2) {
@@ -294,27 +370,32 @@ try {
   else if(command==='ledger') {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
+      if(batchName==='batch8' && (!e.source || e.credits==null)) throw Error('请先用 credit --from-notes 登记实耗：'+id);
+      if(item.referenceOnly && e.status) return {id:batchName+'_'+id,name,source:e.source,method:e.note,credits:e.credits,
+        file:`art-src/tripo/${batchName}/${id}/game.glb`,qc:'仅作原模对照',status:e.status};
       if(item.procedural) {
         if(!s.report) throw Error('请先 replace '+id);
         return {id:batchName+'_'+id,name,source:'程序生成 · 0 积分',method:'游戏原模 → 焊缝 → 三级 LOD → FBX 回读',credits:0,file:`art-src/tripo/${batchName}/${id}/game.glb`,qc:'LOD '+s.report.lods.map(l=>l.triangles).join('/'),status:s.accepted?'Unity 已生成截图；待人工验收':'Blender 已验；待 Unity 截图'};
       }
       if(item.replacement) {
         const r=item.replacement;
-        if(eggs && s.report){
+        // 本批彩蛋有网页生成实耗，replacement 只描述入库后的本地整理。
+        const paid=batchName==='batch8'?e:{};
+        if((eggs || r.sourceSha) && s.report){
           const lods=s.report.lods, counts=lods.map(lod=>lod.triangles).join('/');
           const dims=Object.values(lods[0].size).map(value=>+value.toFixed(5)).join('×');
           const iou=lods.slice(1).map(lod=>Math.min(...Object.values(lod.lodIntegrity.views).map(view=>view.iou)).toFixed(4)).join('/');
-          return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
-            qc:`FBX 回读通过；LOD ${counts}；宽×深×高 ${dims} m；四向最低 IoU ${iou}`,status:s.accepted?'Unity 已生成截图；待人工验收':'Blender 已验；待 Unity 截图'};
+          return {id:batchName+'_'+id,name,source:paid.source??r.source,method:[paid.note,r.method].filter(Boolean).join('；'),license:r.license,credits:paid.credits??0,file:r.blend,
+            qc:`FBX 回读通过；LOD ${counts}；宽×深×高 ${dims} m；四向最低 IoU ${iou}`,status:s.accepted?deliveryStatus(s,paid,item):'Blender 已验；待 Unity 截图'};
         }
-        return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
+        return {id:batchName+'_'+id,name,source:paid.source??r.source,method:[paid.note,r.method].filter(Boolean).join('；'),license:r.license,credits:paid.credits??0,file:r.blend,
           qc:s.report?`精模 ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).map(v=>+v.toFixed(3)).join('×')} m；LOD ${s.report.lods.map(lod=>lod.triangles).join('/')}；远级轮廓 IoU 门槛 ${r.minIoU.join('/')}`:'待替换',
           status:deliveryStatus(s,{},item)};
       }
       const hybrid=isHybrid(item);
-      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+'；参考原色图贴图，程序件从游戏原模回装':null,
+      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+(repaired?'；参考原色图贴图，程序件从游戏原模回装':''):null,
         e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?(hybrid?'AI 外壳＋程序部件':'AI 外壳 + 程序化修补')+'；本地追加 0 积分':null].filter(Boolean).join('；');
-      return {id:batchName+'_'+id,name,source:hybrid && repaired?'AI 外壳＋程序部件':e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
+      return {id:batchName+'_'+id,name,source:hybrid && repaired && batchName!=='batch8'?'AI 外壳＋程序部件':e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
         file:s.downloaded?`art-src/tripo/${batchName}/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,
         qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e,item)};
     });
@@ -323,6 +404,7 @@ try {
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
 function deliveryStatus(s,entry,item) {
+  if(batchName==='batch8' && (entry?.status || s.accepted)) return entry?.status??'已进引擎';
   if(item.procedural) return s.accepted?'Unity 已生成截图；待人工验收':s.report?'Blender 已验；待 Unity 截图':'待生成程序件';
   if(isHybrid(item) && s.accepted) return 'Unity 已生成截图；待人工验收';
   if(s.report?.source==='repaired.glb') return '本地修补及三级回读通过；待 Unity 人工验收';

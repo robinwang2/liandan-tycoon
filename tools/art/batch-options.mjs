@@ -3,8 +3,9 @@ import { existsSync } from 'node:fs';
 
 export function batchConfig(batchName) {
   if (!/^batch[1-9]\d*$/.test(batchName)) throw Error('无效批次：'+batchName);
-  const resource = 'B' + batchName.slice(1);
-  const policy = batchName === 'batch1' ? 'PropPolicy' : 'PropPolicy' + resource;
+  const batchLabel = 'B' + batchName.slice(1);
+  const resource = batchName === 'batch8' ? 'B8' : batchLabel;
+  const policy = batchName === 'batch8' ? 'PropPolicyBatch8' : batchName === 'batch1' ? 'PropPolicy' : 'PropPolicy' + batchLabel;
   if (!existsSync(new URL('../../unity/Game/Assets/Shell/Resources/'+policy+'.json',import.meta.url)))
     throw Error('缺少批次选件表：'+policy);
   return { batchName, resource, policy };

@@ -138,7 +138,7 @@ namespace Liandan.EditorTools
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var camera=Whitebox.Create(false,true);
             var batch=resource.ToLowerInvariant();
-            var package=resource=="Batch6"?"B6":resource;
+            var package=resource=="Batch6"?"B6":resource=="Batch8"?"B8":resource;
             var folder=Path.GetFullPath(Path.Combine(Application.dataPath,"../Build/art-"+batch));
             Directory.CreateDirectory(folder);
             var failures=new List<string>();var skipped=new List<string>();int passed=0;
@@ -153,7 +153,7 @@ namespace Liandan.EditorTools
                     if(hybrid) File.Delete(Path.Combine(folder,id+"-action.png"));
                     for (int level = 1; level <= 2; level++)
                         File.Delete(Path.Combine(folder, $"{id}-lod{level}.png"));
-                    if(!File.Exists(source)){if(package=="B6" || package=="Batch7")throw new FileNotFoundException(source);skipped.Add(id);continue;}
+                    if(!File.Exists(source)){if(package=="B6" || package=="Batch7" || (package=="B8" && item.egg))throw new FileNotFoundException(source);skipped.Add(id);continue;}
                     var log=AssetImporter.GetImportLog(source);
                     if(log!=null){var errors=log.logEntries.Where(entry=>(entry.flags & ImportLogFlags.Error)!=0).Select(entry=>entry.message).ToArray();
                         if(errors.Length>0)throw new InvalidDataException(string.Join("；",errors));}
@@ -183,7 +183,8 @@ namespace Liandan.EditorTools
                     var center=box.transform.TransformPoint(box.center);
                     var diagonal=Vector3.Scale(box.size,box.transform.lossyScale).magnitude;
                     bool doorView=package=="Batch7" && id=="elevator_car";
-                    var direction=copy.transform.TransformDirection(package=="B6"?new Vector3(.23f,.24f,1):doorView?new Vector3(-1.4f*xSign,.65f,xSign):new Vector3(.75f*xSign,.65f,-xSign)).normalized;
+                    bool faceForward=package=="B6" || (package=="B8" && item.egg);
+                    var direction=copy.transform.TransformDirection(faceForward?new Vector3(.23f,.24f,1):doorView?new Vector3(-1.4f*xSign,.65f,xSign):new Vector3(.75f*xSign,.65f,-xSign)).normalized;
                     camera.transform.position=center+direction*diagonal*2;
                     camera.transform.LookAt(center);
                     camera.orthographicSize=diagonal*.5f*1.08f;
