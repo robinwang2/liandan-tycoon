@@ -263,6 +263,7 @@ export function createRoom(stage, k, PROPS, art, traffic) {
       if (!put(g, 'desk_set', x, z + 0.18, 0, { seed: n * 7 + lv, brand, screen: screens[n % 4 === 1 ? 2 : n % 4 === 3 ? 3 : 0].m }, 0.06)) { k.box(1.5, 0.07, 0.72, '#e6c9a0', g, x, 0.8, z + 0.18, { r: 0.03, tex: 'wood' }); k.box(0.07, 0.72, 0.62, '#aeb6c2', g, x - 0.68, 0.42, z + 0.18); k.box(0.07, 0.72, 0.62, '#aeb6c2', g, x + 0.68, 0.42, z + 0.18); }
       if (!put(g, 'office_chair', x, z - 0.52, 0, { brand, seed: n }, 0.06)) k.box(0.5, 0.5, 0.5, '#4a5160', g, x, 0.3, z - 0.55, { r: 0.05 });
       if (lv >= 2 && n % 3 === 1) put(g, 'desk_lamp', x - 0.55, z + 0.35, 0.6, { brand }, 0.8);
+      if (n === 0) put(g, 'trash_bin', x - .48, z + .79, 0, {}, .06);  // Front corner, clear of the next row's chairs.
       seats.push({ x, z: z - 0.5 });
     }
     for (let i = 0; i < 14; i++) stands.push({ x: -W / 2 + 2.4 + (i % 7) * 1.05, z: D / 2 - 0.8 - (i / 7 | 0) * 0.9 });
@@ -436,6 +437,7 @@ export function createRoom(stage, k, PROPS, art, traffic) {
       out('flower_bed', 5.0, oz, 0, { seed: 4 }, 0.05); out('flower_bed', -5.6, oz + 0.05, 0, { seed: 2 }, 0.05);
       out(alt('bulletin_board', 'mailbox'), 6.0, 4.9, PI / 4); out('bike_rack', 2.2, oz - 1.0, 0, { seed: 2 }); out('mailbox', lx - 1.2, D / 2 - 2.6); out('street_lamp', lx - 2.3, 0, PI / 2);
     } else if (kind === 'village') {
+      put(g, 'scroll', .85, bz + .003, 0, { wallMount: true }, 1.84);  // Solid wall above the clothes rail.
       pp('camp_bed', -1.6, fz, PI); pp('bunk_bed', lx + 0.7, bz + 1.3, PI / 2); pp('rice_cooker', lx + 0.5, 1.2, PI / 2); pp('clothes_rack', 0.9, bz + 0.5); pp('water_dispenser', -0.5, bz + 0.4); pp('shoe_rack', lx + 0.75, 3.55, PI / 2); pp('parcels', lx + 0.6, -0.6, PI / 2);
       // 楼下：电线杆、小吃摊、塑料凳、电动车，没有一寸草坪
       out('utility_pole', lx - 1.9, D / 2 + 1.9, 0.3); out('utility_pole', W / 2 + 2.3, bz - 2.05, 1.2);
@@ -473,7 +475,11 @@ export function createRoom(stage, k, PROPS, art, traffic) {
           : lv === 4 ? (bay ? ['reception', 'sofa', 'foosball', 'pantry', 'vending', 'arcade'] : ['reception', 'sofa', 'tea_table', 'pantry', 'vending', 'fish_tank'])
             : (bay ? ['reception', 'statue_founder', 'sofa', 'pingpong', 'pantry', 'vending', 'arcade'] : ['reception', 'statue_founder', 'sofa', 'tea_table', 'pantry', 'vending', 'gong']);
     const tp = TRACK_PROP[st.view.track]; if (PROPS[tp]) strip.splice(1, 0, tp);                    // 产品赛道的标志摆设：排第二个，脸朝镜头
-    strip.forEach((n, i) => { if (slots[i] != null) pp(PROPS[n] ? n : 'coffee_bar', slots[i], n === tp ? fz + 0.1 : fz, n === tp ? 0.45 : Math.PI); });
+    strip.forEach((n, i) => {
+      if (slots[i] == null) return;
+      pp(PROPS[n] ? n : 'coffee_bar', slots[i], n === tp ? fz + 0.1 : fz, n === tp ? 0.45 : Math.PI);
+      if (n === 'reception') put(g, 'pendant_lamp', slots[i], fz, 0, {}, H);
+    });
     if (lv >= 2) { pp('plant_tall', lx + 0.55, -D / 2 + 0.6); pp(bay ? 'bean_bag' : 'money_tree', lx + 0.7, D / 2 - 3.3, 0.6); pp('printer', lx + 0.6, 2.2, Math.PI / 2); pp('whiteboard', lx + 2.4, D / 2 - 3.4, 0.9); }
     if (lv >= 3) { pp('bookshelf', lx + 0.42, -D / 2 + 3.6, Math.PI / 2); pp('plant_small', W / 2 - L.rz - 0.5, D / 2 - 0.5); pp('water_cooler', lx + 0.5, 3.6, Math.PI / 2); if (bay) pp('surfboard', lx + 0.4, -D / 2 + 5.4, Math.PI / 2); else pp('lucky_cat', lx + 3.4, fz - 1.2); }
     if (lv >= 4) { pp(PROPS.glass_room ? 'glass_room' : 'meeting_table', W / 2 - 2.5, D / 2 - 2.1, Math.PI, { screen: screens[2].m }); pp('phone_booth', lx + 0.8, -D / 2 + 5.6, Math.PI / 2); pp('trophy_case', lx + 0.42, 0.9, Math.PI / 2); pp('standing_lamp', lx + 2.2, D / 2 - 0.5); pp('locker', lx + 0.4, D / 2 - 5.4, Math.PI / 2); }
@@ -748,6 +754,7 @@ export function createRoom(stage, k, PROPS, art, traffic) {
   function lobbyFloor(g, pp, bay) {
     const { W, D } = st.L, lx = -W / 2;
     signPanel(g, 0, 1.25, -D / 2 + 0.06, 6.4);                                                       // 背景墙上的公司大招牌
+    pp('pendant_lamp', 0, D / 2 - 3.4, 0, {}, st.L.H);
     pp('reception', 0, D / 2 - 3.4, Math.PI); pp('statue_founder', lx + 3.2, -D / 2 + 3.2); pp('atrium_tree', W / 2 - 3.6, -D / 2 + 2.8);
     pp('rug', lx + 4.8, D / 2 - 2.4, 0); pp('sofa', lx + 3.4, D / 2 - 1.3, Math.PI); pp('sofa', lx + 6.2, D / 2 - 1.3, Math.PI); pp('coffee_table', lx + 4.8, D / 2 - 2.6);
     pp('trophy_case', lx + 0.42, -0.6, Math.PI / 2); pp('tv_wall', lx + 0.02, 1.9, Math.PI / 2, { screen: screens[1].m }, 1.05);
@@ -761,6 +768,7 @@ export function createRoom(stage, k, PROPS, art, traffic) {
     pp('glass_room', W / 2 - 2.8, -D / 2 + 2.2, 0, { screen: screens[2].m });                         // 董事会会议室
     pp('rug', -3.6, -D / 2 + 3.1, 0); pp('desk_set', -3.6, -D / 2 + 3.2, 0, { seed: 7, screen: screens[0].m }); pp('office_chair', -3.6, -D / 2 + 2.6, 0, { seed: 7 });
     pp('bookshelf', -5.6, -D / 2 + 0.45, 0); pp('bookshelf', -1.6, -D / 2 + 0.45, 0); pp('standing_lamp', -6.9, -D / 2 + 1.2);
+    pp('pendant_lamp', 2.2, .6, 0, {}, st.L.H);
     pp('meeting_table', 2.2, 0.6, 0); pp('trophy_case', lx + 0.42, 0.4, Math.PI / 2); pp('statue_founder', lx + 2.8, D / 2 - 3.4);
     pp('rug', lx + 5.2, D / 2 - 2.3, 0); pp('sofa', lx + 3.8, D / 2 - 1.3, Math.PI); pp('sofa', lx + 6.6, D / 2 - 1.3, Math.PI); pp('coffee_table', lx + 5.2, D / 2 - 2.5);
     pp('coffee_bar', W / 2 - 3.6, D / 2 - 1.1, Math.PI); pp('plant_tall', lx + 0.6, D / 2 - 0.6); pp('plant_tall', W / 2 - 0.6, -0.4); pp('plant_tall', 0.4, -D / 2 + 0.6);

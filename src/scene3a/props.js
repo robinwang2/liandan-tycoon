@@ -1,6 +1,7 @@
 // Miniature PBR prop library. Adapted from the original 51 prop drawings below.
 // Shared shapes and materials belong to the caller's kit, never to a prop.
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import scrollInk from './scroll-ink.json' with { type: 'json' };
 const C = {
   wood: '#c99a6b', darkWood: '#8a623f', paleWood: '#e6c9a0',
   metal: '#aeb6c2', dark: '#4a5160', white: '#f7f5ef', black: '#22252d',
@@ -428,6 +429,7 @@ export const PROPS = {
   }),
   skateboard: prop([0.8, 0.25, 0.15], (k, g) => {
     for (const x of [-0.25, 0.25]) {
+      k.box(.078, .045, .060, C.dark, g, x, .0775, 0, { r: .003 });
       bar(k, g, C.metal, [x, 0.045, -0.09], [x, 0.045, 0.09], 0.025);
       for (const z of [-0.09, 0.09]) k.cyl(0.043, 0.043, 0.06, C.yellow, g, x, 0.043, z, { rx: Math.PI / 2 });
     }
@@ -617,12 +619,18 @@ export const PROPS = {
     k.box(1.1, 0.53, 0.025, C.red, g, 0, 0, 0);
     k.box(1.02, 0.42, 0.012, C.cream, g, 0, 0, 0.019);
     for (const y of [-0.265, 0.265]) k.cyl(0.035, 0.035, 1.2, C.darkWood, g, 0, y, 0, { rz: Math.PI / 2 });
-    for (let i = 0; i < 4; i++) {
-      const x = -0.38 + i * 0.25;
-      k.box(0.06, 0.25, 0.012, C.black, g, x, 0, 0.031, { rz: -0.15 + i * 0.12 });
-      k.box(0.16, 0.05, 0.012, C.black, g, x + 0.01, 0.06, 0.031, { rz: 0.14 });
-      k.box(0.12, 0.05, 0.012, C.black, g, x + 0.03, -0.08, 0.031, { rz: -0.45 });
-    }
+    const ink = k.geo('scroll-ink-' + scrollInk.text, () => {
+      const path = new k.THREE.ShapePath();
+      for (const contour of scrollInk.contours) {
+        contour.forEach(([x,y], i) => {
+          const u = (x - scrollInk.width / 2) / 1000, v = (scrollInk.height / 2 - y) / 1000;
+          if (i === 0) path.moveTo(u,v);
+          else path.lineTo(u,v);
+        });
+      }
+      return new k.THREE.ShapeGeometry(path.toShapes());
+    });
+    k.put(ink, C.black, g, 0, 0, .0255);
   }),
   tree_round: prop([1.6, 1.6, 3.2], (k, g) => {
     k.cyl(0.13, 0.22, 1.9, C.wood, g, 0, 0.95, 0);
@@ -1053,10 +1061,41 @@ PROPS.gong = prop([1, 0.5, 1.5], (k, g) => {
   k.ball(0.055, material(k, '#cfa67b', 'fabric'), g, 0.36, 1.13, 0.15);
 });
 PROPS.neon_slogan = prop([2.4, 0.12, 0.6], (k, g, o) => {
-  k.box(2.4, 0.6, 0.04, C.black, g, 0, 0.3, 0.02);
-  const neon = lit(k, brand(o));
-  for (let i = 0; i < 7; i++) { const x = -1.05 + i * 0.32; k.tube([[x, 0.12, 0.075], [x + 0.06, 0.39, 0.075], [x + 0.17, 0.46, 0.075], [x + 0.19, 0.22, 0.075], [x + 0.07, 0.22, 0.075], [x + 0.25, 0.13, 0.075]], 0.012, neon, g, 0, 0, 0); }
-  for (const x of [-1.14, 1.14]) for (const y of [0.06, 0.54]) screw(k, g, x, y, 0.044, 0.014);
+  const steel = material(k, '#4b525b', 'metal', .39, .72);
+  // Extrude a rounded XY outline: the corner radius is independent of panel thickness.
+  const rim = [];
+  for (let corner = 0; corner < 4; corner++) {
+    const cx = corner === 0 || corner === 3 ? 1.11 : -1.11;
+    const cy = corner < 2 ? .51 : .09;
+    for (let i = 0; i <= 4; i++) {
+      const a = (corner + i / 4) * Math.PI / 2;
+      rim.push([cx + .09 * Math.cos(a), cy + .09 * Math.sin(a)]);
+    }
+  }
+  k.extrude(rim, .022, C.black, g, 0, 0, .034);
+  for (const x of [-1.05, 1.05]) for (const y of [.09, .51]) {
+    k.cyl(.025, .025, .036, steel, g, x, y, .018, { rx: Math.PI / 2, seg: 10 });
+    screw(k, g, x, y, .058, .014);
+  }
+  // Each letter of BUILD is bent from one length of luminous glass.
+  const paths = [
+    [[.02,.15],[.08,.44],[.23,.43],[.25,.37],[.16,.31],[.06,.31],[.22,.30],[.23,.21],[.15,.15],[.02,.15]],
+    [[.06,.45],[.03,.29],[.04,.17],[.14,.15],[.23,.20],[.28,.45]],
+    [[.10,.15],[.13,.29],[.17,.45]],
+    [[.09,.45],[.06,.31],[.03,.16],[.12,.15],[.26,.15]],
+    [[.03,.15],[.09,.45],[.21,.44],[.28,.34],[.23,.22],[.13,.16],[.03,.15]],
+  ];
+  const glass = lit(k, brand(o), .85);
+  paths.forEach((points, i) => {
+    const left = -1.00 + i * .413;
+    k.tube(points.map(([x,y]) => [x,y,0]), .015, glass, g, left, 0, .097);
+    for (const [x,y] of [points[0], points[Math.floor(points.length / 2)]]) {
+      k.cyl(.021, .016, .041, steel, g, left + x, y, .075, { rx: Math.PI / 2, seg: 8 });
+    }
+  });
+  k.box(.15, .075, .039, steel, g, 1.06, .17, .076, { r: .009 });
+  k.tube([[.74,.45,.087],[.94,.43,.073],[.95,.22,.073],[1.01,.17,.073]],
+    .007, C.black, g, 0, 0, 0);
 });
 
 // ── Vehicles: +Z nose, suspension-height hubs, independently retained wheels ──
@@ -2076,7 +2115,15 @@ function legacyFinish(k, g, name, o) {
 const rebuiltLegacy = new Set(['car', 'plant_small', 'plant_tall', 'money_tree', 'tree_round', 'tree_palm', 'bush', 'atrium_tree', 'street_lamp']);
 for (const name of Object.keys(legacySizes)) if (!rebuiltLegacy.has(name)) {
   const original = PROPS[name].build;
-  PROPS[name].build = (k, o = {}) => { const sk = surfaceKit(k, name), g = original(sk, o); legacyFinish(sk, g, name, o); return g; };
+  PROPS[name].build = (k, o = {}) => {
+    const sk = surfaceKit(k, name), g = original(sk, o);
+    legacyFinish(sk, g, name, o);
+    // A placed scroll shares the FBX bottom/back anchor; catalogue views retain the centre pivot.
+    if (name === 'scroll' && o.wallMount) {
+      for (const part of g.children) { part.position.y += .30; part.position.z += .035; }
+    }
+    return g;
+  };
 }
 // Starting-location miniatures. Keep these separate from the legacy drawings.
 function ownedGlow(k, g, color) {
@@ -2234,23 +2281,49 @@ PROPS.kick_scooter = prop([.45, 1.1, 1.15], (k, g, o) => {
   k.tube([[.1, 1.08, .3], [.08, .8, .36], [.03, .33, .39]], .005, C.black, g, 0, 0, 0);
 });
 PROPS.fire_escape = prop([2.2, .9, 2.8], (k, g) => {
-  const iron = material(k, '#283c35', 'metal', .65, .6);
-  // The rear half is a landing; the front half is an open stairwell.
-  for (const z of [.025, .43, .875]) k.box(2.2, .05, .05, iron, g, 0, .025, z);
-  for (let i = 0; i < 22; i++) k.box(.035, .025, .4, iron, g, -1.05 + i * .1, .05, .23);
-  for (const x of [-1.07, 1.07]) k.box(.05, .05, .85, iron, g, x, .025, .45);
-  for (let i = 0; i < 12; i++) bar(k, g, iron, [-1.06 + i * .193, .06, .875], [-1.06 + i * .193, .96, .875], .013);
-  bar(k, g, iron, [-1.08, .97, .875], [1.08, .97, .875], .022);
-  for (const x of [-1.07, 1.07]) {
-    bar(k, g, iron, [x, .97, .03], [x, .97, .875], .022);
-    for (const z of [.04, .22, .4]) bar(k, g, iron, [x, .05, z], [x, .97, z], .014);
+  const iron = material(k, '#36443f', 'metal', .61, .65);
+  const tread = material(k, '#758077', 'metal', .55, .72);
+  const square = { r: 0 };
+  // Welded landing: deep bearing bars cross shallow tie bars, leaving real openings.
+  for (const z of [.025, .44]) k.box(2.2, .065, .05, iron, g, 0, .033, z, square);
+  for (let i = 0; i < 28; i++) k.box(.019, .039, .42, tread, g, -1.04 + i * .077, .052, .23, square);
+  for (const z of [.13,.25,.37]) k.box(2.1, .015, .014, tread, g, 0, .063, z, square);
+  for (const x of [-1.07,1.07]) {
+    k.box(.05, .065, .45, iron, g, x, .033, .225, square);
+    k.box(.15, .25, .024, iron, g, x, .15, .012, square);
+    bar(k, g, iron, [x,.25,.035], [x,.065,.42], .019);
   }
-  // Both stringers terminate at the next module's y=.05 platform plane.
-  for (const z of [.48, .83]) bar(k, g, iron, [-.96, .07, z], [.96, 2.8, z], .025);
-  for (let i = 0; i <= 14; i++) k.box(.16, .035, .35, iron, g, -.96 + i * 1.92 / 14, .07 + i * 2.73 / 14, .655);
-  // Top landing shares its edge with the next identical module (spacing 2.8).
-  k.box(.2, .035, .42, iron, g, .96, 2.8, .65);
-  for (const x of [-1.04, 1.04]) k.box(.12, .16, .025, iron, g, x, .12, .0125);
+  // Leave an opening in the landing guard opposite the bottom tread.
+  for (const x of [-.66,-.1,.47,1.05]) bar(k,g,iron,[x,.06,.424],[x,.95,.424],.017);
+  for (const y of [.51,.95]) bar(k,g,iron,[-.66,y,.424],[1.07,y,.424],.021);
+  // Pressed steel stringers, open risers and folded step nosings.
+  const x0 = -.98, run = 1.92, rise = 2.04, foot = .09;
+  const slope = Math.atan2(rise,run);
+  for (const z of [.478,.861]) {
+    k.box(Math.hypot(run,rise), .083, .027, iron, g, x0 + run/2, foot + rise/2, z, { r: 0, rz: slope });
+    const inside = z < .5;
+    // The inside rail stops short of both turns into the landings.
+    const first = inside ? .13 : 0, last = inside ? .86 : 1;
+    for (const f of [first,.37,.65,last]) {
+      const x = x0 + run*f, y = foot + rise*f;
+      bar(k,g,iron,[x,y,z],[x,y+.65,z],.016);
+    }
+    for (const offset of [.34,.65]) bar(k,g,iron,[x0+run*first,foot+rise*first+offset,z],[x0+run*last,foot+rise*last+offset,z],.021);
+  }
+  for (let i = 0; i < 12; i++) {
+    const x = x0 + i * run/12, y = foot + i * rise/12;
+    k.box(.19, .025, .395, tread, g, x, y, .669, square);
+    k.box(.019, .037, .395, iron, g, x-.086, y-.021, .669, square);
+  }
+  // Return landing at the upper doorway.
+  k.box(.38, .047, .44, tread, g, .895, foot+rise-.01, .235, square);
+  k.box(.21, .047, .43, tread, g, .979, foot+rise-.01, .67, square);
+  for (const x of [.875,1.023]) {
+    k.box(.09, .23, .026, iron, g, x, foot+rise-.17, .013, square);
+    bar(k,g,iron,[x,foot+rise-.26,.026],[x,foot+rise-.034,.78],.021);
+  }
+  bar(k,g,iron,[1.039,foot+rise,.04],[1.039,2.78,.04],.017);
+  bar(k,g,iron,[1.039,2.78,.04],[1.039,2.78,.859],.021);
 });
 PROPS.guitar_stand = prop([.5, .4, 1.1], (k, g) => {
   for (const x of [-.2, .2]) bar(k, g, C.dark, [x, .015, .14], [0, .65, -.14], .016);
