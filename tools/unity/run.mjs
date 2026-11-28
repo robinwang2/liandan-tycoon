@@ -27,7 +27,7 @@ const shotBatch = /^art-(batch[1-9]\d*)$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
 async function run() {
-  const resource = shotBatch==='batch7'?'Batch7':shotBatch==='batch6'?'Batch6':shotBatch && batchConfig(shotBatch).resource;
+  const resource = ['batch6','batch7','batch8'].includes(shotBatch) ? shotBatch.replace('batch','Batch') : shotBatch && batchConfig(shotBatch).resource;
   if (shotBatch) methods.set(mode, 'CaptureSelectedBatch');
   const gamePath = folder => join(project, 'Build', folder, 'Liandan.exe');
   const testPlayer = process.env.LIANDAN_PLAYER ? resolve(process.env.LIANDAN_PLAYER) : gamePath('Game');

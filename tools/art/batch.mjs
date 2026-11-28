@@ -34,7 +34,7 @@ function proceduralRecipe({id,w,d,h,budget,origin,parts}) {
   for(const file of files) digest.update('\0'+file+'\0'+fs.readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
   return digest.digest('hex');
 }
-const sourceHash = file=>eggs && file.endsWith('.py') ? createHash('sha256').update(fs.readFileSync(file,'utf8').replaceAll('\r\n','\n')).digest('hex') : hash(file);
+const sourceHash = file=>(eggs || batchName==='batch8') && file.endsWith('.py') ? createHash('sha256').update(fs.readFileSync(file,'utf8').replaceAll('\r\n','\n')).digest('hex') : hash(file);
 const specs = read(path.join(root,'src/data/tables/art.json')).PROPS;
 const selection = read(path.join(root,'unity/Game/Assets/Shell/Resources',policy+'.json'));
 const batch = selection.props.map(entry=>{
@@ -105,50 +105,77 @@ function manifest() {
   }
   save(path.join(local,'upload.json'),entries);
 }
-// 选件表 replacement：整件改用第三方模型（如 CC0 的 ficus），不走 Tripo 下载件。
+// The B8 worktree may mount the main checkout's Art outside its writable root.
+function eggDelivery(item) {
+  return path.join(local,'eggs-delivery','Props',item.id,'Resources',resource,item.id);
+}
 function replacementState(item) {
-  const r=item.replacement, p=paths(item.id), report=read(p.report), blend=path.join(root,r.blend);
+  const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend);
+  const staged=r.sourceSha && (process.env.BATCH8_EGGS_STAGE==='1' || !fs.existsSync(p.report));
+  const dest=staged?eggDelivery(item):p.dest, reportFile=path.join(dest,'report.json'), report=read(reportFile);
   const lod0=path.join(p.dir,r.name,'lod0.glb');
-  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && report.blendSha===sourceHash(blend) && report.blendSha===r.blendSha &&
+  const recordedSha=r.sourceSha?report?.sourceSha:report?.blendSha;
+  const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && recordedSha===sourceHash(blend) && recordedSha===(r.sourceSha??r.blendSha) &&
     (!r.prepSha || (report.prepSha===r.prepSha && sourceHash(path.join(root,r.prep))===r.prepSha)) &&
-    fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(p.dest,report.model));
+    fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(dest,report.model));
   const qc=normal?{pass:true,triangles:report.lods[0].triangles,size:report.lods[0].size,problems:[]}:null;
-  const receipt=normal && read(path.join(shots,item.id+'.json'));
+  const receipt=normal && !staged && read(path.join(shots,item.id+'.json'));
   return {prep:true,downloaded:fs.existsSync(blend),qc,report:normal?report:null,accepted:!!receipt && receipt.reportSha===hash(p.report) && fs.existsSync(path.join(shots,item.id+'.png'))};
 }
 function replace(item) {
   const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend), dir=path.join(p.dir,r.name);
   if(!fs.existsSync(blend)) throw Error('缺少第三方原件：'+blend);
-  if(sourceHash(blend)!==r.blendSha) throw Error('原件哈希与选件表不符：'+blend);
+  if(sourceHash(blend)!==(r.sourceSha??r.blendSha)) throw Error('原件哈希与选件表不符：'+blend);
   if(r.prepSha && sourceHash(path.join(root,r.prep))!==r.prepSha) throw Error('prep 哈希与选件表不符：'+r.prep);
-  // 下载的 .blend 可能带脚本，始终禁用自动执行。
-  const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
-    ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',...(!eggs || blend.endsWith('.blend')?[blend]:[]),'-P',path.join(root,r.prep),'--',dir,...(eggs?[item.id,blend]:[])],
-    {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
-  if(run.error || run.status!==0) throw run.error??Error('第三方模型整理失败：'+item.id);
+  if(r.sourceSha) {
+    blender(path.relative(import.meta.dirname,path.resolve(root,r.prep)),dir,blend,item.h,r.lodBase??'source',...[0,1,2].map(level=>budgetFor(item.budget,level)));
+  } else {
+    // 下载的 .blend 可能带脚本，始终禁用自动执行。
+    const run=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
+      ['-b','--factory-startup','--disable-autoexec','--python-exit-code','1',...(!eggs || blend.endsWith('.blend')?[blend]:[]),'-P',path.join(root,r.prep),'--',dir,...(eggs?[item.id,blend]:[])],
+      {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+    if(run.error || run.status!==0) throw run.error??Error('第三方模型整理失败：'+item.id);
+  }
   const lods=[0,1,2].map(n=>path.join(dir,'lod'+n+'.glb')), ref=path.join(p.dir,r.name+'-ref');
   tool('qc',lods[0],'--tight-frame','--out',ref,'--flat','--bg',1,'--views',[...views,'color'].join(','));
   // 等比缩放到表内高度，树冠宽深须与选件表登记一致（Unity 按它验尺寸，按表内宽深放碰撞）。
   const size=read(path.join(ref,'report.json')).size, k=item.h/size.height;
   const w=eggs?item.w:+(size.width*k).toFixed(4), d=eggs?item.d:+(size.depth*k).toFixed(4);
-  if(!eggs && (Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001)) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
+  if(!eggs && !r.sourceSha && (Math.abs(w-item.canopyW)>.001 || Math.abs(d-item.canopyD)>.001)) throw Error(`等比树冠 ${w}×${d} 与选件表 canopyW/canopyD ${item.canopyW}×${item.canopyD} 不符`);
   const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
   tool('normalize',lods[0],'--lod-sources',lods.slice(1).join(','),'--min-iou',r.minIoU.join(','),'--max-interior-loss',r.maxInteriorLoss,
-    '--out',stage,'--name',item.id,'--width',w,'--depth',d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
+    '--out',stage,'--name',item.id,...(r.sourceSha?[]:['--width',w,'--depth',d]),'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,r.name+'-lod-qc'),'--ref',ref,'--res',512);
   const report=read(path.join(stage,'report.json'));
+  if(r.sourceSha) {
+    for(const lod of report.lods) {
+      const check=read(path.join(p.dir,r.name+'-lod-qc','LOD'+lod.level,'report.json'));
+      const errors=geometryErrors(check,{...item,w,d},lod.level);
+      if(errors.length) throw Error('LOD'+lod.level+'：'+errors.join('；'));
+    }
+  }
   if((!eggs || r.textured) && !report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
-  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
+  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sourceSha:r.sourceSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
   // 原交付（Tripo 版）首次替换前整体留底；之后只覆盖。
   const backup=path.join(p.dir,'tripo-delivery');
   if(fs.existsSync(p.dest) && !fs.existsSync(backup) && read(p.report)?.replacement===undefined) fs.cpSync(p.dest,backup,{recursive:true});
-  fs.mkdirSync(p.dest,{recursive:true});
-  const fresh=new Set(fs.readdirSync(stage));
-  for(const name of fs.readdirSync(p.dest)) {
-    const stem=name.endsWith('.meta')?name.slice(0,-5):name;
-    if(!fresh.has(stem)) fs.rmSync(path.join(p.dest,name));
+  let dest=r.sourceSha && process.env.BATCH8_EGGS_STAGE==='1'?eggDelivery(item):p.dest;
+  try {
+    installReplacement(stage,dest,report.model);
+  } catch(error) {
+    if(!r.sourceSha || dest!==p.dest || !['EPERM','EACCES','EROFS'].includes(error.code)) throw error;
+    dest=eggDelivery(item);
+    installReplacement(stage,dest,report.model);
   }
-  for(const name of [...[...fresh].filter(name=>name!==report.model),report.model]) fs.copyFileSync(path.join(stage,name),path.join(p.dest,name));
-  console.log('已替换为 '+r.name+'：'+p.dest+'；原交付留底 '+backup);
+  console.log('已交付 '+r.name+'：'+dest);
+}
+function installReplacement(stage,dest,model) {
+  fs.mkdirSync(dest,{recursive:true});
+  const fresh=new Set(fs.readdirSync(stage));
+  for(const name of fs.readdirSync(dest)) {
+    const stem=name.endsWith('.meta')?name.slice(0,-5):name;
+    if(!fresh.has(stem)) fs.rmSync(path.join(dest,name));
+  }
+  for(const name of [...[...fresh].filter(name=>name!==model),model]) fs.copyFileSync(path.join(stage,name),path.join(dest,name));
 }
 function state(item) {
   if(item.procedural) {
@@ -347,7 +374,7 @@ try {
       }
       if(item.replacement) {
         const r=item.replacement;
-        if(eggs && s.report){
+        if((eggs || r.sourceSha) && s.report){
           const lods=s.report.lods, counts=lods.map(lod=>lod.triangles).join('/');
           const dims=Object.values(lods[0].size).map(value=>+value.toFixed(5)).join('×');
           const iou=lods.slice(1).map(lod=>Math.min(...Object.values(lod.lodIntegrity.views).map(view=>view.iou)).toFixed(4)).join('/');

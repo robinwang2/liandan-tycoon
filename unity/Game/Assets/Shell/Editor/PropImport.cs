@@ -29,7 +29,8 @@ namespace Liandan.EditorTools
             public float[] emission = Array.Empty<float>();
         }
         [Serializable] class Pivot { public string node=""; public float x,y,z; }
-        [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); public Pivot[] pivots=Array.Empty<Pivot>(); public bool procedural; }
+        [Serializable] class ModelSize { public float width,depth,height; }
+        [Serializable] class Report { public Finish[] materials = Array.Empty<Finish>(); public Pivot[] pivots=Array.Empty<Pivot>(); public bool procedural; public ModelSize sourceSize=null!; }
 
         // 由实际 FBX 回读的枢轴确定横轴镜像方向。轮心、肩轴、双风扇均不在模型中心。
         internal static float CheckAssembly(GameObject root, LOD[] levels, PropBatch.Item item, string reportPath)
@@ -240,6 +241,15 @@ namespace Liandan.EditorTools
                 // 树冠可伸出占地（散叶盆栽）：尺寸按选件表的树冠宽深验，碰撞仍按表内占地。
                 footprint=policy.size;
                 if(selectionItem.canopyW>0) policy.size=new Vector3(selectionItem.canopyW,item.h,selectionItem.canopyD);
+                if(resource=="B8" && selectionItem.egg)
+                {
+                    // The table defines the footprint. These figures retain the source aspect ratio at table height.
+                    var size=JsonUtility.FromJson<Report>(File.ReadAllText(Sibling("report.json"))).sourceSize;
+                    if(size==null || !(size.width>0 && size.depth>0 && size.height>0)) throw new InvalidDataException("缺少彩蛋原件尺寸："+assetPath);
+                    policy.size=new Vector3(size.width/size.height,1,size.depth/size.height)*item.h;
+                    // Standard FBX maps Blender -Y to Unity -Z. Point the figure's face towards Unity +Z.
+                    foreach(Transform child in root.transform)child.RotateAround(root.transform.position,root.transform.up,180);
+                }
             }
             else { context.DependsOnSourceAsset(PolicyPath); policy=JsonUtility.FromJson<Policy>(File.ReadAllText(PolicyPath)); }
             var renderers = root.GetComponentsInChildren<MeshRenderer>(true);
