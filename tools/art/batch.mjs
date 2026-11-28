@@ -1,5 +1,6 @@
 // 各批次：政策只存选件与场景例外，库道具的尺寸和预算始终读表。
 import { batchOptions } from './batch-options.mjs';
+import { budgetFor, geometryErrors } from './prop-geometry.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -214,12 +215,47 @@ async function ingest(item,file,mirrorDepth) {
   }
   deliver(item,p,mirrorDepth,sha,refSha);
 }
+function blender(script,...args) {
+  const result=spawnSync(process.env.BLENDER || 'D:/SteamLibrary/steamapps/common/Blender/blender.exe',
+    ['-b','--factory-startup','--python-exit-code','1','-P',path.join(import.meta.dirname,script),'--',...args.map(String)],
+    {stdio:'inherit',windowsHide:true,env:{...process.env,PYTHONIOENCODING:'utf-8'}});
+  if(result.error || result.status!==0) throw result.error??Error(script+' 未完成');
+}
+
+// 预定的远级面数走同一 Blender 规范化与逐级 FBX 质检。保留近、中级的原额度。
+function normalizeWithFarBudget(item,p,stage,options) {
+  const limits=[budgetFor(item.budget,1),item.lod2Budget];
+  blender('normalize.py',p.source,...options,'--lod-limits',limits.join(','),'--lod-targets',[0,item.lod2Budget].join(','));
+  const report=read(path.join(stage,'report.json'));
+  for(const lod of report.lods) {
+    const out=path.join(p.dir,'lod-qc','LOD'+lod.level);
+    tool('qc',path.join(stage,report.model),'--lod',lod.level,'--out',out,'--budget',lod.budget,'--height',item.h,'--ref',p.ref,'--res',512);
+    const check=read(path.join(out,'report.json'));
+    // qc 按上面的绝对额度验面数，geometryErrors 仍按本级百分比核对尺寸及锚点。
+    const budget=Math.ceil(lod.budget*100/budgetFor(100,lod.level));
+    const errors=[...check.problems,...geometryErrors(check,{...item,budget},lod.level)];
+    if(check.triangles!==lod.triangles || Object.keys(lod.size).some(k=>Math.abs(check.size[k]-lod.size[k])>.002))
+      errors.push('FBX 回读的面数或尺寸与规范化报告不符');
+    if(errors.length) throw Error('LOD'+lod.level+'：'+errors.join('；')+'；见 '+out);
+  }
+}
 function deliver(item,p,mirrorDepth,sha,refSha,previous=null) {
   const hybrid=isHybrid(item);
   const stage=fs.mkdtempSync(path.join(p.dir,'normalized-'));
   // 旧版已经交付的混合件在 reexport 时复现原配方。重新 ingest 则使用独立程序件预算。
   const legacy = hybrid && previous && (previous.legacyHybridRecipe ?? !previous.lods[0].partRatios);
-  tool('normalize',p.source,'--out',stage,'--name',item.id,'--width',item.w,'--depth',item.d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,'--qc',path.join(p.dir,'lod-qc'),'--ref',hybrid?path.join(p.dir,'game-ref'):p.ref,'--res',512,...(hybrid?['--hybrid']:[]),...(legacy?['--legacy-hybrid']:[]),...(mirrorDepth?['--mirror-depth']:[]));
+  const options=['--out',stage,'--name',item.id,'--width',item.w,'--depth',item.d,'--height',item.h,'--origin',item.origin,'--budget',item.budget,
+    ...(hybrid?['--hybrid']:[]),...(legacy?['--legacy-hybrid']:[]),...(mirrorDepth?['--mirror-depth']:[])];
+  if(item.lod2Budget) {
+    normalizeWithFarBudget(item,p,stage,options);
+  } else {
+    if(item.boxLods) {
+      const folder=path.join(p.dir,'box-lods');
+      blender('repair/common.py',p.source,folder,item.boxLods.triangles.join(','),item.boxLods.voxelHeight);
+      options.push('--lod-sources',[1,2].map(n=>path.join(folder,'lod'+n+'.glb')).join(','));
+    }
+    tool('normalize',p.source,...options,'--qc',path.join(p.dir,'lod-qc'),'--ref',hybrid?path.join(p.dir,'game-ref'):p.ref,'--res',512);
+  }
   const report=read(path.join(stage,'report.json'));
   if(mirrorDepth) {
     const check=path.join(p.dir,'verified-lod0');

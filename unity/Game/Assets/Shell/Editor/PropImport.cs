@@ -12,7 +12,7 @@ namespace Liandan.EditorTools
     {
         const string Folder = "Assets/Art/Props/Furnace/Resources/Furnaces/";
         bool Furnace => assetPath.StartsWith(Folder, StringComparison.Ordinal);
-        bool Batch => System.Text.RegularExpressions.Regex.IsMatch(assetPath,@"^Assets/Art/Props/[^/]+/Resources/(?:Batch[1-9]\d*|B6)/");
+        bool Batch => System.Text.RegularExpressions.Regex.IsMatch(assetPath,@"^Assets/Art/Props/[^/]+/Resources/(?:Batch[1-9]\d*|B6|B8)/");
         bool Reference => assetPath.StartsWith("Assets/Art/Props/",StringComparison.Ordinal) && assetPath.Contains("/Editor/RepairReference/");
         bool InPackage => Furnace || Batch || Reference;
         string Sibling(string file) => assetPath.Substring(0, assetPath.LastIndexOf('/')+1) + file;
@@ -224,7 +224,7 @@ namespace Liandan.EditorTools
                 context.DependsOnSourceAsset(PropBatch.PolicyPath);
                 config=JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(PropBatch.PolicyPath));
                 var resource=assetPath.Split('/')[5];
-                string selectionPath=PropBatch.SelectionPath(resource=="B6"?"Batch6":resource);
+                string selectionPath=PropBatch.SelectionPath(resource=="B6"?"Batch6":resource=="B8"?"Batch8":resource);
                 context.DependsOnSourceAsset(selectionPath);
                 var selection=selectionPath==PropBatch.PolicyPath ? config : JsonUtility.FromJson<PropBatch.Config>(File.ReadAllText(selectionPath));
                 var item=selection.props.Single(prop=>prop.id==assetPath.Split('/')[3]); origin=item.origin;
@@ -236,6 +236,7 @@ namespace Liandan.EditorTools
                     item=JsonUtility.FromJson<PropBatch.Table>(File.ReadAllText(art)).PROPS.Single(prop=>prop.id==item.id);
                 }
                 policy=new Policy { thresholds=config.thresholds,size=new Vector3(item.w,item.h,item.d),budgets=config.lodRules.Select(rule=>(item.budget*rule.budgetPercent+99)/100).ToArray() };
+                if(selectionItem.lod2Budget>0) policy.budgets[2]=selectionItem.lod2Budget;
                 // 树冠可伸出占地（散叶盆栽）：尺寸按选件表的树冠宽深验，碰撞仍按表内占地。
                 footprint=policy.size;
                 if(selectionItem.canopyW>0) policy.size=new Vector3(selectionItem.canopyW,item.h,selectionItem.canopyD);

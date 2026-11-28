@@ -8,6 +8,8 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
+if __name__ == '__main__':
+    sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seam_weld import stitch_boundaries
 
@@ -126,3 +128,71 @@ def run(build, size, wall=False):
         uv = screen.data.uv_layers.active
         assert {tuple(coord.vector) for coord in uv.uv} == {(0,0),(1,0),(1,1),(0,1)}
     (folder/'repair-metrics.json').write_text(json.dumps(metrics, indent=2), encoding='utf8')
+
+
+def prepare_box_lods(source, folder, targets, voxel_height):
+    """纸盒的预制远级。保留原坐标系，另烘 LOD2 底色，避免跨图集岛插值。"""
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=str(source))
+    original, = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    name = original.name
+    original.name = name + '_Source'
+    folder.mkdir(parents=True, exist_ok=True)
+
+    for level, target in enumerate(targets, 1):
+        obj = original.copy()
+        obj.data = original.data.copy()
+        bpy.context.collection.objects.link(obj)
+        obj.name = name
+        world = obj.matrix_world.copy()
+        obj.parent = None
+        obj.data.transform(world)
+        obj.matrix_world = Matrix.Identity(4)
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        stitch_boundaries(bm)
+        bm.to_mesh(obj.data)
+        bm.free()
+        bpy.context.view_layer.objects.active = obj
+        if level == 2:
+            remesh = obj.modifiers.new('保留盒盖和层间隙', 'REMESH')
+            remesh.mode = 'VOXEL'
+            remesh_size = (max(v.co.z for v in obj.data.vertices) - min(v.co.z for v in obj.data.vertices)) * voxel_height
+            remesh.voxel_size = remesh_size
+            bpy.ops.object.modifier_apply(modifier=remesh.name)
+        obj.data.calc_loop_triangles()
+        decimate = obj.modifiers.new('纸盒面数', 'DECIMATE')
+        decimate.ratio = min(1., target / len(obj.data.loop_triangles))
+        decimate.use_collapse_triangulate = True
+        bpy.ops.object.modifier_apply(modifier=decimate.name)
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        if level == 2:
+            obj.data.materials.clear()
+            mat = bpy.data.materials.new('M_pizza_stack_Far')
+            mat.use_nodes = True
+            obj.data.materials.append(mat)
+            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.mesh.select_all(action='SELECT')
+            bpy.ops.uv.smart_project(island_margin=.012)
+            bpy.ops.object.mode_set(mode='OBJECT')
+            image = bpy.data.images.new('PizzaFar', 512, 512, alpha=False)
+            tex = mat.node_tree.nodes.new('ShaderNodeTexImage')
+            tex.image = image
+            mat.node_tree.nodes.active = tex
+            scene = bpy.context.scene
+            scene.render.engine = 'CYCLES'
+            scene.cycles.samples = 1
+            original.select_set(True)
+            bpy.ops.object.bake(type='DIFFUSE', pass_filter={'COLOR'}, use_selected_to_active=True,
+                                cage_extrusion=remesh_size, max_ray_distance=remesh_size * 3, margin=4)
+            original.select_set(False)
+            mat.node_tree.links.new(tex.outputs['Color'], mat.node_tree.nodes.get('Principled BSDF').inputs['Base Color'])
+            image.pack()
+        bpy.ops.export_scene.gltf(filepath=str(folder / f'lod{level}.glb'), export_format='GLB', use_selection=True)
+        bpy.data.objects.remove(obj, do_unlink=True)
+
+
+if __name__ == '__main__':
+    file, destination, counts, voxel = sys.argv[sys.argv.index('--')+1:]
+    prepare_box_lods(Path(file), Path(destination), [int(n) for n in counts.split(',')], float(voxel))

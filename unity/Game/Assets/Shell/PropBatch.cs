@@ -9,7 +9,7 @@ namespace Liandan.Shell
     {
         public const string PolicyPath="Assets/Shell/Resources/PropPolicy.json";
         [Serializable] public class ActionPose { public string node="",axis=""; public float degrees,rest,peak; }
-        [Serializable] public class Item { public string id="",name="",origin="bottom"; public float w,d,h,x,y,z,yaw,scale,canopyW,canopyD; public int budget;
+        [Serializable] public class Item { public string id="",name="",origin="bottom"; public float w,d,h,x,y,z,yaw,scale,canopyW,canopyD; public int budget,lod2Budget;
             public string[] parts=Array.Empty<string>(); public ActionPose[] actions=Array.Empty<ActionPose>(); }
         [Serializable] public class LodRule { public int budgetPercent; public float widthDepth,height,center,contact; }
         [Serializable] public class Config { public Item[] props=Array.Empty<Item>(); public float[] thresholds=Array.Empty<float>(); public LodRule[] lodRules=Array.Empty<LodRule>(); public float epsilon; }

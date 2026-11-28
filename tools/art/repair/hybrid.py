@@ -32,6 +32,33 @@ def import_meshes(file):
     return [o for o in bpy.data.objects if o not in before and o.type == 'MESH']
 
 
+def simplify_assembly_part(obj, target):
+    # 在回装前焊接 UV 对边，降低程序件的重复细分；用所有有面的顶点核对原局部包围盒。
+    mesh = bmesh.new()
+    mesh.from_mesh(obj.data)
+    stitch_boundaries(mesh)
+    mesh.to_mesh(obj.data)
+    mesh.free()
+    obj.data.calc_loop_triangles()
+    count = len(obj.data.loop_triangles)
+    if count <= target:
+        return
+
+    def local_bounds():
+        coords = [obj.data.vertices[i].co for i in {loop.vertex_index for loop in obj.data.loops}]
+        return [Vector(fn(point[i] for point in coords) for i in range(3)) for fn in (min, max)]
+
+    base, top = local_bounds()
+    bpy.context.view_layer.objects.active = obj
+    mod = obj.modifiers.new('回装件细分预算', 'DECIMATE')
+    mod.ratio = target / count
+    mod.use_collapse_triangulate = True
+    bpy.ops.object.modifier_apply(modifier=mod.name)
+    low, high = local_bounds()
+    scale = Matrix.Diagonal(Vector([*((top[i]-base[i])/(high[i]-low[i]) for i in range(3)), 1]))
+    obj.data.transform(Matrix.Translation(base) @ scale @ Matrix.Translation(-low))
+
+
 def assemble(folder, item, budget, mirror):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     source = {obj.name: obj for obj in import_meshes(folder/'game.glb')}
@@ -54,6 +81,9 @@ def assemble(folder, item, budget, mirror):
         if 'glassAlpha' in item:
             alpha.default_value = float(item['glassAlpha'])
         glass.diffuse_color = (*shader.inputs['Base Color'].default_value[:3], alpha.default_value)
+
+    for name, target_faces in item.get('assemblyTriangles', {}).items():
+        simplify_assembly_part(source[name], target_faces)
 
     pieces = import_meshes(folder/'tripo.glb')
     if not pieces:
