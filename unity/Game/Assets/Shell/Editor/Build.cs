@@ -36,9 +36,17 @@ namespace Liandan.EditorTools
             }
             foreach (var copy in Directory.GetFiles(dest, "*.json"))
                 if (!File.Exists(Path.Combine(source, Path.GetFileName(copy)))) AssetDatabase.DeleteAsset("Assets/StreamingAssets/tables/" + Path.GetFileName(copy));
-            var script=Path.Combine(root,"tools/unity/sync-art.mjs");
-            var info=new System.Diagnostics.ProcessStartInfo("node", "\""+script+"\" \""+Path.Combine(Application.streamingAssetsPath,"shell-art")+"\"") {WorkingDirectory=root,UseShellExecute=false,CreateNoWindow=true};
-            using(var process=System.Diagnostics.Process.Start(info)){process.WaitForExit();if(process.ExitCode!=0)throw new IOException("界面资源生成失败，请检查 Node 和 sharp 依赖");}
+            void Export(string scriptName, string folder)
+            {
+                var script = Path.Combine(root, "tools/unity", scriptName);
+                var output = Path.Combine(Application.streamingAssetsPath, folder);
+                var info = new System.Diagnostics.ProcessStartInfo("node", $"\"{script}\" \"{output}\"") { WorkingDirectory=root, UseShellExecute=false, CreateNoWindow=true };
+                using var process = System.Diagnostics.Process.Start(info);
+                process.WaitForExit();
+                if (process.ExitCode != 0) throw new IOException(scriptName + " 导出失败");
+            }
+            Export("export-i18n.mjs", "i18n");
+            Export("sync-art.mjs", "shell-art");
             AssetDatabase.Refresh();
         }
 
@@ -72,6 +80,8 @@ namespace Liandan.EditorTools
                 importer.SaveAndReimport();
             }
             var source = RequiredAsset<Font>(sourcePath);
+            foreach (char glyph in "中文与 English 混排，炼丹大亨 ¥1.23M · $999K / Jan 2023 — “AI”")
+                if (!source.HasCharacter(glyph)) throw new IOException($"Shell 字体缺少 U+{(int)glyph:X4} {glyph}");
             if (!File.Exists(fontPath))
             {
                 var created = FontAsset.CreateFontAsset(source);

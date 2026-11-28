@@ -24,7 +24,7 @@ namespace Liandan.Kernel
         private double CourseIncome(JsonNode? p) => (p.N("基础") + users * p.N("每万用户") + hype) * (1 + p.N("每点商业") * (A.N("biz") - 5));
         private double AdsGain(JsonNode? p) => Max(p.N("用户最少"), users * p.N("用户比例")) * JsMath.Pow(Mod("growthMult"), P("users.growModExp")) * (p.N("体验基础") + quality / p.N("体验除数"));
         private JsonNode? WorstDirt => Rows("dirt").OrderByDescending(d => d.N("sev")).FirstOrDefault();
-        public string DateText(double month) => tables.Text("date", false, ("年", P("START_YEAR") + Floor((month - 1) / 12)), ("月", (month - 1) % 12 + 1));
+        public string DateText(double month) => tables.English ? ShellLanguage.Date((int)(P("START_YEAR") + Floor((month - 1) / 12)), (int)((month - 1) % 12 + 1)) : tables.Text("date", false, ("年", P("START_YEAR") + Floor((month - 1) / 12)), ("月", (month - 1) % 12 + 1));
         private string StoryVersion => Ideo.Str("v", Region == "bay" ? "us" : "cn");
         private JsonNode Book => tables.Books[StoryVersion];
         public string InterfaceTheme => Ideo.Str("result") switch { "red" => StoryVersion == "us" ? "rose" : "soviet", "cap" => "cold", _ => "default" };

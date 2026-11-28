@@ -81,7 +81,8 @@ namespace Liandan.Kernel
         public static string DisplayFixed(double value, int digits) => Fixed(value, digits);
         public double MonthlySalary(JsonNode person) => person.N("salary") * Mod("salaryMult");
         public double Severance(JsonNode person) => P("fire.payMonths") * person.N("salary") * Mod("salaryMult");
-        public string MonthHeading() => Tx("ui.top.when", ("日期", DateText(t)), ("月", t), ("总", P("MONTHS")), ("地区", D("REGIONS")[Region].Str("name")), ("办公室", OfficeName()));
+        public string MonthHeading() => Tx("ui.top.when", ("日期", DateText(t)), ("月", t), ("总", P("MONTHS")), ("地区", D("REGIONS")[Region].Str("name")), ("办公室", (tables.English ? " · " : "") + OfficeName()));
+        public string EndingText() => FormatNews(D("ENDINGS")[Snapshot["over"].Str("id")].Str("text")).Replace("{pay}", Money(Snapshot["over"].N("pay")));
         public JsonObject Settle(JsonObject meta)
         {
             var over = Snapshot["over"]!; string id = over.Str("id"); var ending = D("ENDINGS")[id]!;
@@ -93,7 +94,7 @@ namespace Liandan.Kernel
             if (ends.AsObject().Count >= P("ach.allend") && !ach.On("allend")) { ach["allend"] = 1; unlocked.Add("allend"); }
             double points = Math.Max(1, RoundJs(score / P("meta.pointDiv"))) + unlocked.Count * P("meta.achPoints") + (fresh ? P("meta.endPoints") : 0);
             meta["points"] = meta.N("points") + points; meta["runs"] = meta.N("runs") + 1; meta["best"] = Math.Max(meta.N("best"), score);
-            return Obj(("ending", ending), ("score", score), ("points", points), ("newAch", unlocked), ("newEnd", fresh), ("text", FormatNews(ending.Str("text")).Replace("{pay}", Money(over.N("pay")))));
+            return Obj(("ending", ending), ("score", score), ("points", points), ("newAch", unlocked), ("newEnd", fresh), ("text", EndingText()));
         }
     }
 }

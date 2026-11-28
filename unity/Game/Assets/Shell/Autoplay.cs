@@ -15,6 +15,8 @@ namespace Liandan.Shell
         private readonly GameShell game;
         private readonly string shots;
         internal string Shots => shots;
+        internal bool LanguageShots { get; }
+        private string? chineseScreen;
         internal readonly string SaveDirectory;
         private readonly HashSet<string> captured = new HashSet<string>();
         private readonly int limit;
@@ -66,7 +68,7 @@ namespace Liandan.Shell
         }
         internal Autoplay(GameShell game,string[] args)
         {
-            this.game=game;
+            this.game=game; LanguageShots=args.Contains("-i18n-shots");
             string Arg(string key) { int at=Array.IndexOf(args,key); if(at<0 || at+1>=args.Length) throw new ArgumentException("缺少参数："+key); return args[at+1]; }
             game.Seed=int.Parse(Arg("-autoplay")); shots=Path.GetFullPath(Arg("-shots")); limit=args.Contains("-months")?int.Parse(Arg("-months")):int.MaxValue;
             if(limit<=0 || args.Contains("-nographics")) throw new ArgumentException("试玩需要图形输出，月数必须为正数");
@@ -108,6 +110,43 @@ namespace Liandan.Shell
             game.Root.Query(className:"tab-strip").ForEach(CheckRow);
         }
         private string Pick(IEnumerable<string> items) { var choices=items.ToArray(); return choices[(int)(game.RandomValue()*choices.Length)]; }
+        private bool TickLanguageShots()
+        {
+            string screen = game.ScreenId;
+            if ((screen is "title" or "main" or "event" or "end") && !captured.Contains(screen+"-en"))
+            {
+                bool english = game.Language.English;
+                string content = screen=="main"
+                    ? string.Join("\n",game.Root.Q(className:"bar").Query<Label>().ToList().Select(label=>label.text))
+                    : game.Root.Q<Label>(className:"heading").text;
+                if (!english) chineseScreen=content;
+                else if (content==chineseScreen) throw new InvalidOperationException("切换后界面文字相同：" + screen);
+                if (screen=="main") CheckHudLayout();
+                Shot(screen+(english?"-en":"-zh"));
+                string? before=game.State?.ToSnapshotJson();
+                bool menu=screen is "title" or "main";
+                if (menu) Click("menu");
+                Click("settings"); Click(english?"lang:zh":"lang:en");
+                var prefs = JsonNode.Parse(File.ReadAllText(Path.Combine(SaveDirectory,"ldt_settings.json")))!;
+                if ((int)prefs["language"]! != (english?0:1)) throw new InvalidDataException("语言偏好未写入");
+                Click("back");
+                if (menu) Click(screen=="main"?"resume":"title");
+                if (game.ScreenId!=screen || game.State?.ToSnapshotJson()!=before)
+                    throw new InvalidOperationException("切换后页面或存档发生变化：" + screen);
+                return false;
+            }
+            switch (screen)
+            {
+                case "title": Click("new"); break;
+                case "wizard": game.Wizard.Tutorial=false; Click("forward"); break;
+                case "main": Click("month"); break;
+                case "event": Click(game.Controls.Keys.FirstOrDefault(id=>id.StartsWith("option:")) ?? "close"); break;
+                case "result": Click("advance"); break;
+                case "end": return true;
+                default: throw new InvalidOperationException(screen);
+            }
+            return false;
+        }
         private bool Tick()
         {
             if(fxFixture!=null){if(fxFixture.MoveNext())return false;fxFixture=null;}
@@ -184,12 +223,12 @@ namespace Liandan.Shell
             for(int tick=0;tick<30000;tick++)
             {
                 yield return null; yield return new WaitForEndOfFrame();
-                try { if(failed) break; if(Tick()) { exit=failed?1:0; break; } }
+                try { if(failed) break; if(LanguageShots ? TickLanguageShots() : Tick()) { exit=failed?1:0; break; } }
                 catch(Exception error) { Debug.LogException(error); break; }
             }
             // 留出一个前瞻窗口，让最后一次界面操作产生的声部开始发声。
             yield return new WaitForSecondsRealtime(.4f);
-            try { game.FinishRecording(); } catch(Exception error) { Debug.LogException(error); exit=1; }
+            try { if (!LanguageShots) game.FinishRecording(); } catch(Exception error) { Debug.LogException(error); exit=1; }
             if (failed) exit = 1;
             if(exit==0) Debug.Log("Liandan autoplay OK: "+game.ScreenId); Application.Quit(exit);
         }

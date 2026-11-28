@@ -24,7 +24,7 @@ try {
   Math.random = seeded(2026);
   const meta = {...game.loadMeta(), points: 12, runs: 2, best: 50, own: {m_cash:1}, ach:{demo:1}, ends:{small:1}, extra:{keep:true}};
   game.saveMeta(meta);
-  const state = game.newGame(mkSetup({region:'bay',route:'model',track:'chat'},'clean'),meta); drain(state); game.saveGame(state);
+  const state = game.newGame({...mkSetup({region:'bay',route:'model',track:'chat'},'clean'),name:'叉AI',coName:'第一性原理',modelName:'太上',autoNames:6},meta); drain(state); game.saveGame(state);
   const users=[0,0.29999999999999999,19.610832183283492,1.25,99.99,100,100.5,9999.9,10000,12034.56];
   const people=['res','eng','ops','biz','legal'].map(role=>({...state.cands[0],role})).concat(state.staff);
   writeFileSync(join(input,'sample.json'),JSON.stringify({users,people})); run('dashboard');
@@ -41,7 +41,7 @@ try {
   console.log('教学比对通过：开放顺序、提早触发、队列消费和结束状态。');
   for (const mode of ['current','month','legacy','settle','ended','version','broken']) {
     active=input; game.saveMeta(meta); game.saveGame(state);
-    if(mode==='legacy') { const old=JSON.parse(localStorage.getItem('ldt_save_v1')); for(const key of ['projects','chains','quotaAdd','ideoAt','quotaEarn'])delete old[key]; old.stage=2; old.co.office=0; game.saveGame(old); }
+    if(mode==='legacy') { const old=JSON.parse(localStorage.getItem('ldt_save_v1')); for(const key of ['projects','chains','quotaAdd','ideoAt','quotaEarn'])delete old[key]; delete old.flags.autoNames; old.stage=2; old.co.office=0; game.saveGame(old); }
     if(mode==='ended')game.saveGame({...state,over:{id:'ipo'}});
     if(mode==='version')game.saveGame({...state,v:2});
     if(mode==='broken')localStorage.setItem('ldt_save_v1','{');

@@ -1,5 +1,25 @@
 # Unity 可玩界面（阶段 2 / 界面 A、B）
 
+## 中英切换与截图验收
+
+设置中的「语言」可即时切换中文和 English。首次启动在英文系统上使用英文，其他系统使用中文。偏好存于 `ldt_settings.json`。网页和 Unity 共用 `src/i18n/en/*.json`，构建前的 Sync Tables 调用 `tools/unity/export-i18n.mjs`，生成 `Assets/StreamingAssets/i18n/en.json`。存档使用中文原表，随机名标记沿用网页的 `flags.autoNames`。
+
+仓库根目录可以运行以下无编辑器检查。C# 检查对比两种语言下每个月的完整快照以及结算数据，并检查显示文本、旧存档名字和事件选择。
+
+```powershell
+dotnet build unity/GameCheck -c Release
+npm run i18n:unity
+```
+
+在可启动 Unity 的 Windows 图形机上运行以下命令，截图目录须为新目录或空目录。
+
+```powershell
+node tools/unity/run.mjs build-game
+node tools/unity/run.mjs i18n-shots 76361 unity/Game/Build/i18n-shots 1600x900
+```
+
+播放器在同一局的标题、主界面、事件弹窗、结局实际操作语言设置，每页生成 `*-zh.png` 和 `*-en.png`。它会检查切换前后的完整快照、界面文本变化以及主页顶栏和页签布局。查看四组图片，核对长英文换行、混排字形、按钮和正文的可读性。
+
 ## 丹炉 A/B 图形验收
 
 近景复查：除原来的三张外，截图命令现在还生成 `tripo-front.png`（正面平视）和 `tripo-back-high.png`（背面俯视）。位置、实例缩放和灯光不变。Tripo 源文件指定双面、无透明模式，只有底色图；Unity 对开口壳片使用不透明双面、关闭裁剪和底色 alpha，金属度 0.25、光滑度 0.32。原炉则从网页合批属性 `_ARM` 还原金属度和反相后的光滑度，不套铜材质预设。Blender QC 报告的 `normalOrientationEstimate` 用正反向射线估算疑似朝内面占全部面的比例，并单列无法判断数；它不是水密性证明。双面能解决剔除，不能替缺失的几何补面。

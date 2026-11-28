@@ -16,6 +16,7 @@
     "tables:check": "node tools/tables/export.mjs --check",
     "parity": "node tools/parity.mjs check",
     "i18n": "node tools/i18n/check.mjs",
+    "i18n:unity": "node tools/unity/export-i18n.mjs && dotnet run --project unity/KernelCli -- i18n-parity unity/Game/Assets/StreamingAssets/i18n/en.json",
     "i18n:parity": "node tools/i18n/parity.mjs"
   },
   "dependencies": {

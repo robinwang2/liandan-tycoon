@@ -25,7 +25,11 @@ namespace Liandan.Kernel
             foreach (var a in Children(Definitions["ATTRS"])) attrs[a.Str("name")] = a.Str("id");
             void Fill(JsonNode r, string field, bool bare, JsonNode? vars = null)
             {
-                string Replace(string s) => Regex.Replace(s, @"\{[^{}\s]+\}", m => FillRef(m.Value, r, bare, vars));
+                string Replace(string s)
+                {
+                    string filled = Regex.Replace(s, @"\{[^{}\s]+\}", m => FillRef(m.Value, r, bare, vars));
+                    return English ? ShellLanguage.Units(filled) : filled;
+                }
                 if (r[field] is JsonValue v && v.TryGetValue<string>(out var s) && s.Contains("{")) r[field] = Replace(s);
                 if (r[field] is JsonArray a)
                     for (int i = 0; i < a.Count; i++) if (a[i] is JsonValue item && item.ToString().Contains("{")) a[i] = Replace(item.ToString());
@@ -55,10 +59,15 @@ namespace Liandan.Kernel
         }
         internal string FillRuntime(string text, JsonNode? row, params (string key, object value)[] vars)
         {
-            return Regex.Replace(text, @"\{([^{}\s]+)\}", m =>
+            // Only consume suffixes in the source template; a player can literally be named "100万".
+            string pattern = English ? @"(\{([^{}\s]+)\})(\s*[万亿])?" : @"(\{([^{}\s]+)\})";
+            return Regex.Replace(text, pattern, match =>
             {
-                foreach (var v in vars) if (m.Groups[1].Value == v.key) return Convert.ToString(v.value, CultureInfo.InvariantCulture)!;
-                return FillRef(m.Value, row, false, row?["p"]);
+                string key = match.Groups[2].Value;
+                string? value = null;
+                foreach (var v in vars) if (v.key == key) { value = Convert.ToString(v.value, CultureInfo.InvariantCulture); break; }
+                value ??= FillRef(match.Groups[1].Value, row, false, row?["p"]);
+                return English && match.Groups[3].Success ? ShellLanguage.Units(value + match.Groups[3].Value) : value;
             });
         }
         private string FillRef(string token, JsonNode? record, bool bare, JsonNode? vars = null)
@@ -127,7 +136,8 @@ namespace Liandan.Kernel
                     case "±": sign = true; break;
                     case "去号": n = Math.Abs(n); sign = false; break;
                     case "×": prefix = "×"; break;
-                    case "万": return Math.Abs(n) >= 10000 ? Num(n / 10000) + " 亿" : Num(n) + " 万";
+                    case "万": if (English) return ShellLanguage.Compact(n * 10000);
+                        return Math.Abs(n) >= 10000 ? Num(n / 10000) + " 亿" : Num(n) + " 万";
                     case "数": break;
                     default: return token;
                 }

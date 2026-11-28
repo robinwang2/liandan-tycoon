@@ -96,7 +96,7 @@ namespace Liandan.Shell
         private Label AddEggCounter(VisualElement parent)
         {
             int count = EggCount;
-            var counter = Label(parent, $"彩蛋 {count}/{EggRows.Count}", "egg-count");
+            var counter = Label(parent, Language.Tr("彩蛋") + $" {count}/{EggRows.Count}", "egg-count");
             counter.EnableInClassList("egg-complete", count > 0 && count == EggRows.Count);
             return counter;
         }
@@ -160,19 +160,19 @@ namespace Liandan.Shell
             UnlockSound(); Cue(award ? "good" : "card");
             egg.BounceAt = Time.unscaledTime;
             string progress = $"{EggCount}/{EggRows.Count}";
-            eggCounter.text = "彩蛋 " + progress;
+            eggCounter.text = Language.Tr("彩蛋") + " " + progress;
             eggCounter.EnableInClassList("egg-complete", EggCount == EggRows.Count);
             HideEggCard();
             if (award)
             {
                 var awardCard = Box(eggFooter, "egg-award-card");
-                Label(awardCard, "解锁成就：彩蛋大师", "egg-award");
-                Label(awardCard, $"已找到全部 {EggRows.Count} 个彩蛋", "egg-award-detail");
+                Label(awardCard, Language.Tr("解锁成就：彩蛋大师"), "egg-award");
+                Label(awardCard, Language.Tr("已找到全部 {个数} 个彩蛋").Replace("{个数}", EggRows.Count.ToString()), "egg-award-detail");
             }
             eggCard = Box(eggFooter, "egg-card");
-            Label(eggCard, fresh ? "发现彩蛋！ " + progress : "已收集", "egg-status");
-            Label(eggCard, egg.Name, "egg-name"); Label(eggCard, egg.Description);
-            Label(eggCard, "致谢：" + egg.Credit, "egg-credit");
+            Label(eggCard, fresh ? Language.Tr("发现彩蛋！") + " " + progress : Language.Tr("已收集"), "egg-status");
+            Label(eggCard, Language.Tr(egg.Name), "egg-name"); Label(eggCard, Language.Tr(egg.Description));
+            Label(eggCard, Language.Tr("致谢：") + Language.Tr(egg.Credit), "egg-credit");
             hideEggAt = Time.unscaledTime + 4;
         }
 

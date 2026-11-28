@@ -32,9 +32,13 @@ namespace Liandan.Kernel
         internal readonly HashSet<string> RivalContext = new HashSet<string>();
         internal readonly HashSet<string> StoryDialogs = new HashSet<string>();
 
-        public Tables(string directory)
+        internal bool English { get; }
+        public Tables(string directory) : this(directory, null, null) { }
+        internal Tables(string directory, JsonNode? books, Tables? source)
         {
-            JsonNode Load(string name) => JsonNode.Parse(File.ReadAllText(Path.Combine(directory, name + ".json")))!;
+            English = books != null;
+            if (source != null) foreach (var pair in source.attrs) attrs[pair.Key] = pair.Value;
+            JsonNode Load(string name) => books?[name] ?? JsonNode.Parse(File.ReadAllText(Path.Combine(directory, name + ".json")))!;
             Actions = Load("actions");
             Definitions = Load("defs");
             Parameters = Load("params")["P"]!;
@@ -87,11 +91,7 @@ namespace Liandan.Kernel
         public string Text(string key, bool bay, params (string key, object value)[] vars)
         {
             var row = Texts[key] ?? throw new KeyNotFoundException(key);
-            return Regex.Replace(bay ? row.Str("bay", row.Str("text")) : row.Str("text"), @"\{([^{}\s]+)\}", m =>
-            {
-                foreach (var v in vars) if (v.key == m.Groups[1].Value) return Convert.ToString(v.value, CultureInfo.InvariantCulture)!;
-                return FillRef(m.Value, null, false);
-            });
+            return FillRuntime(bay ? row.Str("bay", row.Str("text")) : row.Str("text"), null, vars);
         }
     }
 }
