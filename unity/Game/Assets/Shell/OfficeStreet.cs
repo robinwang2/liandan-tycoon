@@ -39,7 +39,8 @@ namespace Liandan.Shell
         {
             public Transform root=null!;
             public Rotation[] wheels=null!;
-            public float distance,speed,spin,halfLength,offsetZ;
+            public float distance,speed,spin,halfLength,travel;
+            public float distanceToStop,distanceToClear;
         }
         Car[] cars=Array.Empty<Car>();
         Transform[] pedestrians=Array.Empty<Transform>();
@@ -48,7 +49,7 @@ namespace Liandan.Shell
         Rotation[] vanWheels=Array.Empty<Rotation>();
         float tripTime=-1,vanSpin;
         int firstRack,desiredRacks;
-        float dockX,blockedZ;
+        const float FollowingGap=2f,DeliveryWaitGap=4f,VanEnvelope=3.6f;
 
         void BuildStreet()
         {
@@ -61,42 +62,70 @@ namespace Liandan.Shell
                 var item=street.cars[i];
                 var obj=AddItem(item,parent);
                 BindProp(item,obj);
-                cars[i]=new Car{root=obj.transform,wheels=Wheels(item,obj),distance=i*37,
+                var lane=street.lanes[i%2];
+                int laneCount=(cars.Length+1-i%2)/2;
+                // Start at the middle of the right straight, then space cars around the loop.
+                cars[i]=new Car{root=obj.transform,wheels=Wheels(item,obj),distance=lane.points[1]+lane.length*(i/2)/laneCount,
                     speed=(i%2==1?1:-1)*(5.2f+i%3*.6f),halfLength=item.halfLength};
             }
             pedestrians=street.walkers.Select(key=>AddModel(key,"Pedestrian",parent).transform).ToArray();
             StepStreet(0);
         }
 
-        void StepStreet(float dt)
+        void ReserveDeliveryStreet(float streetZ)
         {
+            // The clip crosses both ends of this street on its way in and out.
+            // Reserve it at the two junctions and let traffic already inside clear first.
             for(int i=0;i<cars.Length;i++)
             {
                 var car=cars[i]; var lane=street.lanes[i%2];
-                float travel=car.speed*dt;
-                if(tripTime>=0 && dt>0)
+                float direction=Mathf.Sign(car.speed);
+                float stopZ=streetZ-Mathf.Sign(streetZ)*(VanEnvelope+DeliveryWaitGap+car.halfLength);
+                // Sample zero starts the right straight in -Z; half a lap starts the left in +Z.
+                float right=lane.points[1]-stopZ, left=lane.length*.5f+lane.points[1]+stopZ;
+                bool enterOnRight=direction*streetZ<0;
+                float entry=enterOnRight?right:left, exit=enterOnRight?left:right;
+                car.distanceToStop=Mathf.Repeat(direction*(entry-car.distance),lane.length);
+                if(car.distanceToStop>lane.length-.001f)car.distanceToStop=0;
+                float openLength=Mathf.Repeat(direction*(entry-exit),lane.length);
+                car.distanceToClear=Mathf.Max(0,car.distanceToStop-openLength);
+            }
+        }
+
+        void StepStreet(float dt)
+        {
+            // Read all headways before moving anyone, including the leader across the seam.
+            for(int i=0;i<cars.Length;i++)
+            {
+                var car=cars[i]; var lane=street.lanes[i%2];
+                float travel=Mathf.Abs(car.speed)*dt;
+                for(int j=i%2;j<cars.Length;j+=2)
                 {
-                    // Keep clearance on the receiving side of the block while unloading.
-                    Vector3 p=lane.At(car.distance,out _),next=lane.At(car.distance+travel,out _);
-                    float side=Mathf.Sign(blockedZ),gap=-1,clearance=car.halfLength+7.6f;
-                    if(side*(next.z-p.z)>.0001f)gap=Mathf.Abs(blockedZ)-side*p.z-clearance;
-                    else if(side*p.z>=lane.halfDepth-.01f)
-                        gap=Mathf.Sign(next.x-p.x)*(dockX-p.x)-clearance;
-                    if(gap>=0)travel=Mathf.Sign(travel)*Mathf.Min(gap,Mathf.Abs(travel)*Mathf.Clamp01(gap/2.5f));
+                    if(j==i)continue;
+                    var other=cars[j];
+                    float ahead=Mathf.Repeat(Mathf.Sign(car.speed)*(other.distance-car.distance),lane.length);
+                    travel=Mathf.Min(travel,Mathf.Max(0,ahead-car.halfLength-other.halfLength-FollowingGap));
                 }
-                car.distance=Mathf.Repeat(car.distance+travel,lane.length);
-                var pos=lane.At(car.distance,out float yaw);
-                float detour=0;
                 if(tripTime>=0)
                 {
-                    float side=Mathf.Sign(blockedZ);
-                    detour=side*Mathf.Max(0,Mathf.Abs(blockedZ)+2.05f-lane.halfDepth)*
-                        Mathf.Clamp01((side*pos.z-lane.halfDepth+5)/2);
+                    float gap=car.distanceToStop;
+                    float approach=gap>.05f?Mathf.Clamp01(gap/2.5f):1;
+                    travel=Mathf.Min(travel,Mathf.Min(gap,Mathf.Abs(car.speed)*dt*approach));
                 }
-                car.offsetZ=Mathf.Lerp(car.offsetZ,detour,1-Mathf.Exp(-dt*10));
-                pos.z+=car.offsetZ;
+                car.travel=travel;
+            }
+            for(int i=0;i<cars.Length;i++)
+            {
+                var car=cars[i]; var lane=street.lanes[i%2];
+                if(tripTime>=0)
+                {
+                    car.distanceToStop-=car.travel;
+                    car.distanceToClear=Mathf.Max(0,car.distanceToClear-car.travel);
+                }
+                car.distance=Mathf.Repeat(car.distance+Mathf.Sign(car.speed)*car.travel,lane.length);
+                var pos=lane.At(car.distance,out float yaw);
                 car.root.SetLocalPositionAndRotation(pos,Quaternion.Euler(0,yaw+(car.speed<0?180:0),0));
-                car.spin=Mathf.Repeat(car.spin+Mathf.Abs(travel)/.3f*Mathf.Rad2Deg,360);
+                car.spin=Mathf.Repeat(car.spin+car.travel/.3f*Mathf.Rad2Deg,360);
                 foreach(var wheel in car.wheels)wheel.Set(car.spin);
             }
             for(int i=0;i<pedestrians.Length;i++)
@@ -126,7 +155,7 @@ namespace Liandan.Shell
                     }
                     van!.SetActive(true);
                     var frames=delivery.clips[firstRack].frames;
-                    dockX=frames[360];blockedZ=frames[1];
+                    ReserveDeliveryStreet(frames[1]);
                     vanSpin=0;
                 }
             }
@@ -157,6 +186,7 @@ namespace Liandan.Shell
         void StepDelivery(float dt)
         {
             if(tripTime<0 || delivery==null)return;
+            if(tripTime==0 && cars.Any(car=>car.distanceToClear>0))dt=0;
             tripTime+=dt;
             if(tripTime>=3.7f){EndTrip();SetRacks(desiredRacks,1);return;}
             var frames=delivery.clips[firstRack].frames;

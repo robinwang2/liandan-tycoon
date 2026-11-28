@@ -136,13 +136,13 @@ namespace Liandan.Shell
             releaseLeft=Mathf.Max(0,releaseLeft-dt);
             fire?.Step(motionTime,heat,releaseLeft/1.6f,block);
             foreach(var worker in workers)worker.Step(motionTime,dt);
-            StepDelivery(dt);
             streetElapsed+=dt;
             if(streetElapsed>=1f/30 || dt==0)
             {
                 foreach(var joint in joints)joint.Step(motionTime);
                 StepStreet(streetElapsed);streetElapsed=0;
             }
+            StepDelivery(dt);
             lampElapsed+=dt;
             if(lampElapsed>=.08f || dt==0)
             {
