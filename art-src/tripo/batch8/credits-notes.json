@@ -57,7 +57,7 @@
     "credits": 40,
     "rework": 0,
     "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
-    "source": "Tripo Studio MCP（H3.1 四视图）"
+    "source": "Tripo Studio MCP（归档板面）＋程序轮组"
   },
   "pizza_stack": {
     "credits": 40,
@@ -75,7 +75,7 @@
     "credits": 40,
     "rework": 0,
     "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
-    "source": "Tripo Studio MCP（H3.1 四视图）"
+    "source": "Tripo Studio MCP（归档卷杆）＋程序纸面"
   },
   "pendant_lamp": {
     "credits": 40,
@@ -86,8 +86,8 @@
   "neon_slogan": {
     "credits": 40,
     "rework": 0,
-    "note": "Tripo 把薄背板生成成厚盒子，不可用，保留程序模型",
-    "source": "Tripo Studio MCP（H3.1 四视图）",
+    "note": "旧 Tripo 厚背板作废；精修程序圆管、圆角背板、支架和回线，Office 网格导出，本地追加 0 积分",
+    "source": "程序生成（历史 Tripo 作废单 40 分）",
     "status": "作废·保留程序模型"
   },
   "egg_bunny": {
@@ -123,7 +123,7 @@
   "fire_escape": {
     "credits": 0,
     "rework": 0,
-    "note": "细杆格栅为主，不排单，保留程序模型",
+    "note": "程序平台格栅、斜梁、折边踏步及连续扶手，Office 网格导出，0 积分",
     "source": "程序生成",
     "status": "不排单·保留程序模型"
   }

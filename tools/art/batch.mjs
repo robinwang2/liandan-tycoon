@@ -109,6 +109,11 @@ function manifest() {
 function eggDelivery(item) {
   return path.join(local,'eggs-delivery','Props',item.id,'Resources',resource,item.id);
 }
+function replacementInputs(recipe) {
+  if (!recipe.inputs) return undefined;
+  return Object.fromEntries(recipe.inputs.map(file => [file, createHash('sha256')
+    .update(fs.readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n')).digest('hex')]));
+}
 function replacementState(item) {
   const r=item.replacement, p=paths(item.id), blend=path.join(root,r.blend);
   const staged=r.sourceSha && (process.env.BATCH8_EGGS_STAGE==='1' || !fs.existsSync(p.report));
@@ -117,6 +122,7 @@ function replacementState(item) {
   const recordedSha=r.sourceSha?report?.sourceSha:report?.blendSha;
   const normal=!!report && report.replacement===r.name && fs.existsSync(blend) && recordedSha===sourceHash(blend) && recordedSha===(r.sourceSha??r.blendSha) &&
     (!r.prepSha || (report.prepSha===r.prepSha && sourceHash(path.join(root,r.prep))===r.prepSha)) &&
+    JSON.stringify(report.inputHashes)===JSON.stringify(replacementInputs(r)) &&
     fs.existsSync(lod0) && report.sha===hash(lod0) && fs.existsSync(path.join(dest,report.model));
   const qc=normal?{pass:true,triangles:report.lods[0].triangles,size:report.lods[0].size,problems:[]}:null;
   const receipt=normal && !staged && read(path.join(shots,item.id+'.json'));
@@ -154,7 +160,7 @@ function replace(item) {
     }
   }
   if((!eggs || r.textured) && !report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
-  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sourceSha:r.sourceSha,prepSha:r.prepSha,sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
+  Object.assign(report,{replacement:r.name,blendSha:r.blendSha,sourceSha:r.sourceSha,prepSha:r.prepSha,inputHashes:replacementInputs(r),sha:hash(lods[0]),refSha:hash(lods[0]),credits:0}); save(path.join(stage,'report.json'),report);
   // 原交付（Tripo 版）首次替换前整体留底；之后只覆盖。
   const backup=path.join(p.dir,'tripo-delivery');
   if(fs.existsSync(p.dest) && !fs.existsSync(backup) && read(p.report)?.replacement===undefined) fs.cpSync(p.dest,backup,{recursive:true});
@@ -200,7 +206,14 @@ function state(item) {
 async function ingest(item,file,mirrorDepth) {
   const hybrid=isHybrid(item);
   const repaired=path.basename(file)==='repaired.glb', p=paths(item.id,repaired); if(!prepared(item,p)) throw Error('请先 prep '+item.id);
-  const incoming=path.resolve(file); if(path.extname(incoming).toLowerCase()!=='.glb' || !fs.statSync(incoming).isFile()) throw Error('需要下载的 GLB 文件');
+  let incoming=path.resolve(file); if(path.extname(incoming).toLowerCase()!=='.glb' || !fs.statSync(incoming).isFile()) throw Error('需要下载的 GLB 文件');
+  if(item.archiveShell && !repaired) {
+    const archive=path.join(p.dir,'archive.glb');
+    if(hash(incoming)!==item.archiveShell.sha) throw Error('请传入第 8 批归档的完整模型：'+item.id);
+    if(incoming!==archive) fs.copyFileSync(incoming,archive);
+    blender(item.archiveShell.prep,archive,p.dir);
+    incoming=path.join(p.dir,'extracted-shell.glb');
+  }
   const sha=hash(incoming), refSha=hash(p.game);
   const assemblyFile=path.join(p.dir,'assembly.json');
   if(hybrid && repaired) {
@@ -294,6 +307,7 @@ function deliver(item,p,mirrorDepth,sha,refSha,previous=null) {
   if(!report.materials.some(mat=>mat.BaseColor)) throw Error('没有可用的 BaseColor，保留上一次交付');
   if(report.source==='repaired.glb') Object.assign(report,{originalSha:hash(paths(item.id).source),repairMethod:'AI 外壳 + 程序化修补',repairCredits:0});
   if(hybrid) Object.assign(report,{repairMethod:'AI 外壳＋程序部件',shellMirrorDepth:read(path.join(p.dir,'assembly.json')).shellMirrorDepth});
+  if(item.archiveShell) report.archiveSha=hash(path.join(p.dir,'archive.glb'));
   Object.assign(report,{sha,refSha}); save(path.join(stage,'report.json'),report);
   fs.mkdirSync(p.dest,{recursive:true});
   // 不替换文件夹和已有 .meta，保留已有 Unity 引用；FBX 最后复制。
@@ -371,6 +385,13 @@ try {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
       if(batchName==='batch8' && (!e.source || e.credits==null)) throw Error('请先用 credit --from-notes 登记实耗：'+id);
+      if(item.officeMesh) {
+        const file='unity/Game/Assets/StreamingAssets/office/layouts.json', catalog=read(path.join(root,file));
+        const models=new Set(catalog?.layouts.flatMap(layout=>layout.instances.filter(i=>i.id===id && !i.resource).map(i=>i.model)));
+        const exported=models.size>0 && [...models].every(key=>catalog.models.find(m=>m.key===key)?.parts.some(p=>p.bins.length));
+        return {id:batchName+'_'+id,name,source:e.source,method:e.note,credits:e.credits,file,
+          qc:`网页原模 ${item.tris} 面，预算 ${item.budget} 面`,status:exported?'办公室程序网格已导出；待 Unity 复拍':'待导出办公室程序网格'};
+      }
       if(item.referenceOnly && e.status) return {id:batchName+'_'+id,name,source:e.source,method:e.note,credits:e.credits,
         file:`art-src/tripo/${batchName}/${id}/game.glb`,qc:'仅作原模对照',status:e.status};
       if(item.procedural) {
@@ -393,7 +414,9 @@ try {
           status:deliveryStatus(s,{},item)};
       }
       const hybrid=isHybrid(item);
-      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+(repaired?'；参考原色图贴图，程序件从游戏原模回装':''):null,
+      const shellMethod=item.archiveShell?'从归档整件提取：'+item.shell+'；从游戏原模回装轮桥和四轮'
+        :'四向灰模生成外壳：'+item.shell+(repaired?'；参考原色图贴图，程序件从游戏原模回装':'');
+      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?shellMethod:null,
         e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?(hybrid?'AI 外壳＋程序部件':'AI 外壳 + 程序化修补')+'；本地追加 0 积分':null].filter(Boolean).join('；');
       return {id:batchName+'_'+id,name,source:hybrid && repaired && batchName!=='batch8'?'AI 外壳＋程序部件':e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
         file:s.downloaded?`art-src/tripo/${batchName}/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,

@@ -854,3 +854,38 @@ node tools/art/batch.mjs credit --from-notes --batch batch8
 node tools/art/batch.mjs ledger --batch batch8
 npm run tables
 ```
+
+### 本地程序收尾与复拍（feat/art-polish2）
+
+本轮追加 **0 积分**，第 8 批历史实耗仍为 825 分。挂轴原模只画了四组抽象笔画；本轮选用「天道酬勤」。网页将同一份楷体轮廓三角化，Blender 将它渲成 2048 × 1024 的纸面底色图。归档模型保留上下卷杆和原色纹理，红裱、纸面、印章重新生成，三级 LOD 共用完整纸面 UV。滑板从归档整件的两个连通件中取出贴图板面，按原模装回两座轮桥和四个轮子。
+
+| FBX 回读 | LOD0 | LOD1 | LOD2 | LOD2 四向最低 IoU |
+|---|---:|---:|---:|---:|
+| 挂轴 | 11796 | 6296 | 2096 | 0.9987 |
+| 滑板 | 5942 | 2400 | 718 | 0.9979 |
+
+滑板回读逐级检出四个不同轮心（长轴 ±0.253 m、横轴 ±0.094 m）、两座轮桥，四轮均着地。程序轮组在两级减面中保留全部几何。霓虹标语使用品牌色发光圆管拼成 BUILD，背板有圆角、固定件和回线，5320 / 6000 面。消防梯有双向开孔格栅、折边踏步、斜梁和带出入口的扶手，1572 / 15000 面。两件随 Office 导出到程序网格。
+
+120 个 Office 布局变体中，垃圾桶在单层办公室首张工位桌前角出现 80 次，卷轴在深圳握手楼衣架上方出现 5 次，吊灯在整层办公区及总部前台、总部会议桌上方出现 14 次。对这些实例与同布局其他道具的导出网格包围盒逐对检查，未发现超过 2 mm 的三轴重叠。
+
+**本机复现。** 在此工作树根目录执行。第一次从第 8 批工作树取回已对齐的原件；挂轴与滑板各自的原件 SHA-256 在选件表中。字形轮廓已提交，常规出件不依赖字体；更换题字时可在装有楷体的 Windows 上运行 `tools/art/scroll-ink.ps1 -Text '天道酬勤'`。
+
+```powershell
+$archive = '..\liandan-art8\art-src\tripo\batch8'
+$local = 'art-src\tripo\batch8'
+New-Item -ItemType Directory -Force "$local\scroll" | Out-Null
+Copy-Item "$archive\scroll\tripo.glb" "$local\scroll\tripo.glb"
+node tools/art/batch.mjs --batch batch8 replace scroll
+node tools/art/batch.mjs --batch batch8 prep skateboard
+node tools/art/batch.mjs --batch batch8 ingest skateboard "$archive\skateboard\tripo.glb"
+node tools/unity/export-office.mjs
+```
+
+**Claude 验收。** 直接在 `liandan-artfix` 根目录运行以下两条命令。这个工作树的 `unity/Game/Assets/Art` 有完整本地副本和本次两个新版交付目录，模型与 Office 导出按仓库规则忽略。若换工程，须同步 `Art/Props/{scroll,skateboard}/Resources/B8/<id>/` 的 FBX、贴图和报告，再使用本提交的选件表与布局生成 Office 快照。
+
+```powershell
+node tools/unity/run.mjs art-batch8
+node tools/unity/run.mjs office-shots
+```
+
+在 `Build/art-batch8` 对照两件的近景和两个远级，核对字序、正背面、轮桥及板底净空。斜上方拍摄会遮住对侧轮子，可展开每一级的四个 Wheel 节点或从板底查看。在 `Build/office-shots` 看 `sz-1` 的卷轴和垃圾桶、`bay-1-d_soma` 的霓虹及外墙梯、`sz-4` 的前台灯、`sz-8-F7` 的会议桌灯。本轮已完成 Blender 和 Office 离线验证，引擎实拍留给 Claude。
