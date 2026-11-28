@@ -3,12 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { createRoom } from '../../src/scene3a/office.js';
+import { createRoom, startKind } from '../../src/scene3a/office.js';
 import { makeKit } from '../../src/scene3a/kit.js';
 import { PROPS } from '../../src/scene3a/props.js';
 import { FLOOR_PLANS, TRAITS, TRACKS } from '../../src/data/defs.js';
 import { archive, canvas, transform } from './office-mesh.mjs';
 import { streetSnapshot } from './office-street.mjs';
+import { actorLibrary, deliveryClip } from './office-motion.mjs';
 
 const assets=process.argv[2]?path.resolve(process.argv[2],'Assets'):fileURLToPath(new URL('../../unity/Game/Assets/',import.meta.url));
 const folder=path.join(assets,'StreamingAssets/office'), store=archive(folder);
@@ -27,12 +28,14 @@ async function posterMaterial(key,tall){
 const [tall,wide]=await Promise.all([true,false].map(shape=>Promise.all(posters.map(key=>posterMaterial(key,shape)))));
 const poster=(list,seed)=>list[((seed%list.length)+list.length)%list.length];
 const art={mat:seed=>poster(tall,seed),wide:seed=>poster(wide,seed)};
-const templates=new Map(),source=new Map(),stats=new Map(),layouts=[],actors=new Map(),streets=new Map();
+const templates=new Map(),source=new Map(),stats=new Map(),layouts=[],streets=new Map(),deliveries=new Map();
+let actorModels;
 const props=Object.fromEntries(Object.keys(PROPS).map(id=>[id,{size:PROPS[id].size,build(_,options={}){
   const marker=new THREE.Group();marker.userData.placement={id,options};marker.add(new THREE.Group());return marker;
 }}]));
 const stockPath=path.join(assets,'Art/Props');
 const pivots=[];
+const policies=new Map(),bindings=[];
 for(const file of (fs.existsSync(stockPath)?fs.readdirSync(stockPath,{recursive:true}):[]).map(String).sort()){
   const match=file.replaceAll('\\','/').match(/\/Resources\/(.+\/([^/]+)\/SM_\2)\.fbx$/i);
   if(!match)continue;
@@ -41,6 +44,12 @@ for(const file of (fs.existsSync(stockPath)?fs.readdirSync(stockPath,{recursive:
   if(!batch || !fs.existsSync(path.join(assets,'Shell/Resources',
     batch[1]==='1'?'PropPolicy.json':`PropPolicyBatch${batch[1]}.json`)))continue;
   source.set(match[2],match[1]);
+  if(!policies.has(batch[1])){
+    const filename=batch[1]==='1'?'PropPolicy.json':`PropPolicyBatch${batch[1]}.json`;
+    policies.set(batch[1],JSON.parse(fs.readFileSync(path.join(assets,'Shell/Resources',filename),'utf8')).props);
+  }
+  const policy=policies.get(batch[1]).find(p=>p.id===match[2]);
+  if(policy?.actions?.length)bindings.push({resource:match[1],actions:policy.actions});
   const report=path.join(stockPath,path.dirname(file),'report.json');
   if(fs.existsSync(report)){
     // One off-axis LOD0 pivot distinguishes the two axis conversions accepted by PropImport.
@@ -76,17 +85,27 @@ function build(region,level,district,track,floor){
     else if(node.name==='elevator_car')add(node,node.name,store.model(node));
   }
   world.traverseVisible(collect);
-  if(furnaceG.visible){const furnace=furnaceG.children[0];if(!templates.has('furnace'))templates.set('furnace',store.model(furnace));
-    const resource='Furnaces/Tripo/SM_Furnace';add(furnace,'furnace',templates.get('furnace'),0,fs.existsSync(path.join(assets,'Art/Props/Furnace/Resources',resource+'.fbx'))?resource:'');}
+  if(furnaceG.visible){
+    const furnace=furnaceG.children[0];
+    if(!templates.has('furnace')){
+      furnace.children[1].name='body'; furnace.children[2].name='lid';
+      // Heat is zero in the snapshot. Preserve the fire surfaces and individual
+      // spark pivots so the runtime can wake them when training starts.
+      for(const node of furnace.children.filter(n=>n.geometry?.type==='BoxGeometry')){
+        node.visible=true; node.name='spark'; node.scale.setScalar(1);
+      }
+      templates.set('furnace',store.model(furnace,node=>node.userData.p!=null && node.name!=='spark'));
+    }
+    add(furnace,'furnace',templates.get('furnace'),0,'');
+  }
   if(!seats.has(seatKey)){
     const samples=[],seen=new Set();for(const [index,node] of actorsG.children.entries()){
       if(level>=5 && (floor<0||Math.abs(node.position.y-floor*(info.L.H+.5))>.1))continue;
       const role=index===0?'founder':staff[index-1].role,slot=level<5?index-1:Math.floor((index-1)/roles.length);
-      const pose=node.children[0].position.y>.08?'sit':'stand', key=role+pose;
+      const pose=node.children[0].position.y>.08?'sit':'stand';
       const positionKey=[level>=5||role==='founder'?role:'staff',...node.position.toArray()].join(':');
       if(seen.has(positionKey))continue;
       seen.add(positionKey);
-      if(!actors.has(key)){const rig=node.children[0];rig.name='rig';rig.children.forEach((part,index)=>part.name=['leg_l','leg_r','torso','arm_l','arm_r','head'][index]||'accessory');actors.set(key,store.model(node));}
       samples.push({role,pose,slot,...transform(node.matrixWorld)});
     }seats.set(seatKey,samples);
   }
@@ -100,14 +119,24 @@ function build(region,level,district,track,floor){
   if(!roomG||!floorsG||!instances.length||!store.models.get(shell).parts.some(p=>p.bins.length))throw Error('Empty office');
   const streetKey=[region,level,district].join(':');
   if(!streets.has(streetKey)){
-    const street=streetSnapshot(kit,props,art.wide,region,level,district,info.L),start=instances.length;
+    const street=streetSnapshot(kit,props,art.wide,region,level,district,info.L,store),start=instances.length;
     street.root.traverseVisible(collect);
-    streets.set(streetKey,{model:store.model(street.root,node=>!!node.userData.placement),items:instances.splice(start)});street.dispose();
+    const items=instances.splice(start);
+    street.cars.forEach(collect);
+    for(const car of instances.slice(start))car.halfLength=PROPS[car.id].size[1]/2;
+    streets.set(streetKey,{model:store.model(street.root,node=>!!node.userData.placement),items,
+      motion:{key:streetKey,cars:instances.splice(start),walkers:street.walkers,lanes:street.lanes}});street.dispose();
   }
   const street=streets.get(streetKey);instances.push(...street.items);
   let egg=null,eggCable='';if(furnaceG.visible){room.sync({own:false,racks:0,staff:[]});frame(0,0,{night:0});scene.updateMatrixWorld(true);
     const node=furnaceG.children[0];if(!templates.has('egg'))templates.set('egg',store.model(node));add(node,'office_egg',templates.get('egg'));egg=instances.pop();eggCable=store.model(furnaceG.children[1],()=>false,true);}
-  layouts.push({region,level,district,track,floor,floors:info.floors,w:frameSize.W,d:frameSize.D,h:frameSize.H,target:frameSize.H*.3+info.lift,shell,street:street.model,cable,egg,eggCable,instances,actors:seats.get(seatKey)});
+  const shutter=level===1 && ['garage','stall'].includes(startKind(region,district));
+  const delivery=level<5?[level,info.L.H,shutter].join(':'):'';
+  if(delivery && !deliveries.has(delivery))deliveries.set(delivery,{key:delivery,...deliveryClip(kit,PROPS,store,info.L,shutter,world.position.y)});
+  layouts.push({region,level,district,track,floor,floors:info.floors,w:frameSize.W,d:frameSize.D,h:frameSize.H,target:frameSize.H*.3+info.lift,
+    floorHeight:info.L.H+.5,groundY:world.position.y,traffic:streetKey,delivery,
+    shell,street:street.model,cable,egg,eggCable,instances,actors:seats.get(seatKey)});
+  actorModels ??= actorLibrary(room,actorsG,store,roles);
   room.dispose();kit.nightMats.length=0;
 }
 for(const region of ['sz','bay'])for(let level=1;level<=8;level++){
@@ -117,7 +146,8 @@ for(const region of ['sz','bay'])for(let level=1;level<=8;level++){
   console.log(region,level,layouts.length+' layouts');
 }
 await Promise.all(store.pending);
-const catalog={version:3,layouts,pivots,actorModels:[...actors].map(([key,model])=>({key,model})),models:[...store.models.values()],materials:[...store.materials.values()]};
+const catalog={version:4,layouts,pivots,bindings,actorModels,traffic:[...streets.values()].map(s=>s.motion),
+  deliveries:[...deliveries.values()],models:[...store.models.values()],materials:[...store.materials.values()]};
 fs.writeFileSync(path.join(folder,'layouts.tmp'),JSON.stringify(catalog));fs.renameSync(path.join(folder,'layouts.tmp'),path.join(folder,'layouts.json'));
 for(const file of fs.readdirSync(folder)){const match=/^([a-f0-9]{32})\.(mesh\.gz|png)$/.exec(file);if(match&&!(match[2]==='png'?store.images:store.meshes).has(match[1]))fs.unlinkSync(path.join(folder,file));}
 for(const type of ['prefab','procedural']){const ids=[...stats].filter(([,kind])=>kind===type).map(([id])=>id).sort();console.log(type,ids.length,ids.join(','));}

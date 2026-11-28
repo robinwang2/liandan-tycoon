@@ -18,6 +18,7 @@ namespace Liandan.Shell
         internal string Region => picks["region"];
         internal string District => picks.TryGetValue("district",out var district)?district:"";
         internal string Track => picks["track"];
+        internal string Outfit => picks["outfit"];
         internal bool OwnModel => picks["route"]=="model";
         internal int Step;
         internal bool Tutorial;

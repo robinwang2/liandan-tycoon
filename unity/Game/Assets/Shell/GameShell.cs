@@ -27,6 +27,7 @@ namespace Liandan.Shell
         internal Dictionary<string, JsonNode> Rows = null!;
         internal int Seed;
         private Office? office;
+        private bool officeRelease;
         private static readonly string[] TitleRoles={"res","eng","eng","ops","biz","legal","res"};
         internal double RandomValue() => GameState.NextRandom(ref Seed);
         internal static double Number(JsonNode value) => double.Parse(value.ToString(), System.Globalization.CultureInfo.InvariantCulture);
@@ -173,7 +174,8 @@ namespace Liandan.Shell
         {
             if(!office)return;
             if(ScreenId=="wizard")
-                office!.Show(Wizard.Region,1,Wizard.District,Wizard.Track,-1,Wizard.OwnModel?1:0,Array.Empty<string>(),Wizard.OwnModel);
+                office!.Show(Wizard.Region,1,Wizard.District,Wizard.Track,-1,Wizard.OwnModel?1:0,Array.Empty<string>(),Wizard.OwnModel,
+                    outfit:Wizard.Outfit,session:Wizard,animateRacks:false);
             else if(State==null)
                 office!.Show("bay",3,"","",-1,4,TitleRoles,titleView:true);
             else
@@ -183,9 +185,20 @@ namespace Liandan.Shell
                 string district=State.Founder.Traits.Select(value=>value!.ToString()).FirstOrDefault(value=>value.StartsWith("d_"))??"";
                 bool own=(bool)snapshot["ownModel"]!;
                 int racks=own?(int)Math.Ceiling(Math.Log(Number(snapshot["gpu"]!)/8+1,2)):0;
-                var roles=snapshot["staff"]!.AsArray().Select(row=>row!["role"]!.ToString()).ToArray();
-                office!.Show(State.Company.Region,level,district,State.Company.Track,level==floorOffice?floor:-1,racks,roles,own);
+                var members=snapshot["staff"]!.AsArray();
+                var roles=members.Select(row=>row!["role"]!.ToString()).ToArray();
+                var ids=members.Select(row=>row!["uid"]!.ToString()).ToArray();
+                float morale=(float)Number(snapshot["morale"]!);
+                var moods=ids.Select(id=>int.TryParse(id.AsSpan(1),out int n)?Mathf.Clamp(morale+n*7%21-10,0,100):morale).ToArray();
+                double free=Math.Max(0,Number(snapshot["gpu"]!)-State.ReadBotValue("inferNeed"));
+                float heat=own && (bool?)snapshot["furnace"]?["on"]==true && free>0?
+                    (float)(.25+.75*free/Math.Max(1,State.ReadBotValue("quota"))):0;
+                office!.Show(State.Company.Region,level,district,State.Company.Track,level==floorOffice?floor:-1,racks,roles,own,
+                    ids:ids,moods:moods,heat:heat,outfit:snapshot["founder"]?["outfit"]?.ToString()??"turtleneck",session:State,
+                    animateRacks:ScreenId!="end" && !SuppressThemeFx && Pref("themefx",1)!=0);
+                if(officeRelease && own)office.PlayRelease();
             }
+            officeRelease=false;
             if(ScreenId!="main")office!.Viewport(new Rect(0,0,1,1));
         }
 

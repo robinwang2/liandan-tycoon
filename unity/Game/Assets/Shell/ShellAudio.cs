@@ -178,12 +178,14 @@ namespace Liandan.Shell
             foreach (var item in queue)
             {
                 string? fx=item?[0]?.ToString();
+                if(fx=="release")officeRelease=true;
                 string? cue=fx switch { "money"=>"coin","confetti" or "levelup" or "alarm" or "boom" or "cameo" or "release"=>fx,_=>null };
                 if (cue==null) continue;
                 double delay=0;
                 if ((cue is "boom" or "release" || cue=="cameo" && floor<0)
                     && Tables.Definition("FLOOR_PLANS")[((int)State.Company.Office).ToString()] is JsonArray plan)
                 {
+                    if(floorOffice!=(int)State.Company.Office){floorOffice=(int)State.Company.Office;floor=-1;}
                     string role=cue=="cameo"?"ceo":"res";
                     int i=Array.FindIndex(plan.ToArray(),row=>row!.AsArray().Any(r=>r!.ToString()==role));
                     delay=MoveFloor(i>=0?i:role=="ceo"?plan.Count-1:0,plan.Count);

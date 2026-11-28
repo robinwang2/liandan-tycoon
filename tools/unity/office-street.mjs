@@ -1,8 +1,19 @@
 import * as THREE from 'three';
-import { createCity } from '../../src/scene3a/city.js';
+import { createCity, loopPos } from '../../src/scene3a/city.js';
 import { startKind } from '../../src/scene3a/office.js';
 
-export function streetSnapshot(kit, props, art, region, level, district, L) {
+// Sample the web rounded rectangle at uniform travel distances, including the seam.
+function lane(a, b, radius) {
+  const length = 4 * (a + b - 2 * radius) + 2 * Math.PI * radius;
+  const count = Math.ceil(length / .4), points = [];
+  for (let i = 0; i <= count; i++) {
+    const [x, z, yaw] = loopPos(i % count * length / count, a, b, radius);
+    points.push(...[x, -z, -yaw * 180 / Math.PI].map(v => +v.toFixed(4)));
+  }
+  return { length, halfDepth:b, points };
+}
+
+export function streetSnapshot(kit, props, art, region, level, district, L, store) {
   let tick;
   const stage = {
     scene: new THREE.Scene(),
@@ -47,6 +58,29 @@ export function streetSnapshot(kit, props, art, region, level, district, L) {
   const nearby = p => Math.abs(p.x) < limit && Math.abs(p.z) < limit;
   const position = new THREE.Vector3(), matrix = new THREE.Matrix4(), tint = new THREE.Color();
   const expanded = [];
+  // At web detail 0 only the four ring-road vehicles are direct prop children.
+  // Parked vehicles belong to the baked street and stay where the web placed them.
+  const cars = root.children.filter(n => n.userData.placement);
+  if (cars.length !== 4) throw Error('City ring traffic changed');
+  for (const car of cars) car.removeFromParent();
+  const pedestrians = root.children.filter(n => n.isInstancedMesh && n.instanceColor &&
+    ['CapsuleGeometry', 'SphereGeometry'].includes(n.geometry.type));
+  if (pedestrians.length !== 2) throw Error('City pedestrian meshes changed');
+  const walkers = Array.from({length:pedestrians[0].count}, (_,i) => {
+    const person = new THREE.Group();
+    for (const batch of pedestrians) {
+      const mat = batch.material.clone();
+      batch.getColorAt(i, tint); mat.color.multiply(tint);
+      const mesh = new THREE.Mesh(batch.geometry, mat);
+      mesh.position.y = batch.geometry.type === 'CapsuleGeometry' ? .45 : 1;
+      person.add(mesh);
+    }
+    return store.model(person);
+  });
+  for (const batch of pedestrians) batch.removeFromParent();
+  const hx = L.W / 2 + 3.4, hz = L.D / 2 + 3.4;
+  const lanes = [1.3,-1.5].map(off => lane(hx+3.8+off, hz+3.8+off, 2.2));
+  for (const off of [0,.5,1]) lanes.push(lane(hx+8.8+off,hz+8.8+off,1.2));
   root.traverse(node => {
     if (node.isBatchedMesh) return;
     if (node.isInstancedMesh) {
@@ -71,5 +105,5 @@ export function streetSnapshot(kit, props, art, region, level, district, L) {
   });
   for (const mesh of expanded) root.add(mesh);
   root.updateMatrixWorld(true);
-  return { root, dispose: () => city.destroy() };
+  return { root, cars, walkers, lanes, dispose: () => city.destroy() };
 }

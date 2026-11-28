@@ -24,6 +24,8 @@ const methods = new Map([
   ['build-game-il2cpp', 'BuildGameIl2cpp'],
 ]);
 const [mode, input, ...extra] = process.argv.slice(2);
+const motionShots=mode==='office-shots' && input==='motion';
+if(motionShots)methods.set(mode,'CaptureMotion');
 const shotBatch = /^art-(batch[1-9]\d*)$/.exec(mode)?.[1];
 const checking = mode === 'editor-parity' || mode === 'run-probe';
 
@@ -110,7 +112,7 @@ async function run() {
     }
     checkMix(shots); return;
   }
-  if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking))
+  if ((!methods.has(mode) && mode !== 'run-probe') || extra.length || (input && !checking && !motionShots))
     throw new Error('用法：compile | editor-parity [数学样本] | build-probe | run-probe [数学样本] | setup-ui | office-shots | audio-render | art-furnace | art-batchN | art-repair | build-game | build-game-il2cpp | audiotest <录音目录> | autoplay <种子> <截图目录> [月数] [1280x720|1600x900|1920x1080]');
   const exe = mode === 'run-probe' ? player : editor;
   if (!existsSync(exe)) throw new Error('找不到可执行文件：' + exe);
@@ -151,7 +153,7 @@ async function run() {
     console.log(result + '\n' + report);
   }
   if (proc.status !== 0 || errors.length || !contents ||
-      (mode==='office-shots' && !contents.includes('Liandan office shots OK:')) ||
+      (mode==='office-shots' && !contents.includes(motionShots?'Liandan office motion OK:':'Liandan office shots OK:')) ||
       (shotBatch && !contents.includes('Liandan '+shotBatch+' shots OK:')) ||
       (mode==='art-repair' && !contents.includes('Liandan repair shots OK:')) ||
       (mode === 'art-furnace' && (!contents.includes('Liandan furnace shots OK:') || ['original','tripo','tripo-close','tripo-front','tripo-back-high'].some(name=>!existsSync(join(project,'Build/art-furnace',name+'.png'))))) ||
@@ -162,7 +164,29 @@ async function run() {
       (mode.startsWith('build-game') && (!contents.includes('Liandan build OK:') || !existsSync(gamePath(mode === 'build-game' ? 'Game' : mode==='build-game-art'?'ArtProbe':'GameIl2cpp')))) ||
       (mode === 'build-probe' && (!existsSync(player) || !contents.includes('IL2CPP 探针构建完成'))))
     throw new Error('执行失败（进程退出码 ' + proc.status + '），请查看 ' + log);
-  if(mode==='office-shots'){
+  if(motionShots){
+    const {default:sharp}=await import('sharp');
+    const folder=join(project,'Build/office-shots/motion');
+    for(const scene of ['typing','arrival','furnace','delivery','street','signal','lift','fan']){
+      let previous,changedPairs=0;
+      for(let frame=0;frame<4;frame++){
+        const {data,info}=await sharp(join(folder,`${scene}-${frame}.png`)).removeAlpha().raw().toBuffer({resolveWithObject:true});
+        if(info.width!==1280 || info.height!==720 || info.channels!==3)throw Error('办公室动效截图尺寸错误：'+scene);
+        if(previous){
+          let pixels=0;
+          for(let p=0;p<data.length;p+=3){
+            if((Math.abs(data[p]-previous[p])>8 || Math.abs(data[p+1]-previous[p+1])>8 ||
+                Math.abs(data[p+2]-previous[p+2])>8) && ++pixels>=32)break;
+          }
+          if(pixels>=32)changedPairs++;
+        }
+        previous=data;
+      }
+      if(changedPairs<(scene==='signal'?1:2))throw Error(scene+' 固定镜头只有 '+changedPairs+' 组相邻帧发生可见变化');
+      console.log(scene+' 可见变化 '+changedPairs+'/3');
+    }
+    console.log('办公室动效截图：'+folder);
+  }else if(mode==='office-shots'){
     const folder=join(project,'Build/office-shots');
     for(const region of ['sz','bay'])for(let level=1;level<=8;level++){
       const name=region+'-'+level+'.png', png=readFileSync(join(folder,name));
