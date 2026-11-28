@@ -1,0 +1,130 @@
+{
+  "wall_clock": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "surfboard": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "pingpong": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "flower_bed": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "plant_small": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "atrium_tree": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "foosball": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "standing_lamp": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "basketball_hoop": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "skateboard": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "pizza_stack": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "trash_bin": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "scroll": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "pendant_lamp": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo Studio MCP：H3.1 四视图几何（约 30）+ 2K 图片贴图（约 10）；MCP 出件需绕竖轴转 -90° 才与四视图一致",
+    "source": "Tripo Studio MCP（H3.1 四视图）"
+  },
+  "neon_slogan": {
+    "credits": 40,
+    "rework": 0,
+    "note": "Tripo 把薄背板生成成厚盒子，不可用，保留程序模型",
+    "source": "Tripo Studio MCP（H3.1 四视图）",
+    "status": "作废·保留程序模型"
+  },
+  "egg_bunny": {
+    "credits": 45,
+    "rework": 0,
+    "note": "Tripo 网页：图片工具出概念图（限免 0 分）→ H3.5 单图几何 + 2K 贴图（去光、无 PBR），45 分",
+    "source": "Tripo Studio 网页（H3.5 单图）"
+  },
+  "egg_whale_figure": {
+    "credits": 45,
+    "rework": 0,
+    "note": "Tripo 网页：图片工具出概念图（限免 0 分）→ H3.5 单图几何 + 2K 贴图（去光、无 PBR），45 分",
+    "source": "Tripo Studio 网页（H3.5 单图）"
+  },
+  "egg_parrot": {
+    "credits": 45,
+    "rework": 0,
+    "note": "Tripo 网页：图片工具出概念图（限免 0 分）→ H3.5 单图几何 + 2K 贴图（去光、无 PBR），45 分",
+    "source": "Tripo Studio 网页（H3.5 单图）"
+  },
+  "egg_shoggoth": {
+    "credits": 45,
+    "rework": 0,
+    "note": "Tripo 网页：图片工具出概念图（限免 0 分）→ H3.5 单图几何 + 2K 贴图（去光、无 PBR），45 分",
+    "source": "Tripo Studio 网页（H3.5 单图）"
+  },
+  "egg_alpaca": {
+    "credits": 45,
+    "rework": 0,
+    "note": "Tripo 网页：图片工具出概念图（限免 0 分）→ H3.5 单图几何 + 2K 贴图（去光、无 PBR），45 分",
+    "source": "Tripo Studio 网页（H3.5 单图）"
+  },
+  "fire_escape": {
+    "credits": 0,
+    "rework": 0,
+    "note": "细杆格栅为主，不排单，保留程序模型",
+    "source": "程序生成",
+    "status": "不排单·保留程序模型"
+  }
+}

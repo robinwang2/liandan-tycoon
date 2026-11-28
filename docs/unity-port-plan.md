@@ -805,3 +805,52 @@ npm run tables
 `replace`（或 `reexport`）每次重新取游戏原模，可在末尾指定若干 id。`status` 和 `ledger` 核对建模源码、导出及质检脚本、几何规格的指纹，并校验原模与 FBX 散列，旧结果不计为通过。原模和彩色预览在 `art-src/tripo/batch7/<id>/game.glb`、`preview/color.png`（相对于各件目录），三级几何图及回读报告在 `lod-qc/LOD{0,1,2}/`。各件交付位于 `unity/Game/Assets/Art/Props/<id>/Resources/Batch7/<id>/`。这些产物按仓库规则不进 Git，换工作树需要重建或拷贝已验的整份交付目录。
 
 **待协调方在 Unity 跑：** 确保三款已有 AI 车 `car_sedan`、`car_suv`、`car_hatch` 的 Batch3 交付在同一工程，再运行 `node tools/unity/run.mjs art-batch7`。导入器逐级检查 URP/Lit、玻璃 alpha（车窗 0.62、轿厢 0.28、门 0.36）和发光标志。`unity/Game/Build/art-batch7/` 应产出每件静止图、同机位 `-lod1` / `-lod2`、`-action`，以及九件在同一场景拍摄的 `contact.jpg`。重点看透过门是否能认出扶手、按钮，门框是否随门移动，以及车轮与雷达是否绕自身轴。脚本跑通后再执行 `ledger` 和 `npm run tables` 回填截图状态；截图已生成不等于人工已验收。
+
+## 第 8 批（2026-11-28）
+
+本批登记 21 件。Unity `art-batch8` 实拍通过 19 件（14 件库道具、5 件原创彩蛋），未安装 `neon_slogan`、`fire_escape`，失败 0 件。「道具」沿用表内状态「已进引擎」，源文件列用 `batch8_<id>` 关联「素材来源」。近景、两个远级截图和逐件回执在 `unity/Game/Build/art-batch8/`，`contact.jpg` 为总览。
+
+| 入库方式 | 清单 | 实耗 |
+|---|---|---:|
+| MCP 整件（8 件） | 冲浪板 `surfboard`、花坛 `flower_bed`、小盆栽 `plant_small`、中庭树 `atrium_tree`、滑板 `skateboard`、披萨盒 `pizza_stack`、垃圾桶 `trash_bin`、挂轴 `scroll` | 320 |
+| MCP 外壳＋程序部件（6 件） | 挂钟 `wall_clock`、乒乓球台 `pingpong`、桌上足球 `foosball`、落地灯 `standing_lamp`、篮球架 `basketball_hoop`、吊灯 `pendant_lamp` | 240 |
+| 网页原创彩蛋（5 件） | 致敬版陶瓷兔 `egg_bunny`、鲸鱼娘手办 `egg_whale_figure`、随机鹦鹉 `egg_parrot`、笑脸面具修格斯毛绒 `egg_shoggoth`、羊驼毛绒 `egg_alpaca` | 225 |
+| 作废·保留程序模型 | 霓虹标语 `neon_slogan`。薄背板生成了厚盒子，左右侧轮廓 IoU 均约 0.07，已支付的几何和贴图费用照计 | 40 |
+| 不排单·保留程序模型 | 消防逃生梯 `fire_escape`。平台格栅、细杆和薄踏板沿用程序件，仅留原模对照 | 0 |
+
+**实耗合计 825 分。** MCP 共 15 单 × 40 分（含作废件），网页彩蛋 5 单 × 45 分。逐件记录见 `art-src/tripo/batch8/credits-notes.json`。
+
+### 库道具与彩蛋的出件流程
+
+1. 库道具在 Tripo Studio MCP 调用 `multiview_to_model`，选 H3.1，`texture=false`、`face_limit=40000`。前后槽分别放 `front.png`、`back.png`，**左槽放 `right.png`，右槽放 `left.png`**。混合件只提交选件表指定的外壳，球网、钟针、灯线等部件在本地回装。
+2. 几何轮廓通过后调用 `texture_model`，用 `color.png` 的 `image_key`，分辨率 2K，`delight=false`。用 `get_model_asset` 取回 GLB。MCP 的下载链接会过期，模型也不会进入网页素材库，压缩原件和处理后的模型均存于本机 `art-src/tripo/batch8/<id>/`。
+3. MCP 原件带 `EXT_meshopt_compression` 和 `KHR_mesh_quantization`。先用 glTF Transform 和 meshoptimizer 解压并还原量化的顶点属性，再绕 glTF 竖轴 Y 旋转 **−90°**，使正面与四视图一致。这一步只对 MCP 压缩原件做一次。下面的命令从仓库根目录执行，输出路径须为新文件。新工作树先用 `npm i` 安装开发依赖。
+
+   ```powershell
+   $assetDir = 'art-src/tripo/batch8/wall_clock'
+   node tools/art/mcp-unpack.mjs "$assetDir/tripo-meshopt.glb" "$assetDir/oriented.glb"
+   ```
+
+   本批 15 个压缩原件逐件复跑后，输出与各自归档的 `download.glb` 的 SHA-256 全部一致。
+4. 五件彩蛋在 Tripo 网页用图片工具生成原创概念图（当期限免，0 分），再以同图做 H3.5 单图几何及 2K 去光贴图，关闭 PBR。每件实耗 45 分。网页原件逐件对照四向确认 +Z，按表内高度等比定标，生成三级 LOD 并回读 FBX。
+
+### 四件远级 LOD 修复
+
+修复配方见提交 `5b6396e` 和 `PropPolicyBatch8.json`。下表面数来自最终 FBX 回读，IoU 取 LOD2 相对 LOD0 的前、后、左、右四向最低值。
+
+| 道具 | 修复要点 | 三角面 L0 / L1 / L2 | L2 最低 IoU |
+|---|---|---:|---:|
+| 乒乓球台 | 回装时把球网部件收至 600 面，先减网柱倒角细分并保住球网包围盒，避免远级缩放后细网线错位。 | 14868 / 6000 / 1795 | 0.9969 |
+| 花坛 | 32 株花在 840 面时塌成尖片，1600 面的最低 IoU 仍只有 0.884。只把该件 LOD2 提至 1800 面，近、中级预算和轮廓门槛沿用原值。 | 6000 / 2400 / 1800 | 0.9294 |
+| 桌上足球 | 回装时场地细节分配 280 面，四组杆件各 140 面。减少计分珠和杆上附件的细分，给箱体和桌腿留足远级面数。 | 14857 / 5999 / 2009 | 0.9503 |
+| 披萨盒 | 直接减面会压扁半开的顶盖。LOD2 先按成品约 4 mm 的体素重建，再减到 840 面，从原盒重烘底色，保住顶盖和盒层间隙。 | 6000 / 2400 / 840 | 0.9867 |
+
+**待复核的画面细节。** 挂轴 `scroll` 的字样呈块状，滑板 `skateboard` 远看只露出一个轮子。可对照实拍目录中这两件的近景、`-lod1.png` 和 `-lod2.png`。
+
+在保有本批本地模型、交付报告和回执的工作树中，可重新登记实耗并导出素材来源：
+
+```powershell
+node tools/art/batch.mjs credit --from-notes --batch batch8
+node tools/art/batch.mjs ledger --batch batch8
+npm run tables
+```

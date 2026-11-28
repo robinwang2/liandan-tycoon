@@ -358,7 +358,9 @@ try {
     for(const {id} of batch) {
       const entry=notes?.[id];
       if(!entry || ![entry.credits,entry.rework].every(n=>Number.isSafeInteger(n)&&n>=0) || typeof entry.note!=='string') throw Error('缺少有效的实测记录：'+id);
-      ledger[id]={...ledger[id],source:'Tripo Studio 网页（H3.1，私有四视图）',credits:entry.credits,reworks:entry.rework,note:entry.note};
+      if(batchName==='batch8' && !entry.source) throw Error('实测记录缺少素材来源：'+id);
+      ledger[id]={...ledger[id],source:entry.source??'Tripo Studio 网页（H3.1，私有四视图）',credits:entry.credits,reworks:entry.rework,note:entry.note,
+        ...(entry.status?{status:entry.status}:{})};
     }
     save(ledgerFile,ledger);
   } else if(command==='credit' && args.length>=2) {
@@ -368,27 +370,32 @@ try {
   else if(command==='ledger') {
     const rows=(args.length?args.map(chosen):batch).map(item=>{
       const {id,name}=item,s=state(item),e=ledger[id]??{},repaired=s.report?.source==='repaired.glb';
+      if(batchName==='batch8' && (!e.source || e.credits==null)) throw Error('请先用 credit --from-notes 登记实耗：'+id);
+      if(item.referenceOnly && e.status) return {id:batchName+'_'+id,name,source:e.source,method:e.note,credits:e.credits,
+        file:`art-src/tripo/${batchName}/${id}/game.glb`,qc:'仅作原模对照',status:e.status};
       if(item.procedural) {
         if(!s.report) throw Error('请先 replace '+id);
         return {id:batchName+'_'+id,name,source:'程序生成 · 0 积分',method:'游戏原模 → 焊缝 → 三级 LOD → FBX 回读',credits:0,file:`art-src/tripo/${batchName}/${id}/game.glb`,qc:'LOD '+s.report.lods.map(l=>l.triangles).join('/'),status:s.accepted?'Unity 已生成截图；待人工验收':'Blender 已验；待 Unity 截图'};
       }
       if(item.replacement) {
         const r=item.replacement;
+        // 本批彩蛋有网页生成实耗，replacement 只描述入库后的本地整理。
+        const paid=batchName==='batch8'?e:{};
         if((eggs || r.sourceSha) && s.report){
           const lods=s.report.lods, counts=lods.map(lod=>lod.triangles).join('/');
           const dims=Object.values(lods[0].size).map(value=>+value.toFixed(5)).join('×');
           const iou=lods.slice(1).map(lod=>Math.min(...Object.values(lod.lodIntegrity.views).map(view=>view.iou)).toFixed(4)).join('/');
-          return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
-            qc:`FBX 回读通过；LOD ${counts}；宽×深×高 ${dims} m；四向最低 IoU ${iou}`,status:s.accepted?'Unity 已生成截图；待人工验收':'Blender 已验；待 Unity 截图'};
+          return {id:batchName+'_'+id,name,source:paid.source??r.source,method:[paid.note,r.method].filter(Boolean).join('；'),license:r.license,credits:paid.credits??0,file:r.blend,
+            qc:`FBX 回读通过；LOD ${counts}；宽×深×高 ${dims} m；四向最低 IoU ${iou}`,status:s.accepted?deliveryStatus(s,paid,item):'Blender 已验；待 Unity 截图'};
         }
-        return {id:batchName+'_'+id,name,source:r.source,method:r.method,license:r.license,credits:0,file:r.blend,
+        return {id:batchName+'_'+id,name,source:paid.source??r.source,method:[paid.note,r.method].filter(Boolean).join('；'),license:r.license,credits:paid.credits??0,file:r.blend,
           qc:s.report?`精模 ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).map(v=>+v.toFixed(3)).join('×')} m；LOD ${s.report.lods.map(lod=>lod.triangles).join('/')}；远级轮廓 IoU 门槛 ${r.minIoU.join('/')}`:'待替换',
           status:deliveryStatus(s,{},item)};
       }
       const hybrid=isHybrid(item);
-      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+'；参考原色图贴图，程序件从游戏原模回装':null,
+      const method=[e.method,!legacyBatch&&!hybrid?'四向灰模生成整件；原色 3/4 图贴图':null,hybrid?'四向灰模生成外壳：'+item.shell+(repaired?'；参考原色图贴图，程序件从游戏原模回装':''):null,
         e.reworks!=null?'返工 '+e.reworks+' 次':null,e.note,repaired?(hybrid?'AI 外壳＋程序部件':'AI 外壳 + 程序化修补')+'；本地追加 0 积分':null].filter(Boolean).join('；');
-      return {id:batchName+'_'+id,name,source:hybrid && repaired?'AI 外壳＋程序部件':e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
+      return {id:batchName+'_'+id,name,source:hybrid && repaired && batchName!=='batch8'?'AI 外壳＋程序部件':e.source,method:method||undefined,prompt:e.prompt,date:e.date,license:e.license,credits:e.credits,
         file:s.downloaded?`art-src/tripo/${batchName}/${id}/${repaired?'repaired':'tripo'}.glb`:undefined,
         qc:s.qc?(s.qc.size?`${repaired?'修补件':'下载件'} ${s.qc.triangles} 面，宽深高 ${Object.values(s.qc.size).join('×')} m；`:'')+(s.qc.pass?(s.qc.mirrorDepth?'深度镜像通过':'通过'):s.qc.problems.join('；'))+(s.report?'；LOD '+s.report.lods.map(lod=>lod.triangles).join('/'):''):(e.status&&!s.downloaded?'未下载，未做网格质检':'待检'),status:deliveryStatus(s,e,item)};
     });
@@ -397,6 +404,7 @@ try {
 } catch(error) { console.error(error.message); process.exitCode=1; }
 
 function deliveryStatus(s,entry,item) {
+  if(batchName==='batch8' && (entry?.status || s.accepted)) return entry?.status??'已进引擎';
   if(item.procedural) return s.accepted?'Unity 已生成截图；待人工验收':s.report?'Blender 已验；待 Unity 截图':'待生成程序件';
   if(isHybrid(item) && s.accepted) return 'Unity 已生成截图；待人工验收';
   if(s.report?.source==='repaired.glb') return '本地修补及三级回读通过；待 Unity 人工验收';
