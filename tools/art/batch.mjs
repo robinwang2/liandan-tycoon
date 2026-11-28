@@ -64,7 +64,7 @@ function prepared(item,p) {
     (!isHybrid(item) || (fs.existsSync(shell) && report.shellSha===hash(shell)));
 }
 function manifest() {
-  const entries=batch.filter(item=>prepared(item,paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
+  const entries=batch.filter(item=>!item.referenceOnly && prepared(item,paths(item.id))).map(({id,name,w,d,h,budget})=>({id,name,w,d,h,budget,
     views:Object.fromEntries(views.map(view=>[view,path.join(paths(id).ref,view+'.png')])),tripoSlots:{正面:'front.png',左侧:'right.png',右侧:'left.png',背面:'back.png'},settings:'按 tripoSlots 填网页格子，不按文件名同名上传。私有；H3.1 四视图，正面 +Z；先审轮廓，再生成微缩玩具风底色，普通 1K / 大件最多 2K；下载 GLB。不要烘焙文字或灯光。'}));
   if (withColor) {
     const lines = ['# '+batchName+' 网页上传清单', '', '私有 · H3.1 多视图。先核对几何正反与轮廓，再选图片贴图，上传彩色参考。'];
@@ -77,6 +77,7 @@ function manifest() {
       entry.color = path.join(paths(entry.id).ref,'color.png');
       lines.push('', '## '+entry.name+'（'+entry.id+'）','');
       const item=chosen(entry.id);
+      if(batchName==='batch8') lines.push(`${isHybrid(item)?'混合':'整件'} · 私有 H3.1 四视图 → 2K 图片贴图 · 预计 40 分。`, '', item.review, '');
       if(selection.creditLimit) {
         entry.reserve=!!item.reserve;
         lines.push(item.reserve ? '候补，首轮请跳过。' : '首轮上传。', '');
@@ -88,6 +89,15 @@ function manifest() {
       for (const [slot,file] of Object.entries(entry.tripoSlots)) lines.push('- '+slot+'　`'+path.join(paths(entry.id).ref,file)+'`');
       lines.push('- 图片贴图　`'+entry.color+'`');
       entry.settings='按 tripoSlots 上传四向灰模，审几何后用 color 路径做图片贴图。';
+      if(batchName==='batch8') entry.settings+=' 私有 H3.1 四视图；2K 图片贴图。';
+    }
+    if(batchName==='batch8') {
+      lines.push('', '## 不排单（仅本地原模对照，0 分）');
+      for(const item of batch.filter(item=>item.referenceOnly)) lines.push('', `- ${item.id}：${item.review}`);
+      lines.push('', '## 新彩蛋 · 概念图待生成', '', '逐件在私有图片工具生成一张概念图，保存到下列目标路径；同一张图用于私有 H3.1 单图几何和 2K 图片贴图。没有原模，不传四视图。每件预计 10＋30＋10＝50 分。');
+      for(const item of batch.filter(item=>item.egg)) lines.push('', `### ${item.name}（${item.id}）`, '', `摆放：${item.placement}。目标宽×深×高：${item.w}×${item.d}×${item.h} m。`, '', item.prompt, '', `验收：${item.review}`, '', `概念图待存：\`${path.join(local,item.id,'concept.png')}\``);
+      const paidProps=batch.filter(item=>!item.egg && !item.referenceOnly).length, concepts=batch.filter(item=>item.egg).length;
+      lines.push('', `预算：${paidProps} 件库道具 × 40＋${concepts} 件彩蛋 × 50＝${paidProps*40+concepts*50} 分；不含返工。本地实耗 0。`);
     }
     fs.mkdirSync(local,{recursive:true});
     fs.writeFileSync(path.join(local,'upload.md'),lines.join('\n')+'\n');
@@ -254,6 +264,7 @@ try {
   else if(command==='prep') {
     if(!fs.existsSync(ledgerFile)) save(ledgerFile,{});
     for(const item of args.length?args.map(chosen):batch) {
+      if(batchName==='batch8' && item.egg) continue;
       const p=paths(item.id), shell=path.join(p.dir,'shell.glb');
       const hybrid=isHybrid(item);
       if(hybrid || !legacyBatch) tool('hybrid-export',item.id,p.dir,'--batch',batchName);
